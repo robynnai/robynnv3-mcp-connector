@@ -1,7 +1,9 @@
 /** Cloudflare Worker environment bindings */
 export interface Env {
   OAUTH_KEY: KVNamespace;
+  OAUTH_KV: KVNamespace;
   ROBYNN_API_BASE_URL: string;
+  MCP_PUBLIC_BASE_URL?: string;
   MCP_SERVER_NAME: string;
   MCP_SERVER_VERSION: string;
   MCP_OBJECT: DurableObjectNamespace;
@@ -9,20 +11,26 @@ export interface Env {
   OAUTH_PROVIDER: {
     parseAuthRequest(request: Request): Promise<OAuthRequestInfo>;
     completeAuthorization(options: {
-      request: Request;
+      request: OAuthRequestInfo;
       userId: string;
+      metadata: Record<string, unknown>;
+      scope: string[];
       props: Props;
-      options?: { scope?: string };
-    }): Promise<Response>;
+      revokeExistingGrants?: boolean;
+    }): Promise<{ redirectTo: string }>;
   };
 }
 
 /** OAuth request info parsed by OAuthProvider */
 export interface OAuthRequestInfo {
+  responseType: string;
   clientId: string;
   redirectUri: string;
   state: string;
-  scope?: string;
+  scope: string[];
+  codeChallenge?: string;
+  codeChallengeMethod?: string;
+  resource?: string | string[];
 }
 
 /** Props passed from OAuth to McpAgent Durable Object */

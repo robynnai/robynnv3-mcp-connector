@@ -1,31 +1,47 @@
+import { registerAppTool } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
+import { REPORT_RESOURCE_URIS } from "../ui/report-app";
 
 export function registerSeoTools(server: McpServer, client: RobynnClient) {
-  server.tool(
+  registerAppTool(
+    server,
     "robynn_seo_opportunities",
-    "Identify SEO keyword gaps and content opportunities relative to your market and competitors. Returns keyword gaps, recommended actions, and competitive SEO comparison data.",
     {
-      company_name: z.string().describe("Your company or brand name"),
-      company_url: z
-        .string()
-        .optional()
-        .describe("Optional company URL to ground the analysis"),
-      competitors: z
-        .array(z.string())
-        .optional()
-        .describe("Competitors to benchmark against"),
-      keywords: z
-        .array(z.string())
-        .optional()
-        .describe("Optional seed keywords to include in the analysis"),
-      market_context: z
-        .string()
-        .optional()
-        .describe("Additional market or category context"),
+      description:
+        "Identify SEO keyword gaps and content opportunities relative to your market and competitors. Returns keyword gaps, recommended actions, and competitive SEO comparison data.",
+      inputSchema: {
+        company_name: z.string().describe("Your company or brand name"),
+        company_url: z
+          .string()
+          .optional()
+          .describe("Optional company URL to ground the analysis"),
+        competitors: z
+          .array(z.string())
+          .optional()
+          .describe("Competitors to benchmark against"),
+        keywords: z
+          .array(z.string())
+          .optional()
+          .describe("Optional seed keywords to include in the analysis"),
+        market_context: z
+          .string()
+          .optional()
+          .describe("Additional market or category context"),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+      _meta: {
+        ui: {
+          resourceUri: REPORT_RESOURCE_URIS.seo,
+          visibility: ["model", "app"],
+        },
+      },
     },
-    { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     async ({ company_name, company_url, competitors, keywords, market_context }) => {
       try {
         const result = await client.seoOpportunities({

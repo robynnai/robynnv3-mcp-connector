@@ -20,7 +20,7 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 │  │  OAuthProvider       │  │  McpAgent (Durable Object)        │ │
 │  │  /authorize → login  │  │  /mcp — Streamable HTTP           │ │
 │  │  /token    → tokens  │  │  /sse — SSE transport             │ │
-│  │  /register → DCR     │  │  7 tools, safety annotations      │ │
+│  │  /register → DCR     │  │  10 tools + MCP Apps UI           │ │
 │  └─────────┬───────────┘  └──────────────┬─────────────────────┘ │
 │            │                              │                      │
 │            │  KV Store (OAuth state)      │                      │
@@ -49,8 +49,11 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 | 5 | `robynn_create_content` | Write | Create marketing content (blog, LinkedIn, email, ad copy, etc.) using brand voice |
 | 6 | `robynn_research` | Write | Research companies, competitors, markets |
 | 7 | `robynn_conversations` | Write | List/create conversation threads |
+| 8 | `robynn_geo_analysis` | Read | AI visibility analysis with an interactive GEO report app |
+| 9 | `robynn_competitive_battlecard` | Read | Competitive intelligence battlecard with an interactive report app |
+| 10 | `robynn_seo_opportunities` | Read | SEO gap analysis with an interactive report app |
 
-All tools return both `content` (text for LLM) and `structuredContent` (machine-readable JSON).
+All tools return both `content` (text for LLM) and `structuredContent` (machine-readable JSON). The Phase 1 intelligence tools also expose MCP Apps UI resources for compatible hosts.
 
 ## OAuth Flow
 
@@ -82,12 +85,16 @@ src/
 ├── auth-handler.ts       # Hono app: /authorize redirect, /callback token exchange
 ├── robynn-client.ts      # HTTP client for robynn.ai API (10s read, 280s poll timeout)
 ├── types.ts              # Env, Props, API response types
+├── ui/                   # Shared Robynn MCP Apps report resources and runtime
 └── tools/
     ├── context.ts        # robynn_brand_context + robynn_brand_rules
     ├── status.ts         # robynn_status + robynn_usage
     ├── content.ts        # robynn_create_content
     ├── research.ts       # robynn_research
-    └── conversations.ts  # robynn_conversations
+    ├── conversations.ts  # robynn_conversations
+    ├── geo.ts            # robynn_geo_analysis
+    ├── battlecard.ts     # robynn_competitive_battlecard
+    └── seo.ts            # robynn_seo_opportunities
 ```
 
 ## Development
@@ -100,6 +107,8 @@ npx wrangler deploy       # Deploy to Cloudflare
 ```
 
 ### Local Testing
+
+Detailed runbook: [docs/local-testing.md](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/docs/local-testing.md)
 
 ```bash
 # Health check

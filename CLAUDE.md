@@ -4,7 +4,7 @@ This file provides guidance to Claude Code when working in this repository.
 
 ## Overview
 
-Remote MCP server deployed on Cloudflare Workers at `mcp.robynn.ai`. Exposes 7 brand-aware marketing tools to Claude via the Connectors Directory. Uses OAuth 2.0 for authentication, with the actual user data stored on `robynn.ai` (SvelteKit frontend).
+Remote MCP server deployed on Cloudflare Workers at `mcp.robynn.ai`. Exposes 10 brand-aware marketing tools to Claude via the Connectors Directory, including MCP Apps UI for the Phase 1 intelligence reports. Uses OAuth 2.0 for authentication, with the actual user data stored on `robynn.ai` (SvelteKit frontend).
 
 ## Quick Start
 
@@ -44,7 +44,7 @@ OAuthProvider
 Extends `McpAgent<Env, Record<string, never>, Props>`:
 - One Durable Object instance per authenticated user
 - `this.props.accessToken` contains the user's robynn.ai JWT
-- `init()` creates a `RobynnClient` and registers all 7 tools
+- `init()` creates a `RobynnClient`, registers shared MCP App resources, and registers all 10 tools
 - MCP transport (Streamable HTTP + SSE) handled automatically by the base class
 
 ### Auth Flow (`src/auth-handler.ts`)
@@ -54,7 +54,8 @@ Hono app handling the user-facing OAuth consent flow:
 1. `GET /authorize` — Generates CSRF state, stores in KV, redirects to `robynn.ai/oauth/authorize`
 2. `GET /callback` — Validates state from KV, exchanges auth code for JWT via `robynn.ai/api/oauth/token`, decodes JWT for user/org info, calls `completeAuthorization()`
 3. `GET /` — Health check / landing JSON
-4. `GET /.well-known/mcp.json` — MCP discovery config
+4. `GET /app-assets/report-app.js` — shared JS runtime for Robynn MCP Apps reports
+5. `GET /.well-known/mcp.json` — MCP discovery config
 
 ### API Client (`src/robynn-client.ts`)
 
@@ -131,6 +132,11 @@ Key patterns:
 | `src/tools/content.ts` | `robynn_create_content` |
 | `src/tools/research.ts` | `robynn_research` |
 | `src/tools/conversations.ts` | `robynn_conversations` |
+| `src/tools/geo.ts` | `robynn_geo_analysis` |
+| `src/tools/battlecard.ts` | `robynn_competitive_battlecard` |
+| `src/tools/seo.ts` | `robynn_seo_opportunities` |
+| `src/ui/report-app.ts` | Registers Robynn MCP App report resources (`ui://reports/*.html`) |
+| `src/ui/report-app-script.ts` | Shared browser runtime for the interactive report apps |
 | `wrangler.toml` | Worker config, KV + DO bindings, env vars |
 | `package.json` | Dependencies + scripts |
 | `tsconfig.json` | TypeScript config (ES2022, bundler resolution, Cloudflare types) |

@@ -1,29 +1,30 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { registerBattlecardTools } from "./battlecard";
+import { REPORT_RESOURCE_URIS } from "../ui/report-app";
 
 function createServerHarness() {
   const handlers = new Map<string, (args: any) => Promise<any>>();
+  const configs = new Map<string, Record<string, any>>();
   const server = {
-    tool: vi.fn(
+    registerTool: vi.fn(
       (
         name: string,
-        _description: string,
-        _schema: unknown,
-        _annotations: unknown,
+        config: Record<string, any>,
         handler: (args: any) => Promise<any>
       ) => {
+        configs.set(name, config);
         handlers.set(name, handler);
       }
     ),
   };
 
-  return { server, handlers };
+  return { server, handlers, configs };
 }
 
 describe("registerBattlecardTools", () => {
   it("returns structured battlecard results on success", async () => {
-    const { server, handlers } = createServerHarness();
+    const { server, handlers, configs } = createServerHarness();
     const client = {
       competitiveBattlecard: vi.fn().mockResolvedValue({
         success: true,
@@ -48,6 +49,9 @@ describe("registerBattlecardTools", () => {
 
     expect(client.competitiveBattlecard).toHaveBeenCalled();
     expect(response?.structuredContent.differentiators).toContain("Fast onboarding");
+    expect(
+      configs.get("robynn_competitive_battlecard")?._meta?.ui?.resourceUri
+    ).toBe(REPORT_RESOURCE_URIS.battlecard);
   });
 
   it("returns an MCP error result on upstream failure", async () => {

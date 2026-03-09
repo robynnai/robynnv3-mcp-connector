@@ -1,7 +1,17 @@
 import { Hono } from "hono";
 import type { Env } from "./types";
+import { REPORT_APP_SCRIPT } from "./ui/report-app-script";
 
 type HonoEnv = { Bindings: Env };
+const OAUTH_CLIENT_ID = "robynn-mcp-worker";
+
+function getWorkerBaseUrl(c: { env: Env; req: { url: string } }) {
+  const publicBaseUrl = c.env.MCP_PUBLIC_BASE_URL?.trim();
+  if (publicBaseUrl) {
+    return publicBaseUrl.replace(/\/+$/, "");
+  }
+  return new URL(c.req.url).origin;
+}
 
 /**
  * OAuth authorization handler.
@@ -20,6 +30,10 @@ const app = new Hono<HonoEnv>();
  * Redirects the user to robynn.ai's consent page.
  */
 app.get("/authorize", async (c) => {
+  const workerBaseUrl = getWorkerBaseUrl(c);
+  const workerCallbackUrl = new URL("/callback", workerBaseUrl).href;
+  const oauthRequest = await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw);
+
   // Generate a state token to link the callback back to this session
   const oauthState = crypto.randomUUID();
 
@@ -27,7 +41,8 @@ app.get("/authorize", async (c) => {
   await c.env.OAUTH_KEY.put(
     `oauth_state:${oauthState}`,
     JSON.stringify({
-      workerCallbackUrl: new URL("/callback", c.req.url).href,
+      workerCallbackUrl,
+      oauthRequest,
       timestamp: Date.now(),
     }),
     { expirationTtl: 600 } // 10 minutes
@@ -35,11 +50,8 @@ app.get("/authorize", async (c) => {
 
   // Redirect to Robynn's OAuth consent page
   const authorizeUrl = new URL("/oauth/authorize", c.env.ROBYNN_API_BASE_URL);
-  authorizeUrl.searchParams.set("client_id", "robynn-mcp-worker");
-  authorizeUrl.searchParams.set(
-    "redirect_uri",
-    new URL("/callback", c.req.url).href
-  );
+  authorizeUrl.searchParams.set("client_id", OAUTH_CLIENT_ID);
+  authorizeUrl.searchParams.set("redirect_uri", workerCallbackUrl);
   authorizeUrl.searchParams.set("state", oauthState);
   authorizeUrl.searchParams.set("scope", "brand:read tools:execute");
   authorizeUrl.searchParams.set("response_type", "code");
@@ -75,6 +87,7 @@ app.get("/callback", async (c) => {
 
   const storedState = JSON.parse(storedStateRaw) as {
     workerCallbackUrl: string;
+    oauthRequest: import("./types").OAuthRequestInfo;
   };
 
   // Exchange authorization code for tokens with robynn.ai
@@ -86,7 +99,7 @@ app.get("/callback", async (c) => {
       body: JSON.stringify({
         grant_type: "authorization_code",
         code,
-        client_id: "robynn-mcp-worker",
+        client_id: OAUTH_CLIENT_ID,
         redirect_uri: storedState.workerCallbackUrl,
       }),
     }
@@ -124,19 +137,28 @@ app.get("/callback", async (c) => {
   // Complete the OAuthProvider authorization.
   // This stores the user's props, issues OAuthProvider's own token to Claude,
   // and redirects back to Claude's redirect_uri.
-  return c.env.OAUTH_PROVIDER.completeAuthorization({
-    request: c.req.raw,
+  const grantedScope =
+    storedState.oauthRequest.scope?.length > 0
+      ? storedState.oauthRequest.scope
+      : ["brand:read", "tools:execute"];
+
+  const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
+    request: storedState.oauthRequest,
     userId,
+    metadata: {
+      organizationId,
+      upstreamClientId: OAUTH_CLIENT_ID,
+    },
+    scope: grantedScope,
     props: {
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       userId,
       organizationId,
     },
-    options: {
-      scope: "brand:read tools:execute",
-    },
   });
+
+  return c.redirect(redirectTo);
 });
 
 /**
@@ -156,18 +178,42 @@ app.get("/", (c) => {
   });
 });
 
+app.get("/app-assets/report-app.js", (c) => {
+  c.header("Content-Type", "application/javascript; charset=utf-8");
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.body(REPORT_APP_SCRIPT);
+});
+
+app.get("/.well-known/oauth-protected-resource/:transport", (c) => {
+  const workerBaseUrl = getWorkerBaseUrl(c);
+  const transport = c.req.param("transport");
+
+  if (transport !== "mcp" && transport !== "sse") {
+    return c.text("Not Found", 404);
+  }
+
+  return c.json({
+    resource: `${workerBaseUrl}/${transport}`,
+    authorization_servers: [workerBaseUrl],
+    bearer_methods_supported: ["header"],
+    scopes_supported: ["brand:read", "tools:execute"],
+    resource_name: `Robynn ${transport.toUpperCase()} endpoint`,
+  });
+});
+
 /**
  * Well-known MCP configuration
  */
 app.get("/.well-known/mcp.json", (c) => {
+  const workerBaseUrl = getWorkerBaseUrl(c);
   return c.json({
     name: "Robynn",
     description: "Brand-aware AI marketing tools for Claude",
-    mcp_endpoint: "/mcp",
+    mcp_endpoint: `${workerBaseUrl}/mcp`,
     oauth: {
-      authorization_endpoint: "/authorize",
-      token_endpoint: "/token",
-      registration_endpoint: "/register",
+      authorization_endpoint: `${workerBaseUrl}/authorize`,
+      token_endpoint: `${workerBaseUrl}/token`,
+      registration_endpoint: `${workerBaseUrl}/register`,
     },
   });
 });

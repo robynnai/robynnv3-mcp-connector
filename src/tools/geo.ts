@@ -1,31 +1,47 @@
+import { registerAppTool } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
+import { REPORT_RESOURCE_URIS } from "../ui/report-app";
 
 export function registerGeoTools(server: McpServer, client: RobynnClient) {
-  server.tool(
+  registerAppTool(
+    server,
     "robynn_geo_analysis",
-    "Measure your brand's visibility across AI answer engines for a category or set of strategic questions. Returns citation breakdowns, query gaps, and recommended follow-up actions.",
     {
-      company_name: z.string().describe("Your company or brand name"),
-      category: z
-        .string()
-        .optional()
-        .describe("Market category to benchmark visibility against"),
-      questions: z
-        .array(z.string())
-        .optional()
-        .describe("Specific AI-search questions to evaluate"),
-      competitors: z
-        .array(z.string())
-        .optional()
-        .describe("Optional competitor set for comparison"),
-      analysis_depth: z
-        .enum(["standard", "deep"])
-        .optional()
-        .describe("Standard or deeper analysis depth"),
+      description:
+        "Measure your brand's visibility across AI answer engines for a category or set of strategic questions. Returns citation breakdowns, query gaps, and recommended follow-up actions.",
+      inputSchema: {
+        company_name: z.string().describe("Your company or brand name"),
+        category: z
+          .string()
+          .optional()
+          .describe("Market category to benchmark visibility against"),
+        questions: z
+          .array(z.string())
+          .optional()
+          .describe("Specific AI-search questions to evaluate"),
+        competitors: z
+          .array(z.string())
+          .optional()
+          .describe("Optional competitor set for comparison"),
+        analysis_depth: z
+          .enum(["standard", "deep"])
+          .optional()
+          .describe("Standard or deeper analysis depth"),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+      _meta: {
+        ui: {
+          resourceUri: REPORT_RESOURCE_URIS.geo,
+          visibility: ["model", "app"],
+        },
+      },
     },
-    { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     async ({ company_name, category, questions, competitors, analysis_depth }) => {
       try {
         const result = await client.geoAnalysis({

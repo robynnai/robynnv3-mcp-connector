@@ -12,6 +12,7 @@ import { registerGeoTools } from "./tools/geo";
 import { registerBattlecardTools } from "./tools/battlecard";
 import { registerSeoTools } from "./tools/seo";
 import type { Env, Props } from "./types";
+import { getPublicBaseUrl, registerReportAppResources } from "./ui/report-app";
 
 /**
  * RobynnMCP — Durable Object that hosts the MCP server.
@@ -35,6 +36,9 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
       this.env.ROBYNN_API_BASE_URL,
       accessToken || ""
     );
+    const publicBaseUrl = getPublicBaseUrl(this.env.MCP_PUBLIC_BASE_URL);
+
+    registerReportAppResources(this.server, publicBaseUrl);
 
     // Register the existing tools plus the Phase 1 intelligence-first tools
     registerContextTools(this.server, client);
@@ -48,14 +52,7 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
   }
 }
 
-/**
- * Worker entry point — OAuthProvider wraps everything.
- *
- * - /mcp and /sse → routed to McpAgent Durable Object (authenticated)
- * - /authorize, /token, /register → handled by OAuthProvider
- * - All other paths → routed to robynnAuthHandler (Hono app)
- */
-export default new OAuthProvider({
+const oauthProvider = new OAuthProvider({
   apiRoute: ["/mcp", "/sse"],
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   apiHandler: RobynnMCP.serve("/mcp") as any,
@@ -63,4 +60,53 @@ export default new OAuthProvider({
   authorizeEndpoint: "/authorize",
   tokenEndpoint: "/token",
   clientRegistrationEndpoint: "/register",
-});
+})
+
+/**
+ * Worker entry point — OAuthProvider wraps everything.
+ *
+ * - /mcp and /sse → routed to McpAgent Durable Object (authenticated)
+ * - /authorize, /token, /register → handled by OAuthProvider
+ * - All other paths → routed to robynnAuthHandler (Hono app)
+ */
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const publicBaseUrl = getPublicBaseUrl(env.MCP_PUBLIC_BASE_URL);
+    const originalUrl = new URL(request.url);
+    const rewrittenUrl = new URL(
+      `${originalUrl.pathname}${originalUrl.search}`,
+      publicBaseUrl,
+    );
+    const rewrittenRequest = new Request(rewrittenUrl.toString(), request);
+
+    const shouldTrace =
+      originalUrl.pathname === "/register" ||
+      originalUrl.pathname === "/authorize" ||
+      originalUrl.pathname === "/callback" ||
+      originalUrl.pathname === "/token" ||
+      originalUrl.pathname === "/mcp" ||
+      originalUrl.pathname === "/sse";
+
+    if (shouldTrace) {
+      console.log("[OAuthTrace] request", {
+        method: request.method,
+        path: originalUrl.pathname,
+        hasAuthHeader: request.headers.has("authorization"),
+      });
+    }
+
+    const response = await oauthProvider.fetch(rewrittenRequest, env, ctx);
+
+    if (shouldTrace) {
+      console.log("[OAuthTrace] response", {
+        method: request.method,
+        path: originalUrl.pathname,
+        status: response.status,
+        location: response.headers.get("location"),
+        wwwAuthenticate: response.headers.get("www-authenticate"),
+      });
+    }
+
+    return response;
+  },
+};
