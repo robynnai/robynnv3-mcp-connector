@@ -8,6 +8,9 @@ import { registerStatusTools } from "./tools/status";
 import { registerContentTools } from "./tools/content";
 import { registerResearchTools } from "./tools/research";
 import { registerConversationTools } from "./tools/conversations";
+import { registerGeoTools } from "./tools/geo";
+import { registerBattlecardTools } from "./tools/battlecard";
+import { registerSeoTools } from "./tools/seo";
 import type { Env, Props } from "./types";
 
 /**
@@ -33,12 +36,15 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
       accessToken || ""
     );
 
-    // Register all 7 tools
+    // Register the existing tools plus the Phase 1 intelligence-first tools
     registerContextTools(this.server, client);
     registerStatusTools(this.server, client);
     registerContentTools(this.server, client);
     registerResearchTools(this.server, client);
     registerConversationTools(this.server, client);
+    registerGeoTools(this.server, client);
+    registerBattlecardTools(this.server, client);
+    registerSeoTools(this.server, client);
   }
 }
 

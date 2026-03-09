@@ -41,6 +41,109 @@ export interface RobynnApiResponse<T = unknown> {
   error?: string;
 }
 
+/** Phase 1 intelligence-first MCP tools */
+export type IntelligenceToolName =
+  | "robynn_geo_analysis"
+  | "robynn_competitive_battlecard"
+  | "robynn_seo_opportunities";
+
+/** Shared status values for MCP intelligence responses */
+export type IntelligenceToolStatus =
+  | "pending"
+  | "success"
+  | "partial"
+  | "failed";
+
+/** Suggested next-step surfaced back to Claude users */
+export interface RecommendedAction {
+  title: string;
+  priority?: "high" | "medium" | "low";
+  rationale?: string;
+  type?: string;
+}
+
+/** Shared response envelope for intelligence tools */
+export interface IntelligenceToolResultBase {
+  summary: string;
+  status: IntelligenceToolStatus;
+  artifacts: Record<string, unknown>;
+  recommended_actions: RecommendedAction[];
+}
+
+export interface GeoAnalysisRequest {
+  company_name: string;
+  category?: string;
+  questions?: string[];
+  competitors?: string[];
+  analysis_depth?: "standard" | "deep";
+}
+
+export interface VisibilityScore {
+  llm: string;
+  score: number;
+  mentions?: number;
+  citations?: number;
+}
+
+export interface CitationBreakdown {
+  target_company: number;
+  competitor: number;
+  other: number;
+}
+
+export interface QueryGap {
+  query: string;
+  gap_type?: string;
+  detail?: string;
+}
+
+export interface GeoAnalysisResult extends IntelligenceToolResultBase {
+  visibility_scores: VisibilityScore[];
+  citation_breakdown: CitationBreakdown;
+  query_gaps: QueryGap[];
+}
+
+export interface CompetitiveBattlecardRequest {
+  competitor_name: string;
+  company_name?: string;
+  focus_areas?: string[];
+  include_objections?: boolean;
+}
+
+export interface BattlecardSection {
+  title: string;
+  bullets: string[];
+}
+
+export interface CompetitiveBattlecardResult extends IntelligenceToolResultBase {
+  comparison: BattlecardSection[];
+  objections: string[];
+  differentiators: string[];
+  risks: string[];
+}
+
+export interface SeoOpportunitiesRequest {
+  company_name: string;
+  company_url?: string;
+  competitors?: string[];
+  keywords?: string[];
+  market_context?: string;
+}
+
+export interface KeywordOpportunity {
+  keyword: string;
+  opportunity_score?: number;
+  search_volume?: number;
+  difficulty?: number;
+  competitor_rank?: number | null;
+}
+
+export interface SeoOpportunitiesResult extends IntelligenceToolResultBase {
+  opportunities: KeywordOpportunity[];
+  keyword_gaps: KeywordOpportunity[];
+  competitor_comparison: Record<string, unknown>[];
+}
+
 /** Brand context scope */
 export type BrandScope = 'summary' | 'voice' | 'positioning' | 'competitors' | 'audience' | 'products' | 'rules' | 'full';
 

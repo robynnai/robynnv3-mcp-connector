@@ -1,4 +1,17 @@
-import type { BrandContextData, BrandScope, UsageData, Thread, RunResult, RobynnApiResponse } from './types';
+import type {
+  BrandContextData,
+  BrandScope,
+  UsageData,
+  Thread,
+  RunResult,
+  RobynnApiResponse,
+  GeoAnalysisRequest,
+  GeoAnalysisResult,
+  CompetitiveBattlecardRequest,
+  CompetitiveBattlecardResult,
+  SeoOpportunitiesRequest,
+  SeoOpportunitiesResult,
+} from './types';
 
 const READ_TIMEOUT_MS = 10_000;
 const POLL_TIMEOUT_MS = 280_000; // Under Claude's 300s timeout
@@ -62,6 +75,36 @@ export class RobynnClient {
   /** List conversation threads */
   async listThreads(): Promise<RobynnApiResponse<{ threads: Thread[] }>> {
     return this.fetch('/api/agents/cmo/threads');
+  }
+
+  /** Execute GEO analysis through the MCP-safe API route */
+  async geoAnalysis(
+    payload: GeoAnalysisRequest
+  ): Promise<RobynnApiResponse<GeoAnalysisResult>> {
+    return this.fetch('/api/cli/mcp/geo-analysis', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Execute competitive battlecard generation through the MCP-safe API route */
+  async competitiveBattlecard(
+    payload: CompetitiveBattlecardRequest
+  ): Promise<RobynnApiResponse<CompetitiveBattlecardResult>> {
+    return this.fetch('/api/cli/mcp/competitive-battlecard', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Execute SEO opportunity analysis through the MCP-safe API route */
+  async seoOpportunities(
+    payload: SeoOpportunitiesRequest
+  ): Promise<RobynnApiResponse<SeoOpportunitiesResult>> {
+    return this.fetch('/api/cli/mcp/seo-opportunities', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
   }
 
   /** Create a new conversation thread */
