@@ -1,0 +1,27 @@
+name = "robynn-mcp-server"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ROBYNN_API_BASE_URL = "https://robynn.ai"
+MCP_SERVER_NAME = "Robynn"
+MCP_SERVER_VERSION = "0.1.0"
+
+[[kv_namespaces]]
+binding = "OAUTH_KEY"
+id = "5727f263cda54e439bd998f618878b18"
+
+[durable_objects]
+bindings = [
+  { name = "MCP_OBJECT", class_name = "RobynnMCP" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RobynnMCP"]
+
+# Uncomment when deploying with custom domain:
+# [[routes]]
+# pattern = "mcp.robynn.ai/*"
+# custom_domain = true
