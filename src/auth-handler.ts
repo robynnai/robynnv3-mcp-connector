@@ -96,7 +96,9 @@ app.get("/callback", async (c) => {
     oauthRequest: import("./types").OAuthRequestInfo;
   };
 
-  const internalAuthSecret = c.env.MCP_INTERNAL_AUTH_SECRET?.trim();
+  const internalAuthSecret =
+    c.env.MCP_INTERNAL_AUTH_SECRET?.trim() ||
+    c.env.CONNECTOR_STATE_SECRET?.trim();
   const tokenExchangeHeaders: Record<string, string> = {
     "Content-Type": "application/json",
   };
