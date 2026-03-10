@@ -4,12 +4,23 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-export type ReportType = "geo" | "seo" | "battlecard";
+export type ReportType =
+  | "geo"
+  | "seo"
+  | "battlecard"
+  | "brandBookStatus"
+  | "brandBookStrategy"
+  | "websiteAudit"
+  | "websiteStrategy";
 
 export const REPORT_RESOURCE_URIS: Record<ReportType, string> = {
   geo: "ui://reports/geo.html",
   seo: "ui://reports/seo.html",
   battlecard: "ui://reports/battlecard.html",
+  brandBookStatus: "ui://reports/brand-book-status.html",
+  brandBookStrategy: "ui://reports/brand-book-strategy.html",
+  websiteAudit: "ui://reports/website-audit.html",
+  websiteStrategy: "ui://reports/website-strategy.html",
 };
 
 interface ReportAppDefinition {
@@ -33,6 +44,26 @@ const REPORT_DEFINITIONS: ReportAppDefinition[] = [
     reportType: "battlecard",
     title: "Robynn Competitive Battlecard",
     description: "Interactive competitive intelligence report",
+  },
+  {
+    reportType: "brandBookStatus",
+    title: "Robynn Brand Book Status",
+    description: "Interactive brand-book completeness report",
+  },
+  {
+    reportType: "brandBookStrategy",
+    title: "Robynn Brand Book Strategy",
+    description: "Interactive brand-book improvement strategy",
+  },
+  {
+    reportType: "websiteAudit",
+    title: "Robynn Website Audit",
+    description: "Interactive website audit report",
+  },
+  {
+    reportType: "websiteStrategy",
+    title: "Robynn Website Strategy",
+    description: "Interactive website improvement strategy",
   },
 ];
 
@@ -438,7 +469,15 @@ export function buildReportAppHtml(params: {
           ? "robynn_geo_analysis"
           : reportType === "seo"
             ? "robynn_seo_opportunities"
-            : "robynn_competitive_battlecard",
+            : reportType === "battlecard"
+              ? "robynn_competitive_battlecard"
+              : reportType === "brandBookStatus"
+                ? "robynn_brand_book_status"
+                : reportType === "brandBookStrategy"
+                  ? "robynn_brand_book_strategy"
+                  : reportType === "websiteAudit"
+                    ? "robynn_website_audit"
+                    : "robynn_website_strategy",
     })}</script>
     <script type="module" src="${assetUrl}"></script>
   </body>

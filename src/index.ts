@@ -11,6 +11,8 @@ import { registerConversationTools } from "./tools/conversations";
 import { registerGeoTools } from "./tools/geo";
 import { registerBattlecardTools } from "./tools/battlecard";
 import { registerSeoTools } from "./tools/seo";
+import { registerBrandBookTools } from "./tools/brand-book";
+import { registerWebsiteTools } from "./tools/website";
 import type { Env, Props } from "./types";
 import { getPublicBaseUrl, registerReportAppResources } from "./ui/report-app";
 
@@ -49,6 +51,8 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
     registerGeoTools(this.server, client);
     registerBattlecardTools(this.server, client);
     registerSeoTools(this.server, client);
+    registerBrandBookTools(this.server, client);
+    registerWebsiteTools(this.server, client);
   }
 }
 
@@ -73,8 +77,12 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const publicBaseUrl = getPublicBaseUrl(env.MCP_PUBLIC_BASE_URL);
     const originalUrl = new URL(request.url);
+    const rewrittenPath =
+      originalUrl.pathname === "/" && request.method !== "GET"
+        ? "/mcp"
+        : originalUrl.pathname;
     const rewrittenUrl = new URL(
-      `${originalUrl.pathname}${originalUrl.search}`,
+      `${rewrittenPath}${originalUrl.search}`,
       publicBaseUrl,
     );
     const rewrittenRequest = new Request(rewrittenUrl.toString(), request);
@@ -85,12 +93,14 @@ export default {
       originalUrl.pathname === "/callback" ||
       originalUrl.pathname === "/token" ||
       originalUrl.pathname === "/mcp" ||
+      (originalUrl.pathname === "/" && request.method !== "GET") ||
       originalUrl.pathname === "/sse";
 
     if (shouldTrace) {
       console.log("[OAuthTrace] request", {
         method: request.method,
         path: originalUrl.pathname,
+        rewrittenPath,
         hasAuthHeader: request.headers.has("authorization"),
       });
     }
@@ -101,6 +111,7 @@ export default {
       console.log("[OAuthTrace] response", {
         method: request.method,
         path: originalUrl.pathname,
+        rewrittenPath,
         status: response.status,
         location: response.headers.get("location"),
         wwwAuthenticate: response.headers.get("www-authenticate"),
