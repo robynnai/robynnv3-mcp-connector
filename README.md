@@ -20,7 +20,7 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 │  │  OAuthProvider       │  │  McpAgent (Durable Object)        │ │
 │  │  /authorize → login  │  │  /mcp — Streamable HTTP           │ │
 │  │  /token    → tokens  │  │  /sse — SSE transport             │ │
-│  │  /register → DCR     │  │  10 tools + MCP Apps UI           │ │
+│  │  /register → DCR     │  │  17 tools + MCP Apps UI           │ │
 │  └─────────┬───────────┘  └──────────────┬─────────────────────┘ │
 │            │                              │                      │
 │            │  KV Store (OAuth state)      │                      │
@@ -40,20 +40,29 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 
 ## Tools
 
-| # | Tool | Type | Description |
-|---|------|------|-------------|
-| 1 | `robynn_brand_context` | Read | Get brand context by scope (voice, positioning, competitors, audience, products, rules, summary, full) |
-| 2 | `robynn_brand_rules` | Read | Get brand rules, terminology, style constraints |
-| 3 | `robynn_status` | Read | Check connection and org info |
-| 4 | `robynn_usage` | Read | Check token balance and quota |
-| 5 | `robynn_create_content` | Write | Create marketing content (blog, LinkedIn, email, ad copy, etc.) using brand voice |
-| 6 | `robynn_research` | Write | Research companies, competitors, markets |
-| 7 | `robynn_conversations` | Write | List/create conversation threads |
-| 8 | `robynn_geo_analysis` | Read | AI visibility analysis with an interactive GEO report app |
-| 9 | `robynn_competitive_battlecard` | Read | Competitive intelligence battlecard with an interactive report app |
-| 10 | `robynn_seo_opportunities` | Read | SEO gap analysis with an interactive report app |
+| Tool | Category | Execution backend | Inline MCP App UI |
+|---|---|---|---|
+| `robynn_brand_context` | Brand context | Direct `robynnv3` context API | No |
+| `robynn_brand_rules` | Brand context | Direct `robynnv3` context API | No |
+| `robynn_status` | Status | Direct `robynnv3` status API | No |
+| `robynn_usage` | Status | Direct `robynnv3` usage API | No |
+| `robynn_conversations` | Thread management | `robynnv3` CMO thread list/create endpoints | No |
+| `robynn_create_content` | CMO execution | `robynnv3` CMO thread/run pipeline, defaulting to `cmo_v2` unless env overrides it | No |
+| `robynn_research` | CMO execution | `robynnv3` CMO thread/run pipeline, defaulting to `cmo_v2` unless env overrides it | No |
+| `robynn_geo_analysis` | Intelligence | GEO proxy in `robynnv3` -> LangGraph `geo_researcher` by default | Yes |
+| `robynn_seo_opportunities` | Intelligence | SEO proxy in `robynnv3` -> LangGraph `seo_researcher` -> `seo_researcher_v5` | Yes |
+| `robynn_competitive_battlecard` | Intelligence | Direct LangGraph `competitor_intelligence_v1` plus Supabase battlecard readback | Yes |
+| `robynn_brand_book_status` | Brand book | Direct `robynnv3` brand-book export and changelog services | Yes |
+| `robynn_brand_book_gap_analysis` | Brand book | Direct `robynnv3` brand-book adapter logic | No |
+| `robynn_brand_book_strategy` | Brand book | Direct `robynnv3` brand-book adapter logic | Yes |
+| `robynn_brand_reflections` | Brand book | Direct `robynnv3` changelog/reflection query logic | No |
+| `robynn_publish_brand_book_html` | Brand book | Direct `robynnv3` export aggregation and HTML generation | No |
+| `robynn_website_audit` | Website intelligence | `robynnv3` website adapter -> LangGraph `website_report_v1` | Yes |
+| `robynn_website_strategy` | Website intelligence | `robynnv3` website adapter -> LangGraph `website_report_v1` | Yes |
 
-All tools return both `content` (text for LLM) and `structuredContent` (machine-readable JSON). The Phase 1 intelligence tools also expose MCP Apps UI resources for compatible hosts.
+All tools return both `content` (text for LLM) and `structuredContent` (machine-readable JSON). Tools with inline app support expose MCP Apps resources from the Worker, while the backend agent or service only returns data.
+
+Detailed execution mapping for every tool lives in [docs/architecture/robynn-mcp-tool-execution-matrix.md](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/docs/architecture/robynn-mcp-tool-execution-matrix.md).
 
 ## OAuth Flow
 
@@ -94,7 +103,9 @@ src/
     ├── conversations.ts  # robynn_conversations
     ├── geo.ts            # robynn_geo_analysis
     ├── battlecard.ts     # robynn_competitive_battlecard
-    └── seo.ts            # robynn_seo_opportunities
+    ├── seo.ts            # robynn_seo_opportunities
+    ├── brand-book.ts     # brand-book status, strategy, reflections, export tools
+    └── website.ts        # website audit + website strategy tools
 ```
 
 ## Development

@@ -331,6 +331,166 @@ export const REPORT_APP_SCRIPT = String.raw`
     '</section>';
   }
 
+  function renderFindingsCards(items, emptyMessage) {
+    const findings = normalizeObjectArray(items);
+    if (!findings.length) {
+      return '<div class="empty-state">' + escapeHtml(emptyMessage) + '</div>';
+    }
+
+    return '<div class="list-stack">' + findings.map((item) => {
+      const meta = [
+        item && item.priority ? '<span>' + escapeHtml(item.priority) + '</span>' : '',
+        item && item.page ? '<span>' + escapeHtml(item.page) + '</span>' : '',
+      ].filter(Boolean).join('');
+
+      return '<article class="list-card">' +
+        '<h4>' + escapeHtml(item && item.title ? item.title : 'Finding') + '</h4>' +
+        (meta ? '<div class="meta-row">' + meta + '</div>' : '') +
+        (item && item.detail ? '<p>' + escapeHtml(item.detail) + '</p>' : '') +
+        (item && item.evidence ? '<p class="muted">' + escapeHtml(item.evidence) + '</p>' : '') +
+      '</article>';
+    }).join('') + '</div>';
+  }
+
+  function renderSimpleListSection(title, items, emptyMessage) {
+    const values = normalizeList(items);
+    const body = values.length
+      ? '<div class="list-stack">' + values.map((item) => '<article class="list-card"><p>' + escapeHtml(item) + '</p></article>').join('') + '</div>'
+      : '<div class="empty-state">' + escapeHtml(emptyMessage) + '</div>';
+
+    return '<section class="report-section">' +
+      '<div class="section-head"><h3>' + escapeHtml(title) + '</h3></div>' +
+      body +
+    '</section>';
+  }
+
+  function renderBrandBookStatusReport(result) {
+    const sections = normalizeObjectArray(result && result.sections);
+    const missingItems = normalizeObjectArray(result && result.missing_items);
+
+    const sectionCards = sections.length
+      ? '<div class="score-grid">' + sections.map((section) => {
+          const total = typeof section.total_items === 'number' ? section.total_items : 0;
+          const completed = typeof section.completed_items === 'number' ? section.completed_items : 0;
+          return '<article class="score-card">' +
+            '<span class="score-label">' + escapeHtml(section && section.name ? section.name : 'Section') + '</span>' +
+            '<span class="score-value">' + escapeHtml(total ? Math.round((completed / total) * 100) + '%' : '—') + '</span>' +
+            '<span class="score-subtle">' + escapeHtml(completed + ' of ' + total + ' items complete') + '</span>' +
+          '</article>';
+        }).join('') + '</div>'
+      : '<div class="empty-state">No brand-book sections were returned.</div>';
+
+    return '<section class="report-section">' +
+        '<div class="section-head"><h3>Brand-book coverage</h3></div>' +
+        '<div class="summary-grid">' +
+          summaryValue('Completeness', escapeHtml(String(result && result.completeness_score !== undefined ? result.completeness_score + '%' : '—')), 'success') +
+          summaryValue('Sections', formatNumber(sections.length), 'neutral') +
+          summaryValue('Missing items', formatNumber(missingItems.length), 'warning') +
+        '</div>' +
+        '<p class="hero-summary">' + escapeHtml(result && result.readiness_summary ? result.readiness_summary : 'No readiness summary was returned.') + '</p>' +
+      '</section>' +
+      '<section class="report-section">' +
+        '<div class="section-head"><h3>Section health</h3></div>' +
+        sectionCards +
+      '</section>' +
+      '<section class="report-section">' +
+        '<div class="section-head"><h3>Missing items</h3></div>' +
+        renderFindingsCards(missingItems.map((item) => ({
+          title: item.item || 'Missing item',
+          detail: item.detail,
+          priority: item.priority,
+          page: item.section,
+        })), 'No missing brand-book items were returned.') +
+      '</section>';
+  }
+
+  function renderBrandBookStrategyReport(result) {
+    const priorities = normalizeObjectArray(result && result.strategic_priorities);
+    const priorityCards = priorities.length
+      ? '<div class="action-grid">' + priorities.map((item) => {
+          return '<article class="action-card">' +
+            '<div class="action-title-row"><h4>' + escapeHtml(item && item.title ? item.title : 'Priority') + '</h4>' +
+            (item && item.priority ? '<span class="pill">' + escapeHtml(item.priority) + '</span>' : '') +
+            '</div>' +
+            (item && item.rationale ? '<p>' + escapeHtml(item.rationale) + '</p>' : '') +
+          '</article>';
+        }).join('') + '</div>'
+      : '<div class="empty-state">No strategic priorities were returned.</div>';
+
+    return '<section class="report-section">' +
+        '<div class="section-head"><h3>Strategic priorities</h3></div>' +
+        priorityCards +
+      '</section>' +
+      renderSimpleListSection('Positioning recommendations', result && result.positioning_recommendations, 'No positioning recommendations were returned.') +
+      renderSimpleListSection('Voice recommendations', result && result.voice_recommendations, 'No voice recommendations were returned.') +
+      renderSimpleListSection('Competitive recommendations', result && result.competitive_recommendations, 'No competitive recommendations were returned.') +
+      renderSimpleListSection('Proof recommendations', result && result.proof_recommendations, 'No proof recommendations were returned.');
+  }
+
+  function renderWebsiteAuditReport(result) {
+    return '<section class="report-section">' +
+        '<div class="section-head"><h3>Website summary</h3></div>' +
+        '<div class="summary-grid">' +
+          summaryValue('Website', result && result.website_url ? result.website_url : '—', 'neutral') +
+          summaryValue('Messaging findings', formatNumber(Array.isArray(result && result.messaging_findings) ? result.messaging_findings.length : 0), 'neutral') +
+          summaryValue('SEO findings', formatNumber(Array.isArray(result && result.seo_findings) ? result.seo_findings.length : 0), 'neutral') +
+        '</div>' +
+      '</section>' +
+      '<section class="report-section"><div class="section-head"><h3>Messaging findings</h3></div>' + renderFindingsCards(result && result.messaging_findings, 'No messaging findings were returned.') + '</section>' +
+      '<section class="report-section"><div class="section-head"><h3>Conversion findings</h3></div>' + renderFindingsCards(result && result.conversion_findings, 'No conversion findings were returned.') + '</section>' +
+      '<section class="report-section"><div class="section-head"><h3>SEO findings</h3></div>' + renderFindingsCards(result && result.seo_findings, 'No SEO findings were returned.') + '</section>' +
+      '<section class="report-section"><div class="section-head"><h3>GEO findings</h3></div>' + renderFindingsCards(result && result.geo_findings, 'No GEO findings were returned.') + '</section>' +
+      '<section class="report-section"><div class="section-head"><h3>Competitive findings</h3></div>' + renderFindingsCards(result && result.competitor_findings, 'No competitor findings were returned.') + '</section>';
+  }
+
+  function renderWebsiteStrategyReport(result) {
+    const priorities = normalizeObjectArray(result && result.priority_plan);
+    const pageRecommendations = normalizeObjectArray(result && result.page_level_recommendations);
+    const measurementPlan = normalizeObjectArray(result && result.measurement_plan);
+
+    const priorityCards = priorities.length
+      ? '<div class="action-grid">' + priorities.map((item) => {
+          return '<article class="action-card">' +
+            '<div class="action-title-row"><h4>' + escapeHtml(item && item.title ? item.title : 'Priority') + '</h4>' +
+            (item && item.priority ? '<span class="pill">' + escapeHtml(item.priority) + '</span>' : '') +
+            '</div>' +
+            (item && item.rationale ? '<p>' + escapeHtml(item.rationale) + '</p>' : '') +
+          '</article>';
+        }).join('') + '</div>'
+      : '<div class="empty-state">No priority plan was returned.</div>';
+
+    const pageCards = pageRecommendations.length
+      ? '<div class="list-stack">' + pageRecommendations.map((item) => {
+          return '<article class="list-card">' +
+            '<div class="action-title-row"><h4>' + escapeHtml(item && item.page ? item.page : 'Page') + '</h4>' +
+            (item && item.priority ? '<span class="pill">' + escapeHtml(item.priority) + '</span>' : '') +
+            '</div>' +
+            (item && item.recommendation ? '<p>' + escapeHtml(item.recommendation) + '</p>' : '') +
+            (item && item.rationale ? '<p class="muted">' + escapeHtml(item.rationale) + '</p>' : '') +
+          '</article>';
+        }).join('') + '</div>'
+      : '<div class="empty-state">No page-level recommendations were returned.</div>';
+
+    const measurementCards = measurementPlan.length
+      ? '<div class="list-stack">' + measurementPlan.map((item) => {
+          return '<article class="list-card">' +
+            '<h4>' + escapeHtml(item && item.metric ? item.metric : 'Metric') + '</h4>' +
+            (item && item.target ? '<div class="meta-row"><span>Target</span><strong>' + escapeHtml(item.target) + '</strong></div>' : '') +
+            (item && item.rationale ? '<p>' + escapeHtml(item.rationale) + '</p>' : '') +
+          '</article>';
+        }).join('') + '</div>'
+      : '<div class="empty-state">No measurement plan was returned.</div>';
+
+    return '<section class="report-section">' +
+        '<div class="section-head"><h3>Priority plan</h3></div>' +
+        priorityCards +
+      '</section>' +
+      '<section class="report-section"><div class="section-head"><h3>Page-level recommendations</h3></div>' + pageCards + '</section>' +
+      renderSimpleListSection('Messaging changes', result && result.messaging_changes, 'No messaging changes were returned.') +
+      renderSimpleListSection('SEO and GEO changes', result && result.seo_geo_changes, 'No SEO or GEO changes were returned.') +
+      '<section class="report-section"><div class="section-head"><h3>Measurement plan</h3></div>' + measurementCards + '</section>';
+  }
+
   function buildGeoForm(args) {
     const questions = normalizeList(args && args.questions).join('\n');
     const competitors = normalizeList(args && args.competitors).join('\n');
@@ -369,6 +529,48 @@ export const REPORT_APP_SCRIPT = String.raw`
     '</div>';
   }
 
+  function buildBrandBookStatusForm(args) {
+    return '<div class="form-grid">' +
+      '<label class="checkbox-row"><input type="checkbox" name="include_recent_reflections"' + (args && args.include_recent_reflections ? ' checked' : '') + ' /><span>Include recent reflection count</span></label>' +
+    '</div>';
+  }
+
+  function buildBrandBookStrategyForm(args) {
+    const goals = normalizeList(args && args.goals).join('\n');
+    const focusAreas = normalizeList(args && args.focus_areas).join('\n');
+    return '<div class="form-grid">' +
+      '<label class="full"><span>Goals (one per line)</span><textarea name="goals">' + escapeHtml(goals) + '</textarea></label>' +
+      '<label class="full"><span>Focus areas (one per line)</span><textarea name="focus_areas">' + escapeHtml(focusAreas) + '</textarea></label>' +
+      '<label class="checkbox-row"><input type="checkbox" name="include_intelligence_signals"' + (args && args.include_intelligence_signals ? ' checked' : '') + ' /><span>Include GEO, SEO, and battlecard follow-ups</span></label>' +
+    '</div>';
+  }
+
+  function buildWebsiteAuditForm(args) {
+    const goals = normalizeList(args && args.goals).join('\n');
+    const competitors = normalizeList(args && args.competitors).join('\n');
+    const analysisDepth = args && args.analysis_depth ? args.analysis_depth : 'standard';
+    return '<div class="form-grid">' +
+      '<label><span>Website URL</span><input name="website_url" value="' + escapeHtml(args && args.website_url ? args.website_url : '') + '" /></label>' +
+      '<label><span>Analysis depth</span><select name="analysis_depth">' +
+        '<option value="standard"' + (analysisDepth === 'standard' ? ' selected' : '') + '>Standard</option>' +
+        '<option value="deep"' + (analysisDepth === 'deep' ? ' selected' : '') + '>Deep</option>' +
+      '</select></label>' +
+      '<label class="full"><span>Goals (one per line)</span><textarea name="goals">' + escapeHtml(goals) + '</textarea></label>' +
+      '<label class="full"><span>Competitors (one per line)</span><textarea name="competitors">' + escapeHtml(competitors) + '</textarea></label>' +
+    '</div>';
+  }
+
+  function buildWebsiteStrategyForm(args) {
+    const constraints = normalizeList(args && args.constraints).join('\n');
+    const priorityPages = normalizeList(args && args.priority_pages).join('\n');
+    return '<div class="form-grid">' +
+      '<label><span>Website URL</span><input name="website_url" value="' + escapeHtml(args && args.website_url ? args.website_url : '') + '" /></label>' +
+      '<label><span>Primary goal</span><input name="primary_goal" value="' + escapeHtml(args && args.primary_goal ? args.primary_goal : '') + '" /></label>' +
+      '<label class="full"><span>Constraints (one per line)</span><textarea name="constraints">' + escapeHtml(constraints) + '</textarea></label>' +
+      '<label class="full"><span>Priority pages (one per line)</span><textarea name="priority_pages">' + escapeHtml(priorityPages) + '</textarea></label>' +
+    '</div>';
+  }
+
   function renderRerunForm() {
     const args = state.toolArgs || {};
     let body = '';
@@ -376,8 +578,16 @@ export const REPORT_APP_SCRIPT = String.raw`
       body = buildGeoForm(args);
     } else if (config.reportType === 'seo') {
       body = buildSeoForm(args);
-    } else {
+    } else if (config.reportType === 'battlecard') {
       body = buildBattlecardForm(args);
+    } else if (config.reportType === 'brandBookStatus') {
+      body = buildBrandBookStatusForm(args);
+    } else if (config.reportType === 'brandBookStrategy') {
+      body = buildBrandBookStrategyForm(args);
+    } else if (config.reportType === 'websiteAudit') {
+      body = buildWebsiteAuditForm(args);
+    } else {
+      body = buildWebsiteStrategyForm(args);
     }
 
     return '<section class="report-section">' +
@@ -421,11 +631,43 @@ export const REPORT_APP_SCRIPT = String.raw`
       };
     }
 
+    if (config.reportType === 'battlecard') {
+      return {
+        competitor_name: String(formData.get('competitor_name') || '').trim(),
+        company_name: String(formData.get('company_name') || '').trim() || undefined,
+        focus_areas: parseLines(formData.get('focus_areas')),
+        include_objections: formData.get('include_objections') === 'on',
+      };
+    }
+
+    if (config.reportType === 'brandBookStatus') {
+      return {
+        include_recent_reflections: formData.get('include_recent_reflections') === 'on',
+      };
+    }
+
+    if (config.reportType === 'brandBookStrategy') {
+      return {
+        goals: parseLines(formData.get('goals')),
+        focus_areas: parseLines(formData.get('focus_areas')),
+        include_intelligence_signals: formData.get('include_intelligence_signals') === 'on',
+      };
+    }
+
+    if (config.reportType === 'websiteAudit') {
+      return {
+        website_url: String(formData.get('website_url') || '').trim() || undefined,
+        analysis_depth: String(formData.get('analysis_depth') || 'standard'),
+        goals: parseLines(formData.get('goals')),
+        competitors: parseLines(formData.get('competitors')),
+      };
+    }
+
     return {
-      competitor_name: String(formData.get('competitor_name') || '').trim(),
-      company_name: String(formData.get('company_name') || '').trim() || undefined,
-      focus_areas: parseLines(formData.get('focus_areas')),
-      include_objections: formData.get('include_objections') === 'on',
+      website_url: String(formData.get('website_url') || '').trim() || undefined,
+      primary_goal: String(formData.get('primary_goal') || '').trim() || undefined,
+      constraints: parseLines(formData.get('constraints')),
+      priority_pages: parseLines(formData.get('priority_pages')),
     };
   }
 
@@ -458,7 +700,11 @@ export const REPORT_APP_SCRIPT = String.raw`
 
     if (config.reportType === 'geo') return renderGeoReport(state.result);
     if (config.reportType === 'seo') return renderSeoReport(state.result);
-    return renderBattlecardReport(state.result);
+    if (config.reportType === 'battlecard') return renderBattlecardReport(state.result);
+    if (config.reportType === 'brandBookStatus') return renderBrandBookStatusReport(state.result);
+    if (config.reportType === 'brandBookStrategy') return renderBrandBookStrategyReport(state.result);
+    if (config.reportType === 'websiteAudit') return renderWebsiteAuditReport(state.result);
+    return renderWebsiteStrategyReport(state.result);
   }
 
   function render() {

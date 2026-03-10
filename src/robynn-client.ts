@@ -5,6 +5,20 @@ import type {
   Thread,
   RunResult,
   RobynnApiResponse,
+  BrandBookStatusRequest,
+  BrandBookStatusResult,
+  BrandBookGapAnalysisRequest,
+  BrandBookGapAnalysisResult,
+  BrandBookStrategyRequest,
+  BrandBookStrategyResult,
+  BrandReflectionsRequest,
+  BrandReflectionsResult,
+  PublishBrandBookHtmlRequest,
+  PublishBrandBookHtmlResult,
+  WebsiteAuditRequest,
+  WebsiteAuditResult,
+  WebsiteStrategyRequest,
+  WebsiteStrategyResult,
   GeoAnalysisRequest,
   GeoAnalysisResult,
   CompetitiveBattlecardRequest,
@@ -26,6 +40,18 @@ export class RobynnClient {
     private readonly baseUrl: string,
     private readonly accessToken: string
   ) {}
+
+  private withQuery(
+    path: string,
+    params: Record<string, string | number | boolean | undefined>
+  ) {
+    const url = new URL(path, this.baseUrl);
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") return;
+      url.searchParams.set(key, String(value));
+    });
+    return `${url.pathname}${url.search}`;
+  }
 
   private async fetch<T>(
     path: string,
@@ -103,6 +129,79 @@ export class RobynnClient {
   ): Promise<RobynnApiResponse<SeoOpportunitiesResult>> {
     return this.fetch('/api/cli/mcp/seo-opportunities', {
       method: 'POST',
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Get the current brand-book completeness snapshot */
+  async brandBookStatus(
+    payload: BrandBookStatusRequest = {}
+  ): Promise<RobynnApiResponse<BrandBookStatusResult>> {
+    return this.fetch(
+      this.withQuery("/api/cli/mcp/brand-book/status", {
+        include_recent_reflections: payload.include_recent_reflections,
+      })
+    );
+  }
+
+  /** Explain which brand-book gaps matter most right now */
+  async brandBookGapAnalysis(
+    payload: BrandBookGapAnalysisRequest
+  ): Promise<RobynnApiResponse<BrandBookGapAnalysisResult>> {
+    return this.fetch("/api/cli/mcp/brand-book/gap-analysis", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Convert current brand context into a deterministic improvement strategy */
+  async brandBookStrategy(
+    payload: BrandBookStrategyRequest
+  ): Promise<RobynnApiResponse<BrandBookStrategyResult>> {
+    return this.fetch("/api/cli/mcp/brand-book/strategy", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** List current brand reflections and pending changelog items */
+  async brandReflections(
+    payload: BrandReflectionsRequest = {}
+  ): Promise<RobynnApiResponse<BrandReflectionsResult>> {
+    return this.fetch(
+      this.withQuery("/api/cli/mcp/brand-book/reflections", {
+        status_filter: payload.status_filter,
+        limit: payload.limit,
+      })
+    );
+  }
+
+  /** Generate an HTML brand book artifact through the MCP-safe API route */
+  async publishBrandBookHtml(
+    payload: PublishBrandBookHtmlRequest = {}
+  ): Promise<RobynnApiResponse<PublishBrandBookHtmlResult>> {
+    return this.fetch("/api/cli/mcp/brand-book/publish-html", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Execute a structured website audit against the organization's site */
+  async websiteAudit(
+    payload: WebsiteAuditRequest
+  ): Promise<RobynnApiResponse<WebsiteAuditResult>> {
+    return this.fetch("/api/cli/mcp/website/audit", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Translate website audit findings into a prioritized website strategy */
+  async websiteStrategy(
+    payload: WebsiteStrategyRequest
+  ): Promise<RobynnApiResponse<WebsiteStrategyResult>> {
+    return this.fetch("/api/cli/mcp/website/strategy", {
+      method: "POST",
       body: JSON.stringify(payload),
     }, POLL_TIMEOUT_MS);
   }

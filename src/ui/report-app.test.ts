@@ -49,6 +49,10 @@ describe("report-app helpers", () => {
     expect(resources.has(REPORT_RESOURCE_URIS.geo)).toBe(true);
     expect(resources.has(REPORT_RESOURCE_URIS.seo)).toBe(true);
     expect(resources.has(REPORT_RESOURCE_URIS.battlecard)).toBe(true);
+    expect(resources.has(REPORT_RESOURCE_URIS.brandBookStatus)).toBe(true);
+    expect(resources.has(REPORT_RESOURCE_URIS.brandBookStrategy)).toBe(true);
+    expect(resources.has(REPORT_RESOURCE_URIS.websiteAudit)).toBe(true);
+    expect(resources.has(REPORT_RESOURCE_URIS.websiteStrategy)).toBe(true);
 
     const geoResource = resources.get(REPORT_RESOURCE_URIS.geo);
     const geoRead = await geoResource?.read();
@@ -57,5 +61,15 @@ describe("report-app helpers", () => {
       "https://mcp.robynn.ai",
     ]);
     expect(geoRead?.contents[0]?.text).toContain("Robynn GEO Report");
+  });
+
+  it("builds brand-book report HTML for the new guided surfaces", () => {
+    const html = buildReportAppHtml({
+      reportType: "brandBookStatus",
+      publicBaseUrl: "https://mcp.robynn.ai",
+    });
+
+    expect(html).toContain('"reportType":"brandBookStatus"');
+    expect(html).toContain("Robynn Brand Book Status");
   });
 });

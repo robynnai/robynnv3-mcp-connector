@@ -17,6 +17,7 @@ describe("RobynnClient intelligence routes", () => {
             status: "success",
             artifacts: {},
             recommended_actions: [],
+            next_steps: [],
             visibility_scores: [],
             citation_breakdown: {
               target_company: 1,
@@ -57,6 +58,7 @@ describe("RobynnClient intelligence routes", () => {
             status: "success",
             artifacts: {},
             recommended_actions: [],
+            next_steps: [],
             comparison: [],
             objections: [],
             differentiators: [],
@@ -90,6 +92,7 @@ describe("RobynnClient intelligence routes", () => {
             status: "success",
             artifacts: {},
             recommended_actions: [],
+            next_steps: [],
             opportunities: [],
             keyword_gaps: [],
             competitor_comparison: [],
@@ -105,6 +108,114 @@ describe("RobynnClient intelligence routes", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://robynn.test/api/cli/mcp/seo-opportunities",
+      expect.objectContaining({
+        method: "POST",
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("calls the brand-book status MCP-safe route with query params", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            summary: "status",
+            status: "partial",
+            artifacts: {},
+            recommended_actions: [],
+            next_steps: [],
+            completeness_score: 55,
+            sections: [],
+            missing_items: [],
+            readiness_summary: "partial",
+          },
+        })
+      )
+    );
+
+    const client = new RobynnClient("https://robynn.test", "token-123");
+    const result = await client.brandBookStatus({
+      include_recent_reflections: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/cli/mcp/brand-book/status?include_recent_reflections=true",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer token-123",
+        }),
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("calls the brand reflections MCP-safe route with query params", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            summary: "reflections",
+            status: "success",
+            artifacts: {},
+            recommended_actions: [],
+            next_steps: [],
+            pending_reflections: [],
+            recent_reflections: [],
+          },
+        })
+      )
+    );
+
+    const client = new RobynnClient("https://robynn.test", "token-123");
+    const result = await client.brandReflections({
+      status_filter: "pending",
+      limit: 5,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/cli/mcp/brand-book/reflections?status_filter=pending&limit=5",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer token-123",
+        }),
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("posts website strategy requests to the MCP-safe API route", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            summary: "website strategy",
+            status: "success",
+            artifacts: {},
+            recommended_actions: [],
+            next_steps: [],
+            website_url: "https://acme.test",
+            priority_plan: [],
+            page_level_recommendations: [],
+            messaging_changes: [],
+            seo_geo_changes: [],
+            measurement_plan: [],
+          },
+        })
+      )
+    );
+
+    const client = new RobynnClient("https://robynn.test", "token-123");
+    const result = await client.websiteStrategy({
+      website_url: "https://acme.test",
+      primary_goal: "Increase qualified demos",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/cli/mcp/website/strategy",
       expect.objectContaining({
         method: "POST",
       })
