@@ -4,6 +4,7 @@ export interface Env {
   OAUTH_KV: KVNamespace;
   ROBYNN_API_BASE_URL: string;
   MCP_PUBLIC_BASE_URL?: string;
+  MCP_INTERNAL_AUTH_SECRET?: string;
   MCP_SERVER_NAME: string;
   MCP_SERVER_VERSION: string;
   MCP_OBJECT: DurableObjectNamespace;

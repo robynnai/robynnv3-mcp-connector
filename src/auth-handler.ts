@@ -1,6 +1,12 @@
 import { Hono } from "hono";
 import type { Env } from "./types";
 import { REPORT_APP_SCRIPT } from "./ui/report-app-script";
+import {
+  MCP_SIGNATURE_HEADER,
+  MCP_TIMESTAMP_HEADER,
+  shouldSignTrustedMcpTokenExchange,
+  signTrustedMcpTokenExchange,
+} from "./internal-mcp-auth";
 
 type HonoEnv = { Bindings: Env };
 const OAUTH_CLIENT_ID = "robynn-mcp-worker";
@@ -90,12 +96,34 @@ app.get("/callback", async (c) => {
     oauthRequest: import("./types").OAuthRequestInfo;
   };
 
+  const internalAuthSecret = c.env.MCP_INTERNAL_AUTH_SECRET?.trim();
+  const tokenExchangeHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (
+    shouldSignTrustedMcpTokenExchange(internalAuthSecret, OAUTH_CLIENT_ID)
+  ) {
+    const { signature, timestamp } = await signTrustedMcpTokenExchange(
+      internalAuthSecret,
+      {
+        grantType: "authorization_code",
+        code,
+        clientId: OAUTH_CLIENT_ID,
+        redirectUri: storedState.workerCallbackUrl,
+      }
+    );
+
+    tokenExchangeHeaders[MCP_SIGNATURE_HEADER] = signature;
+    tokenExchangeHeaders[MCP_TIMESTAMP_HEADER] = timestamp;
+  }
+
   // Exchange authorization code for tokens with robynn.ai
   const tokenResponse = await fetch(
     `${c.env.ROBYNN_API_BASE_URL}/api/oauth/token`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: tokenExchangeHeaders,
       body: JSON.stringify({
         grant_type: "authorization_code",
         code,
