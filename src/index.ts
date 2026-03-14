@@ -1,4 +1,5 @@
-import OAuthProvider from "@cloudflare/workers-oauth-provider";
+import OAuthProvider, { GrantType } from "@cloudflare/workers-oauth-provider";
+import type { TokenExchangeCallbackOptions, TokenExchangeCallbackResult } from "@cloudflare/workers-oauth-provider";
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { RobynnClient } from "./robynn-client";
@@ -56,6 +57,56 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
   }
 }
 
+const OAUTH_CLIENT_ID = "robynn-mcp-worker";
+
+/**
+ * Refresh the upstream robynn.ai JWT when the OAuthProvider rotates tokens.
+ * On authorization_code grant the props already contain a fresh JWT, so we
+ * only act on refresh_token grants.
+ */
+async function tokenExchangeCallback(
+  options: TokenExchangeCallbackOptions,
+): Promise<TokenExchangeCallbackResult | void> {
+  if (options.grantType !== GrantType.REFRESH_TOKEN) return;
+
+  const props = options.props as Props;
+  if (!props.refreshToken || !props._apiBaseUrl) return;
+
+  try {
+    const res = await fetch(`${props._apiBaseUrl}/api/oauth/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grant_type: "refresh_token",
+        refresh_token: props.refreshToken,
+        client_id: OAUTH_CLIENT_ID,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("[TokenExchange] Upstream refresh failed:", res.status, await res.text());
+      return;
+    }
+
+    const tokens = (await res.json()) as {
+      access_token: string;
+      refresh_token: string;
+      expires_in: number;
+    };
+
+    return {
+      newProps: {
+        ...props,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+      },
+      accessTokenTTL: tokens.expires_in,
+    };
+  } catch (err) {
+    console.error("[TokenExchange] Failed to refresh upstream token:", err);
+  }
+}
+
 const oauthProvider = new OAuthProvider({
   apiRoute: ["/mcp", "/sse"],
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -64,6 +115,9 @@ const oauthProvider = new OAuthProvider({
   authorizeEndpoint: "/authorize",
   tokenEndpoint: "/token",
   clientRegistrationEndpoint: "/register",
+  accessTokenTTL: 3600,
+  refreshTokenTTL: 30 * 24 * 3600,
+  tokenExchangeCallback,
 })
 
 /**

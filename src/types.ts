@@ -41,6 +41,7 @@ export interface Props {
   refreshToken?: string;
   userId: string;
   organizationId: string;
+  _apiBaseUrl?: string;
   [key: string]: unknown;
 }
 
