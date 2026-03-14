@@ -4,30 +4,7 @@ import { z } from "zod";
 
 import type { RobynnClient } from "../robynn-client";
 import { REPORT_RESOURCE_URIS } from "../ui/report-app";
-
-function toErrorResult(message: string) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: message,
-      },
-    ],
-    isError: true,
-  };
-}
-
-function toSuccessResult(result: Record<string, unknown>) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: JSON.stringify(result, null, 2),
-      },
-    ],
-    structuredContent: result,
-  };
-}
+import { toErrorResult, toSuccessResult } from "./util";
 
 export function registerWebsiteTools(server: McpServer, client: RobynnClient) {
   registerAppTool(
@@ -76,14 +53,11 @@ export function registerWebsiteTools(server: McpServer, client: RobynnClient) {
         });
 
         if (!result.success || !result.data) {
-          return toErrorResult(
-            JSON.stringify({
-              error: result.error || "Website audit failed",
-            }),
-          );
+          return toErrorResult(result.error || "Website audit failed");
         }
 
-        return toSuccessResult(result.data as unknown as Record<string, unknown>);
+        const data = result.data as unknown as Record<string, unknown>;
+        return toSuccessResult(data, (data.summary as string) || undefined);
       } catch (err) {
         return toErrorResult(
           `Error running website audit: ${err instanceof Error ? err.message : "Unknown error"}`,
@@ -138,14 +112,11 @@ export function registerWebsiteTools(server: McpServer, client: RobynnClient) {
         });
 
         if (!result.success || !result.data) {
-          return toErrorResult(
-            JSON.stringify({
-              error: result.error || "Website strategy failed",
-            }),
-          );
+          return toErrorResult(result.error || "Website strategy failed");
         }
 
-        return toSuccessResult(result.data as unknown as Record<string, unknown>);
+        const data = result.data as unknown as Record<string, unknown>;
+        return toSuccessResult(data, (data.summary as string) || undefined);
       } catch (err) {
         return toErrorResult(
           `Error building website strategy: ${err instanceof Error ? err.message : "Unknown error"}`,

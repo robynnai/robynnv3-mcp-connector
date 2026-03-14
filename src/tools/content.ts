@@ -1,17 +1,26 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
+import { toErrorResult, toSuccessResult } from "./util";
 
 export function registerContentTools(server: McpServer, client: RobynnClient) {
   server.tool(
     "robynn_create_content",
-    "Create marketing content using the Robynn CMO agent. The content is generated using your brand voice, positioning, and guidelines. Supports blog posts, LinkedIn posts, emails, ad copy, and more.",
+    "Create marketing content using the Robynn CMO agent. The content is generated using your brand voice, positioning, and guidelines.",
     {
       type: z
-        .string()
-        .describe(
-          "Content type: linkedin_post, blog_post, email, ad_copy, social_media, landing_page, press_release, or general"
-        ),
+        .enum([
+          "linkedin_post",
+          "blog_post",
+          "email",
+          "ad_copy",
+          "social_media",
+          "landing_page",
+          "press_release",
+          "newsletter",
+          "general",
+        ])
+        .describe("Content type to generate"),
       topic: z.string().describe("The topic or subject for the content"),
       instructions: z
         .string()
@@ -25,22 +34,11 @@ export function registerContentTools(server: McpServer, client: RobynnClient) {
     { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     async ({ type, topic, instructions, thread_id }) => {
       try {
-        // Create or reuse thread
         let threadId = thread_id;
         if (!threadId) {
           const threadResult = await client.createThread(`${type}: ${topic}`);
           if (!threadResult.success || !threadResult.data) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify({
-                    error: "Failed to create conversation thread",
-                  }),
-                },
-              ],
-              isError: true,
-            };
+            return toErrorResult("Failed to create conversation thread");
           }
           threadId = threadResult.data.id;
         }
@@ -53,32 +51,13 @@ export function registerContentTools(server: McpServer, client: RobynnClient) {
         const runResult = await client.startRun(threadId, { message, type });
 
         if (!runResult.success || !runResult.data) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  error:
-                    runResult.error || "Failed to start content generation",
-                }),
-              },
-            ],
-            isError: true,
-          };
+          return toErrorResult(runResult.error || "Failed to start content generation");
         }
 
         const result = await client.pollRun(runResult.data.run_id);
 
         if (!result.success || !result.data) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({ error: "Content generation failed" }),
-              },
-            ],
-            isError: true,
-          };
+          return toErrorResult("Content generation failed");
         }
 
         const responseData = {
@@ -89,26 +68,12 @@ export function registerContentTools(server: McpServer, client: RobynnClient) {
           status: result.data.status,
         };
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(responseData, null, 2),
-            },
-          ],
-          structuredContent: responseData as Record<string, unknown>,
-        };
+        return toSuccessResult(responseData as Record<string, unknown>);
       } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error creating content: ${err instanceof Error ? err.message : "Unknown error"}`,
-            },
-          ],
-          isError: true,
-        };
+        return toErrorResult(
+          `Error creating content: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
       }
-    }
+    },
   );
 }

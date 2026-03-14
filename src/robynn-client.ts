@@ -58,6 +58,15 @@ export class RobynnClient {
     options: RequestInit = {},
     timeoutMs = READ_TIMEOUT_MS
   ): Promise<T> {
+    return this.fetchWithRetry(path, options, timeoutMs, 1);
+  }
+
+  private async fetchWithRetry<T>(
+    path: string,
+    options: RequestInit,
+    timeoutMs: number,
+    retriesLeft: number,
+  ): Promise<T> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -74,10 +83,32 @@ export class RobynnClient {
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
-        throw new Error(`API error ${response.status}: ${text}`);
+        const status = response.status;
+
+        // Retry on 5xx server errors only
+        if (status >= 500 && retriesLeft > 0) {
+          clearTimeout(timeout);
+          await new Promise((r) => setTimeout(r, 1_000));
+          return this.fetchWithRetry(path, options, timeoutMs, retriesLeft - 1);
+        }
+
+        throw new Error(`API error ${status}: ${text}`);
       }
 
       return response.json() as Promise<T>;
+    } catch (err) {
+      // Retry on network errors (not aborts, not 4xx)
+      if (
+        retriesLeft > 0 &&
+        err instanceof Error &&
+        !err.message.startsWith('API error') &&
+        err.name !== 'AbortError'
+      ) {
+        clearTimeout(timeout);
+        await new Promise((r) => setTimeout(r, 1_000));
+        return this.fetchWithRetry(path, options, timeoutMs, retriesLeft - 1);
+      }
+      throw err;
     } finally {
       clearTimeout(timeout);
     }

@@ -1,10 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
+import { toErrorResult, toSuccessResult } from "./util";
 
 export function registerResearchTools(
   server: McpServer,
-  client: RobynnClient
+  client: RobynnClient,
 ) {
   server.tool(
     "robynn_research",
@@ -28,20 +29,10 @@ export function registerResearchTools(
         let threadId = thread_id;
         if (!threadId) {
           const threadResult = await client.createThread(
-            `Research: ${query.slice(0, 50)}`
+            `Research: ${query.slice(0, 50)}`,
           );
           if (!threadResult.success || !threadResult.data) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify({
-                    error: "Failed to create research thread",
-                  }),
-                },
-              ],
-              isError: true,
-            };
+            return toErrorResult("Failed to create research thread");
           }
           threadId = threadResult.data.id;
         }
@@ -56,31 +47,13 @@ export function registerResearchTools(
         });
 
         if (!runResult.success || !runResult.data) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  error: runResult.error || "Failed to start research",
-                }),
-              },
-            ],
-            isError: true,
-          };
+          return toErrorResult(runResult.error || "Failed to start research");
         }
 
         const result = await client.pollRun(runResult.data.run_id);
 
         if (!result.success || !result.data) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({ error: "Research failed" }),
-              },
-            ],
-            isError: true,
-          };
+          return toErrorResult("Research failed");
         }
 
         const responseData = {
@@ -91,26 +64,12 @@ export function registerResearchTools(
           status: result.data.status,
         };
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(responseData, null, 2),
-            },
-          ],
-          structuredContent: responseData as Record<string, unknown>,
-        };
+        return toSuccessResult(responseData as Record<string, unknown>);
       } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error during research: ${err instanceof Error ? err.message : "Unknown error"}`,
-            },
-          ],
-          isError: true,
-        };
+        return toErrorResult(
+          `Error during research: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
       }
-    }
+    },
   );
 }

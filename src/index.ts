@@ -32,18 +32,31 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
     const accessToken = this.props?.accessToken;
     if (!accessToken) {
       console.error("[RobynnMCP] No access token in props — tools will fail");
+      this.server.tool(
+        "robynn_status",
+        "Check Robynn connection status.",
+        {},
+        async () => ({
+          content: [
+            {
+              type: "text" as const,
+              text: "Not authenticated. Please disconnect and reconnect the Robynn connector in your Claude settings.",
+            },
+          ],
+          isError: true,
+        }),
+      );
+      return;
     }
 
-    // Create API client using the authenticated user's access token
     const client = new RobynnClient(
       this.env.ROBYNN_API_BASE_URL,
-      accessToken || ""
+      accessToken,
     );
     const publicBaseUrl = getPublicBaseUrl(this.env.MCP_PUBLIC_BASE_URL);
 
     registerReportAppResources(this.server, publicBaseUrl);
 
-    // Register the existing tools plus the Phase 1 intelligence-first tools
     registerContextTools(this.server, client);
     registerStatusTools(this.server, client);
     registerContentTools(this.server, client);

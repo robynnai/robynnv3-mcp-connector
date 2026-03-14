@@ -4,30 +4,7 @@ import { z } from "zod";
 
 import type { RobynnClient } from "../robynn-client";
 import { REPORT_RESOURCE_URIS } from "../ui/report-app";
-
-function toErrorResult(message: string) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: message,
-      },
-    ],
-    isError: true,
-  };
-}
-
-function toSuccessResult(result: Record<string, unknown>) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: JSON.stringify(result, null, 2),
-      },
-    ],
-    structuredContent: result,
-  };
-}
+import { toErrorResult, toSuccessResult } from "./util";
 
 export function registerBrandBookTools(server: McpServer, client: RobynnClient) {
   registerAppTool(
@@ -61,14 +38,11 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
         });
 
         if (!result.success || !result.data) {
-          return toErrorResult(
-            JSON.stringify({
-              error: result.error || "Brand book status failed",
-            }),
-          );
+          return toErrorResult(result.error || "Brand book status failed");
         }
 
-        return toSuccessResult(result.data as unknown as Record<string, unknown>);
+        const data = result.data as unknown as Record<string, unknown>;
+        return toSuccessResult(data, (data.summary as string) || undefined);
       } catch (err) {
         return toErrorResult(
           `Error loading brand book status: ${err instanceof Error ? err.message : "Unknown error"}`,
@@ -118,14 +92,11 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
         });
 
         if (!result.success || !result.data) {
-          return toErrorResult(
-            JSON.stringify({
-              error: result.error || "Brand book gap analysis failed",
-            }),
-          );
+          return toErrorResult(result.error || "Brand book gap analysis failed");
         }
 
-        return toSuccessResult(result.data as unknown as Record<string, unknown>);
+        const data = result.data as unknown as Record<string, unknown>;
+        return toSuccessResult(data, (data.summary as string) || undefined);
       } catch (err) {
         return toErrorResult(
           `Error loading brand book gap analysis: ${err instanceof Error ? err.message : "Unknown error"}`,
@@ -175,14 +146,11 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
         });
 
         if (!result.success || !result.data) {
-          return toErrorResult(
-            JSON.stringify({
-              error: result.error || "Brand book strategy failed",
-            }),
-          );
+          return toErrorResult(result.error || "Brand book strategy failed");
         }
 
-        return toSuccessResult(result.data as unknown as Record<string, unknown>);
+        const data = result.data as unknown as Record<string, unknown>;
+        return toSuccessResult(data, (data.summary as string) || undefined);
       } catch (err) {
         return toErrorResult(
           `Error loading brand book strategy: ${err instanceof Error ? err.message : "Unknown error"}`,
@@ -230,14 +198,11 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
         });
 
         if (!result.success || !result.data) {
-          return toErrorResult(
-            JSON.stringify({
-              error: result.error || "Brand reflections failed",
-            }),
-          );
+          return toErrorResult(result.error || "Brand reflections failed");
         }
 
-        return toSuccessResult(result.data as unknown as Record<string, unknown>);
+        const data = result.data as unknown as Record<string, unknown>;
+        return toSuccessResult(data, (data.summary as string) || undefined);
       } catch (err) {
         return toErrorResult(
           `Error loading brand reflections: ${err instanceof Error ? err.message : "Unknown error"}`,
@@ -263,7 +228,7 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
           .describe("Reserved flag for future export filtering"),
       },
       annotations: {
-        readOnlyHint: true,
+        readOnlyHint: false,
         destructiveHint: false,
         openWorldHint: false,
       },
@@ -282,14 +247,11 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
         });
 
         if (!result.success || !result.data) {
-          return toErrorResult(
-            JSON.stringify({
-              error: result.error || "Brand book HTML export failed",
-            }),
-          );
+          return toErrorResult(result.error || "Brand book HTML export failed");
         }
 
-        return toSuccessResult(result.data as unknown as Record<string, unknown>);
+        const data = result.data as unknown as Record<string, unknown>;
+        return toSuccessResult(data, (data.summary as string) || undefined);
       } catch (err) {
         return toErrorResult(
           `Error exporting brand book HTML: ${err instanceof Error ? err.message : "Unknown error"}`,
