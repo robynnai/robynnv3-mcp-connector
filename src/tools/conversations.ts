@@ -1,10 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
+import { toErrorResult, toSuccessResult } from "./util";
 
 export function registerConversationTools(
   server: McpServer,
-  client: RobynnClient
+  client: RobynnClient,
 ) {
   server.tool(
     "robynn_conversations",
@@ -13,7 +14,7 @@ export function registerConversationTools(
       action: z
         .enum(["list", "create"])
         .describe(
-          "Action to perform: list existing threads or create a new one"
+          "Action to perform: list existing threads or create a new one",
         ),
       title: z
         .string()
@@ -27,17 +28,7 @@ export function registerConversationTools(
           const result = await client.listThreads();
 
           if (!result.success) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify({
-                    error: result.error || "Failed to list threads",
-                  }),
-                },
-              ],
-              isError: true,
-            };
+            return toErrorResult(result.error || "Failed to list threads");
           }
 
           const responseData = {
@@ -45,32 +36,14 @@ export function registerConversationTools(
             count: result.data?.threads?.length || 0,
           };
 
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(responseData, null, 2),
-              },
-            ],
-            structuredContent: responseData as Record<string, unknown>,
-          };
+          return toSuccessResult(responseData as Record<string, unknown>);
         }
 
         if (action === "create") {
           const result = await client.createThread(title);
 
           if (!result.success || !result.data) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify({
-                    error: result.error || "Failed to create thread",
-                  }),
-                },
-              ],
-              isError: true,
-            };
+            return toErrorResult(result.error || "Failed to create thread");
           }
 
           const responseData = {
@@ -78,37 +51,15 @@ export function registerConversationTools(
             message: "Thread created successfully",
           };
 
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(responseData, null, 2),
-              },
-            ],
-            structuredContent: responseData as Record<string, unknown>,
-          };
+          return toSuccessResult(responseData as Record<string, unknown>);
         }
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({ error: `Unknown action: ${action}` }),
-            },
-          ],
-          isError: true,
-        };
+        return toErrorResult(`Unknown action: ${action}`);
       } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error managing conversations: ${err instanceof Error ? err.message : "Unknown error"}`,
-            },
-          ],
-          isError: true,
-        };
+        return toErrorResult(
+          `Error managing conversations: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
       }
-    }
+    },
   );
 }

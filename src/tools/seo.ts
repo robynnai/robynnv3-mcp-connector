@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
 import { REPORT_RESOURCE_URIS } from "../ui/report-app";
+import { toErrorResult, toSuccessResult } from "./util";
 
 export function registerSeoTools(server: McpServer, client: RobynnClient) {
   registerAppTool(
@@ -53,39 +54,16 @@ export function registerSeoTools(server: McpServer, client: RobynnClient) {
         });
 
         if (!result.success || !result.data) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  error: result.error || "SEO opportunities analysis failed",
-                }),
-              },
-            ],
-            isError: true,
-          };
+          return toErrorResult(result.error || "SEO opportunities analysis failed");
         }
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(result.data, null, 2),
-            },
-          ],
-          structuredContent: result.data as unknown as Record<string, unknown>,
-        };
+        const data = result.data as unknown as Record<string, unknown>;
+        return toSuccessResult(data, (data.summary as string) || undefined);
       } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error analyzing SEO opportunities: ${err instanceof Error ? err.message : "Unknown error"}`,
-            },
-          ],
-          isError: true,
-        };
+        return toErrorResult(
+          `Error analyzing SEO opportunities: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
       }
-    }
+    },
   );
 }

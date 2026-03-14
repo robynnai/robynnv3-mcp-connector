@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RobynnClient } from "../robynn-client";
+import { toErrorResult, toSuccessResult } from "./util";
 
 export function registerStatusTools(server: McpServer, client: RobynnClient) {
   server.tool(
@@ -15,27 +16,13 @@ export function registerStatusTools(server: McpServer, client: RobynnClient) {
           ...(result.data || {}),
         };
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(statusData, null, 2),
-            },
-          ],
-          structuredContent: statusData as Record<string, unknown>,
-        };
+        return toSuccessResult(statusData as Record<string, unknown>);
       } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error checking status: ${err instanceof Error ? err.message : "Unknown error"}`,
-            },
-          ],
-          isError: true,
-        };
+        return toErrorResult(
+          `Error checking status: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
       }
-    }
+    },
   );
 
   server.tool(
@@ -47,39 +34,15 @@ export function registerStatusTools(server: McpServer, client: RobynnClient) {
         const result = await client.getUsage();
 
         if (!result.success || !result.data) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  error: result.error || "Failed to fetch usage",
-                }),
-              },
-            ],
-            isError: true,
-          };
+          return toErrorResult(result.error || "Failed to fetch usage");
         }
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(result.data, null, 2),
-            },
-          ],
-          structuredContent: result.data as unknown as Record<string, unknown>,
-        };
+        return toSuccessResult(result.data as unknown as Record<string, unknown>);
       } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error fetching usage: ${err instanceof Error ? err.message : "Unknown error"}`,
-            },
-          ],
-          isError: true,
-        };
+        return toErrorResult(
+          `Error fetching usage: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
       }
-    }
+    },
   );
 }

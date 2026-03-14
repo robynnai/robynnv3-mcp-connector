@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
+import { toErrorResult, toSuccessResult } from "./util";
 
 export function registerContextTools(server: McpServer, client: RobynnClient) {
   server.tool(
@@ -26,86 +27,17 @@ export function registerContextTools(server: McpServer, client: RobynnClient) {
         const result = await client.getBrandContext(scope);
 
         if (!result.success || !result.data) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  error:
-                    result.error ||
-                    "No brand context found. Has the brand been set up?",
-                }),
-              },
-            ],
-            isError: true,
-          };
+          return toErrorResult(
+            result.error || "No brand context found. Has the brand been set up?",
+          );
         }
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(result.data, null, 2),
-            },
-          ],
-          structuredContent: result.data as unknown as Record<string, unknown>,
-        };
+        return toSuccessResult(result.data as unknown as Record<string, unknown>);
       } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error fetching brand context: ${err instanceof Error ? err.message : "Unknown error"}`,
-            },
-          ],
-          isError: true,
-        };
+        return toErrorResult(
+          `Error fetching brand context: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
       }
-    }
-  );
-
-  server.tool(
-    "robynn_brand_rules",
-    "Get brand rules, terminology guidelines, and style constraints. Returns vocabulary (terms to use/avoid), objection responses, and user-defined brand rules.",
-    { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    async () => {
-      try {
-        const result = await client.getBrandContext("rules");
-
-        if (!result.success || !result.data) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  error: result.error || "No brand rules found.",
-                }),
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(result.data, null, 2),
-            },
-          ],
-          structuredContent: result.data as unknown as Record<string, unknown>,
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error fetching brand rules: ${err instanceof Error ? err.message : "Unknown error"}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    }
+    },
   );
 }
