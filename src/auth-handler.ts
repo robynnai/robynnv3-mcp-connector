@@ -310,6 +310,7 @@ app.get("/callback", async (c) => {
       refreshToken: tokens.refresh_token,
       userId,
       organizationId,
+      _apiBaseUrl: c.env.ROBYNN_API_BASE_URL,
     },
   });
 

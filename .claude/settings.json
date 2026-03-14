@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "command": "npx tsc --noEmit 2>&1 | head -20"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "command": "if echo \"$CLAUDE_FILE_PATH\" | grep -qE '\\.(dev\\.vars|env)$'; then echo 'BLOCKED: Do not edit secret files' && exit 1; fi"
+      }
+    ]
+  }
+}
