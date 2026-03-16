@@ -12,6 +12,12 @@ type HonoEnv = { Bindings: Env };
 const OAUTH_CLIENT_ID = "robynn-mcp-worker";
 const BRAND_HUB_FALLBACK_PATH = "/brand-book/generate";
 const CLAUDE_LAUNCH_REDIRECT_DELAY_MS = 1800;
+const DEFAULT_OAUTH_SCOPES = ["brand:read", "tools:execute"] as const;
+const DEFAULT_OAUTH_SCOPE_STRING = DEFAULT_OAUTH_SCOPES.join(" ");
+const PROTECTED_RESOURCE_TRANSPORTS = ["mcp", "sse"] as const;
+
+type ProtectedResourceTransport =
+  (typeof PROTECTED_RESOURCE_TRANSPORTS)[number];
 
 function getWorkerBaseUrl(c: { env: Env; req: { url: string } }) {
   const publicBaseUrl = c.env.MCP_PUBLIC_BASE_URL?.trim();
@@ -23,6 +29,56 @@ function getWorkerBaseUrl(c: { env: Env; req: { url: string } }) {
 
 function getBrandHubFallbackUrl(apiBaseUrl: string) {
   return new URL(BRAND_HUB_FALLBACK_PATH, apiBaseUrl).toString();
+}
+
+function getProtectedResourceAliases(workerBaseUrl: string) {
+  const normalizedBaseUrl = workerBaseUrl.replace(/\/+$/, "");
+
+  return [
+    normalizedBaseUrl,
+    ...PROTECTED_RESOURCE_TRANSPORTS.map(
+      (transport) => `${normalizedBaseUrl}/${transport}`,
+    ),
+  ];
+}
+
+export function normalizeOAuthRequestResource(
+  oauthRequest: import("./types").OAuthRequestInfo,
+  workerBaseUrl: string,
+): import("./types").OAuthRequestInfo {
+  if (!oauthRequest.resource) {
+    return oauthRequest;
+  }
+
+  const requestedResources = Array.isArray(oauthRequest.resource)
+    ? oauthRequest.resource
+    : [oauthRequest.resource];
+  const mergedResources = Array.from(
+    new Set([...requestedResources, ...getProtectedResourceAliases(workerBaseUrl)]),
+  );
+
+  return {
+    ...oauthRequest,
+    resource:
+      mergedResources.length === 1 ? mergedResources[0] : mergedResources,
+  };
+}
+
+export function getProtectedResourceMetadata(
+  workerBaseUrl: string,
+  transport?: ProtectedResourceTransport,
+) {
+  const normalizedBaseUrl = workerBaseUrl.replace(/\/+$/, "");
+
+  return {
+    resource: normalizedBaseUrl,
+    authorization_servers: [normalizedBaseUrl],
+    bearer_methods_supported: ["header"],
+    scopes_supported: [...DEFAULT_OAUTH_SCOPES],
+    resource_name: transport
+      ? `Robynn ${transport.toUpperCase()} endpoint`
+      : "Robynn MCP server",
+  };
 }
 
 function shouldUseLaunchInterstitial(redirectTo: string) {
@@ -163,7 +219,10 @@ const app = new Hono<HonoEnv>();
 app.get("/authorize", async (c) => {
   const workerBaseUrl = getWorkerBaseUrl(c);
   const workerCallbackUrl = new URL("/callback", workerBaseUrl).href;
-  const oauthRequest = await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw);
+  const oauthRequest = normalizeOAuthRequestResource(
+    await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw),
+    workerBaseUrl,
+  );
 
   // Generate a state token to link the callback back to this session
   const oauthState = crypto.randomUUID();
@@ -184,7 +243,7 @@ app.get("/authorize", async (c) => {
   authorizeUrl.searchParams.set("client_id", OAUTH_CLIENT_ID);
   authorizeUrl.searchParams.set("redirect_uri", workerCallbackUrl);
   authorizeUrl.searchParams.set("state", oauthState);
-  authorizeUrl.searchParams.set("scope", "brand:read tools:execute");
+  authorizeUrl.searchParams.set("scope", DEFAULT_OAUTH_SCOPE_STRING);
   authorizeUrl.searchParams.set("response_type", "code");
 
   return c.redirect(authorizeUrl.toString());
@@ -295,7 +354,7 @@ app.get("/callback", async (c) => {
   const grantedScope =
     storedState.oauthRequest.scope?.length > 0
       ? storedState.oauthRequest.scope
-      : ["brand:read", "tools:execute"];
+      : [...DEFAULT_OAUTH_SCOPES];
 
   const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
     request: storedState.oauthRequest,
@@ -354,17 +413,16 @@ app.get("/.well-known/oauth-protected-resource/:transport", (c) => {
   const workerBaseUrl = getWorkerBaseUrl(c);
   const transport = c.req.param("transport");
 
-  if (transport !== "mcp" && transport !== "sse") {
+  if (!PROTECTED_RESOURCE_TRANSPORTS.includes(transport as ProtectedResourceTransport)) {
     return c.text("Not Found", 404);
   }
 
-  return c.json({
-    resource: `${workerBaseUrl}/${transport}`,
-    authorization_servers: [workerBaseUrl],
-    bearer_methods_supported: ["header"],
-    scopes_supported: ["brand:read", "tools:execute"],
-    resource_name: `Robynn ${transport.toUpperCase()} endpoint`,
-  });
+  return c.json(
+    getProtectedResourceMetadata(
+      workerBaseUrl,
+      transport as ProtectedResourceTransport,
+    ),
+  );
 });
 
 /**

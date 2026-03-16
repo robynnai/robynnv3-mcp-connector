@@ -3,7 +3,7 @@ import type { TokenExchangeCallbackOptions, TokenExchangeCallbackResult } from "
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { RobynnClient } from "./robynn-client";
-import { robynnAuthHandler } from "./auth-handler";
+import { getProtectedResourceMetadata, robynnAuthHandler } from "./auth-handler";
 import { registerContextTools } from "./tools/context";
 import { registerStatusTools } from "./tools/status";
 import { registerContentTools } from "./tools/content";
@@ -71,6 +71,7 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
 }
 
 const OAUTH_CLIENT_ID = "robynn-mcp-worker";
+const SUPPORTED_OAUTH_SCOPES = ["brand:read", "tools:execute"];
 
 /**
  * Refresh the upstream robynn.ai JWT when the OAuthProvider rotates tokens.
@@ -120,18 +121,24 @@ async function tokenExchangeCallback(
   }
 }
 
-const oauthProvider = new OAuthProvider({
-  apiRoute: ["/mcp", "/sse"],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  apiHandler: RobynnMCP.serve("/mcp") as any,
-  defaultHandler: robynnAuthHandler,
-  authorizeEndpoint: "/authorize",
-  tokenEndpoint: "/token",
-  clientRegistrationEndpoint: "/register",
-  accessTokenTTL: 3600,
-  refreshTokenTTL: 30 * 24 * 3600,
-  tokenExchangeCallback,
-})
+function createOAuthProvider(env: Env) {
+  const publicBaseUrl = getPublicBaseUrl(env.MCP_PUBLIC_BASE_URL);
+
+  return new OAuthProvider({
+    apiRoute: ["/mcp", "/sse"],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    apiHandler: RobynnMCP.serve("/mcp") as any,
+    defaultHandler: robynnAuthHandler,
+    authorizeEndpoint: "/authorize",
+    tokenEndpoint: "/token",
+    clientRegistrationEndpoint: "/register",
+    scopesSupported: SUPPORTED_OAUTH_SCOPES,
+    resourceMetadata: getProtectedResourceMetadata(publicBaseUrl),
+    accessTokenTTL: 3600,
+    refreshTokenTTL: 30 * 24 * 3600,
+    tokenExchangeCallback,
+  });
+}
 
 /**
  * Worker entry point — OAuthProvider wraps everything.
@@ -142,6 +149,7 @@ const oauthProvider = new OAuthProvider({
  */
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const oauthProvider = createOAuthProvider(env);
     const publicBaseUrl = getPublicBaseUrl(env.MCP_PUBLIC_BASE_URL);
     const originalUrl = new URL(request.url);
     const rewrittenPath =
