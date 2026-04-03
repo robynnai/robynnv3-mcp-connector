@@ -183,6 +183,63 @@ Changes are live at `mcp.robynn.ai` within seconds.
 - **robynnv3_agents** — Python LangGraph agent backend
 - **robynn-claude-cmo** — Rory CLI (local MCP server for Claude Code)
 
+## @robynn-ai/cli (Local Usage)
+
+In addition to the Cloudflare-hosted remote server for Claude Web, this repository builds the official `@robynn-ai/cli` which provides a local Stdio MCP bridge (for Claude Code, Cursor) and standalone headless commands.
+
+### Installation
+
+```bash
+# Install globally
+npm install -g @robynn-ai/cli
+
+# Verify installation
+robynn -h
+```
+
+### Authentication
+
+The CLI uses the exact same `rbo_...` organization keys from your Robynn dashboard.
+
+```bash
+robynn init rbo_YOUR_KEY_HERE
+robynn auth status
+```
+
+### Viewing and Using Commands
+
+The CLI runs the exact same execution paths as the Cloudflare tools, but locally:
+
+```bash
+# List all available commands
+robynn --help
+
+# Generate a GEO Analysis (outputs rich terminal text)
+robynn analyze geo -q "Lucid Software" -c "software"
+
+# Generate an SEO Report (outputs JSON for agent parsing)
+robynn analyze seo -u "https://lucid.co" --json
+
+# Read current brand context
+robynn brand context --json
+```
+
+### Local MCP Server (Cursor / Claude Code)
+
+You can plug the exact same tool suite into your local agents without setting up the remote Cloudflare worker:
+
+**For Claude Code:**
+```bash
+claude mcp add robynn-local -- robynn mcp
+```
+
+**For Cursor:**
+1. Open Cursor Settings > MCP
+2. Add new MCP server
+3. Name: `Robynn Local`
+4. Type: `command`
+5. Command: `robynn mcp`
+
 ## Connectors Directory Submission
 
 Submit at [anthropic.com/partners/mcp](https://www.anthropic.com/partners/mcp). Requirements:
