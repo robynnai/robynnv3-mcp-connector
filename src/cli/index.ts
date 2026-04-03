@@ -110,6 +110,7 @@ analyze
   .command('geo')
   .description('Run a GEO analysis')
   .requiredOption('-q, --query <text>', 'Search query')
+  .option('-c, --category <text>', 'Category (required by backend)')
   .option('--json', 'Output strictly as JSON')
   .action(async (options) => {
     const config = readConfig();
@@ -117,7 +118,7 @@ analyze
     const client = new RobynnClient(DEFAULT_API_URL, config.apiKey);
     try {
       if (!options.json) console.log('⏳ Running GEO analysis... (this may take 1-2 minutes)');
-      const res = await client.geoAnalysis({ query: options.query });
+      const res = await client.geoAnalysis({ company_name: options.query, category: options.category || "software" });
       handleOutput(options.json, res, 'GEO Analysis Result');
     } catch (e: any) {
       console.error('Error:', e.message);
