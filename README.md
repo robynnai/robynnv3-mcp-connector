@@ -240,6 +240,38 @@ claude mcp add robynn-local -- robynn mcp
 4. Type: `command`
 5. Command: `robynn mcp`
 
+### OpenClaw Install
+
+For remote Linux hosts running OpenClaw, the CLI can patch the local OpenClaw MCP config for you:
+
+```bash
+robynn install openclaw
+robynn init rbo_YOUR_KEY_HERE
+```
+
+What this does:
+
+- `robynn install openclaw` looks for OpenClaw config in:
+  - `/home/$USER/.openclaw/openclaw.json`
+  - `~/.openclaw/openclaw.json`
+- If it finds a config file, it adds or updates:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "robynn": {
+        "command": "robynn",
+        "args": ["mcp"]
+      }
+    }
+  }
+}
+```
+
+- If it cannot find or safely patch the config, it prints exact manual instructions instead.
+- `robynn init rbo_...` stores the org key in `~/.robynn/config.json`, which is then used by `robynn mcp`.
+
 ## Connectors Directory Submission
 
 Submit at [anthropic.com/partners/mcp](https://www.anthropic.com/partners/mcp). Requirements:

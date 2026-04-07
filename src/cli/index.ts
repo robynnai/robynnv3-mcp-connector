@@ -15,9 +15,38 @@ import { registerBattlecardTools } from '../tools/battlecard';
 import { registerSeoTools } from '../tools/seo';
 import { registerBrandBookTools } from '../tools/brand-book';
 import { registerWebsiteTools } from '../tools/website';
+import { installOpenClaw } from './install-openclaw';
+import type { RobynnApiResponse } from '../types';
 
 const program = new Command();
 const DEFAULT_API_URL = process.env.ROBYNN_API_BASE_URL || 'https://robynn.ai';
+
+function exitWithError(message: string): never {
+  console.error(message);
+  process.exit(1);
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function getConfiguredApiKey(): string {
+  const apiKey = readConfig().apiKey;
+  if (!apiKey) {
+    exitWithError('❌ Not authenticated. Run `robynn init <key>` first.');
+  }
+  return apiKey;
+}
+
+function requireResponseData<T>(
+  response: RobynnApiResponse<T>,
+  actionName: string,
+): T {
+  if (!response.data) {
+    throw new Error(`${actionName} returned no data.`);
+  }
+  return response.data;
+}
 
 program
   .name('robynn')
@@ -54,8 +83,38 @@ auth
     if (config.apiKey) {
       console.log(`✅ Authenticated with API Key: ${config.apiKey.substring(0, 8)}...`);
     } else {
-      console.log(`❌ Not authenticated. Run 'robynn init <key>' first.`);
-      process.exit(1);
+      exitWithError(`❌ Not authenticated. Run 'robynn init <key>' first.`);
+    }
+  });
+
+const install = program.command('install').description('Configure local agent runtimes');
+
+install
+  .command('openclaw')
+  .description('Configure OpenClaw to launch the local Robynn MCP bridge')
+  .action(() => {
+    const config = readConfig();
+    const result = installOpenClaw({
+      apiKeyConfigured: Boolean(config.apiKey),
+    });
+
+    if (result.status === 'manual-required') {
+      exitWithError(result.instructions || 'OpenClaw install failed.');
+    }
+
+    const action =
+      result.status === 'installed'
+        ? 'Installed'
+        : result.status === 'updated'
+          ? 'Updated'
+          : 'OpenClaw already has';
+
+    console.log(`${action} MCP server entry at ${result.configPath}`);
+    console.log('Configured OpenClaw server: robynn -> `robynn mcp`');
+    if (result.nextStep) {
+      console.log(`Next step: run \`${result.nextStep}\``);
+    } else {
+      console.log('Robynn API key already configured.');
     }
   });
 
@@ -64,13 +123,7 @@ program
   .command('mcp')
   .description('Start the local Stdio MCP Server')
   .action(async () => {
-    const config = readConfig();
-    if (!config.apiKey) {
-      console.error('❌ Not authenticated. Run `robynn init <key>` first.');
-      process.exit(1);
-    }
-
-    const client = new RobynnClient(DEFAULT_API_URL, config.apiKey);
+    const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
     const server = new McpServer({
       name: "Robynn (Local CLI)",
       version: "0.1.0",
@@ -112,17 +165,14 @@ analyze
   .requiredOption('-q, --query <text>', 'Search query')
   .option('-c, --category <text>', 'Category (required by backend)')
   .option('--json', 'Output strictly as JSON')
-  .action(async (options) => {
-    const config = readConfig();
-    if (!config.apiKey) { console.error('Not authenticated.'); process.exit(1); }
-    const client = new RobynnClient(DEFAULT_API_URL, config.apiKey);
+  .action(async (options: { query: string; category?: string; json?: boolean }) => {
+    const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
     try {
       if (!options.json) console.log('⏳ Running GEO analysis... (this may take 1-2 minutes)');
       const res = await client.geoAnalysis({ company_name: options.query, category: options.category || "software" });
-      handleOutput(options.json, res, 'GEO Analysis Result');
-    } catch (e: any) {
-      console.error('Error:', e.message);
-      process.exit(1);
+      handleOutput(options.json ?? false, res, 'GEO Analysis Result');
+    } catch (error: unknown) {
+      exitWithError(`Error: ${formatError(error)}`);
     }
   });
 
@@ -131,17 +181,17 @@ analyze
   .description('Run an SEO opportunities analysis')
   .requiredOption('-u, --url <url>', 'Website URL')
   .option('--json', 'Output strictly as JSON')
-  .action(async (options) => {
-    const config = readConfig();
-    if (!config.apiKey) { console.error('Not authenticated.'); process.exit(1); }
-    const client = new RobynnClient(DEFAULT_API_URL, config.apiKey);
+  .action(async (options: { url: string; json?: boolean }) => {
+    const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
     try {
       if (!options.json) console.log('⏳ Running SEO analysis...');
-      const res = await client.seoOpportunities({ url: options.url });
-      handleOutput(options.json, res, 'SEO Opportunities Result');
-    } catch (e: any) {
-      console.error('Error:', e.message);
-      process.exit(1);
+      const res = await client.seoOpportunities({
+        company_name: options.url,
+        company_url: options.url,
+      });
+      handleOutput(options.json ?? false, res, 'SEO Opportunities Result');
+    } catch (error: unknown) {
+      exitWithError(`Error: ${formatError(error)}`);
     }
   });
 
@@ -151,16 +201,13 @@ brand
   .command('context')
   .description('Get the current brand context')
   .option('--json', 'Output strictly as JSON')
-  .action(async (options) => {
-    const config = readConfig();
-    if (!config.apiKey) { console.error('Not authenticated.'); process.exit(1); }
-    const client = new RobynnClient(DEFAULT_API_URL, config.apiKey);
+  .action(async (options: { json?: boolean }) => {
+    const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
     try {
       const res = await client.getBrandContext('full');
-      handleOutput(options.json, res, 'Brand Context');
-    } catch (e: any) {
-      console.error('Error:', e.message);
-      process.exit(1);
+      handleOutput(options.json ?? false, res, 'Brand Context');
+    } catch (error: unknown) {
+      exitWithError(`Error: ${formatError(error)}`);
     }
   });
 
@@ -171,20 +218,18 @@ research
   .description('Research a company')
   .requiredOption('-q, --query <text>', 'Company name')
   .option('--json', 'Output strictly as JSON')
-  .action(async (options) => {
-    const config = readConfig();
-    if (!config.apiKey) { console.error('Not authenticated.'); process.exit(1); }
-    const client = new RobynnClient(DEFAULT_API_URL, config.apiKey);
+  .action(async (options: { query: string; json?: boolean }) => {
+    const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
     try {
       if (!options.json) console.log('⏳ Running research on ' + options.query + '...');
       const threadRes = await client.createThread(`Research: ${options.query}`);
-      const threadId = threadRes.data.id;
+      const threadId = requireResponseData(threadRes, 'Thread creation').id;
       const runRes = await client.startRun(threadId, { message: `Research: ${options.query}`, type: "research" });
-      const result = await client.pollRun(runRes.data.run_id);
-      handleOutput(options.json, result.data.output, 'Research Result');
-    } catch (e) {
-      console.error('Error:', e.message);
-      process.exit(1);
+      const runId = requireResponseData(runRes, 'Run creation').run_id;
+      const result = await client.pollRun(runId);
+      handleOutput(options.json ?? false, requireResponseData(result, 'Research run').output, 'Research Result');
+    } catch (error: unknown) {
+      exitWithError(`Error: ${formatError(error)}`);
     }
   });
 
@@ -194,22 +239,19 @@ content
   .description('Draft an email')
   .requiredOption('-p, --prompt <text>', 'Email prompt')
   .option('--json', 'Output strictly as JSON')
-  .action(async (options) => {
-    const config = readConfig();
-    if (!config.apiKey) { console.error('Not authenticated.'); process.exit(1); }
-    const client = new RobynnClient(DEFAULT_API_URL, config.apiKey);
+  .action(async (options: { prompt: string; json?: boolean }) => {
+    const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
     try {
       if (!options.json) console.log('⏳ Drafting email...');
       const threadRes = await client.createThread(`Email Draft`);
-      const threadId = threadRes.data.id;
+      const threadId = requireResponseData(threadRes, 'Thread creation').id;
       const runRes = await client.startRun(threadId, { message: options.prompt, type: "content" });
-      const result = await client.pollRun(runRes.data.run_id);
-      handleOutput(options.json, result.data.output, 'Draft Email');
-    } catch (e) {
-      console.error('Error:', e.message);
-      process.exit(1);
+      const runId = requireResponseData(runRes, 'Run creation').run_id;
+      const result = await client.pollRun(runId);
+      handleOutput(options.json ?? false, requireResponseData(result, 'Content run').output, 'Draft Email');
+    } catch (error: unknown) {
+      exitWithError(`Error: ${formatError(error)}`);
     }
   });
 
 program.parse(process.argv);
-
