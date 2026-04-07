@@ -60,7 +60,7 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 | `robynn_website_audit` | Website intelligence | `robynnv3` website adapter -> LangGraph `website_report_v1` | Yes |
 | `robynn_website_strategy` | Website intelligence | `robynnv3` website adapter -> LangGraph `website_report_v1` | Yes |
 
-All tools return both `content` (text for LLM) and `structuredContent` (machine-readable JSON). Long-running `robynn_create_content` and `robynn_research` runs may return a pending `run_id` instead of blocking until completion; use `robynn_run_status` to fetch the final output. Tools with inline app support expose MCP Apps resources from the Worker, while the backend agent or service only returns data.
+All tools return both `content` (text for LLM) and `structuredContent` (machine-readable JSON). Long-running `robynn_create_content` and `robynn_research` runs may return a pending `run_id` instead of blocking until completion; use `robynn_run_status` to fetch the final output. The local CLI now waits only briefly for those runs before returning `pending`, which avoids MCP client timeouts in command-based agents like OpenClaw. You can tune that short wait with `ROBYNN_MCP_SYNC_WAIT_MS` (default `8000`, max `30000`). Tools with inline app support expose MCP Apps resources from the Worker, while the backend agent or service only returns data.
 
 Detailed execution mapping for every tool lives in [docs/architecture/robynn-mcp-tool-execution-matrix.md](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/docs/architecture/robynn-mcp-tool-execution-matrix.md).
 
@@ -92,7 +92,7 @@ Detailed execution mapping for every tool lives in [docs/architecture/robynn-mcp
 src/
 ├── index.ts              # Worker entry: RobynnMCP (McpAgent DO) + OAuthProvider
 ├── auth-handler.ts       # Hono app: /authorize redirect, /callback token exchange
-├── robynn-client.ts      # HTTP client for robynn.ai API (10s read, 280s poll timeout)
+├── robynn-client.ts      # HTTP client for robynn.ai API (10s read, configurable poll timeout)
 ├── types.ts              # Env, Props, API response types
 ├── ui/                   # Shared Robynn MCP Apps report resources and runtime
 └── tools/
@@ -169,7 +169,7 @@ Changes are live at `mcp.robynn.ai` within seconds.
 |----------|-------|---------|
 | `ROBYNN_API_BASE_URL` | `https://robynn.ai` | wrangler.toml `[vars]` |
 | `MCP_SERVER_NAME` | `Robynn` | wrangler.toml `[vars]` |
-| `MCP_SERVER_VERSION` | `0.1.0` | wrangler.toml `[vars]` |
+| `MCP_SERVER_VERSION` | `0.1.4` | wrangler.toml `[vars]` |
 | `OAUTH_KEY` | KV namespace | wrangler.toml binding |
 | `MCP_OBJECT` | Durable Object | wrangler.toml binding |
 
@@ -199,6 +199,18 @@ npm install -g @robynn-ai/cli
 # Verify installation
 robynn -h
 ```
+
+### OpenClaw Behavior
+
+For command-based MCP clients such as OpenClaw, `robynn_create_content` and `robynn_research` wait only briefly for completion and then return a pending `run_id` that should be checked with `robynn_run_status`. This is intentional so long-running one-pagers and research jobs do not hit the client's MCP request timeout.
+
+If your MCP host can tolerate a slightly longer inline wait, set:
+
+```bash
+export ROBYNN_MCP_SYNC_WAIT_MS=12000
+```
+
+The CLI caps this at `30000ms`.
 
 ### Authentication
 

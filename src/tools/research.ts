@@ -1,12 +1,20 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
-import { isRunTimeoutError, toErrorResult, toPendingRunResult, toSuccessResult } from "./util";
+import {
+  getShortSyncWaitMs,
+  isRunTimeoutError,
+  toErrorResult,
+  toPendingRunResult,
+  toSuccessResult,
+} from "./util";
 
 export function registerResearchTools(
   server: McpServer,
   client: RobynnClient,
 ) {
+  const syncWaitMs = getShortSyncWaitMs();
+
   server.tool(
     "robynn_research",
     "Research companies, competitors, markets, or topics using Robynn's AI research capabilities. Returns structured findings with sources.",
@@ -52,7 +60,7 @@ export function registerResearchTools(
 
         let result;
         try {
-          result = await client.pollRun(runResult.data.run_id);
+          result = await client.pollRun(runResult.data.run_id, syncWaitMs);
         } catch (err) {
           if (isRunTimeoutError(err)) {
             return toPendingRunResult("Research", runResult.data.run_id, threadId);
