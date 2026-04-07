@@ -9,7 +9,7 @@
     "deploy": "wrangler deploy",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
-    "build:cli": "tsup src/cli/index.ts --format cjs --outDir dist && mv dist/index.cjs dist/cli.cjs",
+    "build:cli": "rm -rf dist && tsup src/cli/index.ts --format cjs --outDir dist && mv dist/index.cjs dist/robynn",
     "build": "pnpm typecheck && pnpm build:cli",
     "prepack": "pnpm build:cli"
   },
@@ -31,7 +31,7 @@
     "wrangler": "^4.6.0"
   },
   "bin": {
-    "robynn": "./dist/cli.cjs"
+    "robynn": "dist/robynn"
   },
   "files": [
     "dist",
