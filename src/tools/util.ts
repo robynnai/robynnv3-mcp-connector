@@ -51,12 +51,19 @@ export function toPendingRunResult(
   runId: string,
   threadId: string,
 ) {
+  const lines = [
+    `${label} is still running in Robynn.`,
+    `run_id: ${runId}`,
+    `thread_id: ${threadId}`,
+    "Next step: call robynn_run_status with the exact run_id above to fetch the latest status or completed output.",
+  ];
+
   const result = {
     status: "pending",
     run_id: runId,
     thread_id: threadId,
     poll_after_seconds: 5,
-    message: `${label} is still running in Robynn. Call robynn_run_status with this run_id to fetch the latest status or completed output.`,
+    message: lines.join("\n"),
   };
 
   return toSuccessResult(result, result.message);
