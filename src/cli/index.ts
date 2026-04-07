@@ -18,6 +18,7 @@ import { registerBrandBookTools } from '../tools/brand-book';
 import { registerWebsiteTools } from '../tools/website';
 import { installOpenClaw } from './install-openclaw';
 import type { RobynnApiResponse } from '../types';
+import { APP_VERSION } from '../version';
 
 const program = new Command();
 const DEFAULT_API_URL = process.env.ROBYNN_API_BASE_URL || 'https://robynn.ai';
@@ -52,7 +53,7 @@ function requireResponseData<T>(
 program
   .name('robynn')
   .description('Robynn AI Official CLI & Local MCP Bridge')
-  .version('0.1.0');
+  .version(APP_VERSION);
 
 program
   .command('init')
@@ -127,7 +128,7 @@ program
     const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
     const server = new McpServer({
       name: "Robynn (Local CLI)",
-      version: "0.1.0",
+      version: APP_VERSION,
     });
 
     // Register all tools just like the Cloudflare worker

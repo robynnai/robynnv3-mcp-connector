@@ -826,7 +826,7 @@ export const REPORT_APP_SCRIPT = String.raw`
 
     try {
       const init = await request('ui/initialize', {
-        appInfo: { name: 'Robynn Report App', version: '0.1.0' },
+        appInfo: { name: 'Robynn Report App', version: APP_VERSION },
         appCapabilities: { availableDisplayModes: ['inline', 'fullscreen'] },
         protocolVersion: '2026-01-26',
       });
@@ -869,3 +869,4 @@ export const REPORT_APP_SCRIPT = String.raw`
   connect();
 })();
 `;
+import { APP_VERSION } from "../version";

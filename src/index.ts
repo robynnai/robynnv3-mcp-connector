@@ -17,6 +17,7 @@ import { registerBrandBookTools } from "./tools/brand-book";
 import { registerWebsiteTools } from "./tools/website";
 import type { Env, Props } from "./types";
 import { getPublicBaseUrl, registerReportAppResources } from "./ui/report-app";
+import { APP_VERSION } from "./version";
 
 /**
  * RobynnMCP — Durable Object that hosts the MCP server.
@@ -26,7 +27,7 @@ import { getPublicBaseUrl, registerReportAppResources } from "./ui/report-app";
 export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
   server = new McpServer({
     name: "Robynn",
-    version: "0.1.0",
+    version: APP_VERSION,
   });
 
   async init() {
