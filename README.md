@@ -261,8 +261,8 @@ git clone https://github.com/robynnai/robynnv3-mcp-connector.git
 cd robynnv3-mcp-connector
 pnpm install
 pnpm build:cli
-node dist/robynn install openclaw
-node dist/robynn init rbo_YOUR_KEY_HERE
+node dist/robynn.cjs install openclaw
+node dist/robynn.cjs init rbo_YOUR_KEY_HERE
 ```
 
 What this does:
