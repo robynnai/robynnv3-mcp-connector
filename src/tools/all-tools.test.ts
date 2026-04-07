@@ -4,6 +4,7 @@ import { registerStatusTools } from "./status";
 import { registerContentTools } from "./content";
 import { registerResearchTools } from "./research";
 import { registerConversationTools } from "./conversations";
+import { registerRunTools } from "./runs";
 import { registerGeoTools } from "./geo";
 import { registerBattlecardTools } from "./battlecard";
 import { registerSeoTools } from "./seo";
@@ -61,6 +62,16 @@ function createFullMockClient() {
     startRun: vi.fn().mockResolvedValue({
       success: true,
       data: { run_id: "run-1" },
+    }),
+    getRun: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        id: "run-1",
+        status: "completed",
+        output: "Generated content here",
+        thread_id: "thread-1",
+        tokens_used: 50,
+      },
     }),
     pollRun: vi.fn().mockResolvedValue({
       success: true,
@@ -216,6 +227,7 @@ function registerAllTools(
   registerContentTools(server, client as never);
   registerResearchTools(server, client as never);
   registerConversationTools(server, client as never);
+  registerRunTools(server, client as never);
   registerGeoTools(server, client as never);
   registerBattlecardTools(server, client as never);
   registerSeoTools(server, client as never);
@@ -224,11 +236,11 @@ function registerAllTools(
 }
 
 describe("all tools registration", () => {
-  it("registers exactly 16 tools (robynn_brand_rules removed)", () => {
+  it("registers exactly 17 tools (robynn_brand_rules removed)", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(16);
+    expect(handlers.size).toBe(17);
   });
 
   it("registers the expected tool names", () => {
@@ -243,6 +255,7 @@ describe("all tools registration", () => {
       "robynn_create_content",
       "robynn_research",
       "robynn_conversations",
+      "robynn_run_status",
       "robynn_geo_analysis",
       "robynn_competitive_battlecard",
       "robynn_seo_opportunities",
@@ -311,6 +324,20 @@ describe("all tools success path", () => {
     expect(client.pollRun).toHaveBeenCalledWith("run-1");
   });
 
+  it("robynn_create_content returns pending status when polling times out", async () => {
+    setup();
+    client.pollRun.mockRejectedValueOnce(new Error("Run timed out after 280 seconds"));
+    const res = await handlers.get("robynn_create_content")!({
+      type: "blog_post",
+      topic: "AI marketing",
+    });
+    expect(res.isError).toBeUndefined();
+    expect(res.structuredContent.status).toBe("pending");
+    expect(res.structuredContent.run_id).toBe("run-1");
+    expect(res.structuredContent.thread_id).toBe("thread-1");
+    expect(res.content[0].text).toContain("still running");
+  });
+
   it("robynn_create_content reuses existing thread_id", async () => {
     setup();
     await handlers.get("robynn_create_content")!({
@@ -333,6 +360,16 @@ describe("all tools success path", () => {
     });
     expect(res.structuredContent.findings).toBe("Generated content here");
     expect(client.createThread).toHaveBeenCalled();
+  });
+
+  it("robynn_run_status returns completed output", async () => {
+    setup();
+    const res = await handlers.get("robynn_run_status")!({
+      run_id: "run-1",
+    });
+    expect(res.structuredContent.status).toBe("completed");
+    expect(res.structuredContent.output).toBe("Generated content here");
+    expect(client.getRun).toHaveBeenCalledWith("run-1");
   });
 
   it("robynn_conversations list returns threads", async () => {
@@ -540,6 +577,7 @@ function getMinimalArgs(toolName: string): Record<string, unknown> {
     robynn_create_content: { type: "blog_post", topic: "test" },
     robynn_research: { query: "test" },
     robynn_conversations: { action: "list" },
+    robynn_run_status: { run_id: "run-1" },
     robynn_geo_analysis: { company_name: "Acme" },
     robynn_competitive_battlecard: { competitor_name: "Rival" },
     robynn_seo_opportunities: { company_name: "Acme" },

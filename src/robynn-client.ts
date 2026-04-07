@@ -256,14 +256,17 @@ export class RobynnClient {
     }, POLL_TIMEOUT_MS);
   }
 
+  /** Fetch the latest state for a CMO run */
+  async getRun(runId: string): Promise<RobynnApiResponse<RunResult>> {
+    return this.fetch(`/api/agents/cmo/runs/${runId}`);
+  }
+
   /** Poll a run until completion */
   async pollRun(runId: string): Promise<RobynnApiResponse<RunResult>> {
     const start = Date.now();
 
     while (Date.now() - start < POLL_TIMEOUT_MS) {
-      const result = await this.fetch<RobynnApiResponse<RunResult>>(
-        `/api/agents/cmo/runs/${runId}`
-      );
+      const result = await this.getRun(runId);
 
       if (result.data?.status === 'completed' || result.data?.status === 'failed') {
         return result;
