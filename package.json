@@ -1,6 +1,6 @@
 {
   "name": "@robynn-ai/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Robynn CLI and local MCP bridge for Robynn organizations.",
   "license": "UNLICENSED",
   "type": "module",
@@ -9,7 +9,7 @@
     "deploy": "wrangler deploy",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
-    "build:cli": "rm -rf dist && tsup src/cli/index.ts --format cjs --outDir dist && mv dist/index.cjs dist/robynn",
+    "build:cli": "rm -rf dist && tsup src/cli/index.ts --format cjs --outDir dist && mv dist/index.cjs dist/robynn.cjs",
     "build": "pnpm typecheck && pnpm build:cli",
     "prepack": "pnpm build:cli"
   },
@@ -31,7 +31,7 @@
     "wrangler": "^4.6.0"
   },
   "bin": {
-    "robynn": "dist/robynn"
+    "robynn": "dist/robynn.cjs"
   },
   "files": [
     "dist",
