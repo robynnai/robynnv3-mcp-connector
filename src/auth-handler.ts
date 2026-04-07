@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "./types";
 import { REPORT_APP_SCRIPT } from "./ui/report-app-script";
+import { getServerVersion } from "./version";
 import {
   MCP_SIGNATURE_HEADER,
   MCP_TIMESTAMP_HEADER,
@@ -393,7 +394,7 @@ app.get("/", (c) => {
   return c.json({
     name: "Robynn MCP Server",
     description: "Brand-aware AI marketing tools for Claude",
-    version: c.env.MCP_SERVER_VERSION || "0.1.0",
+    version: getServerVersion(c.env.MCP_SERVER_VERSION),
     endpoints: {
       mcp: "/mcp",
       sse: "/sse",
