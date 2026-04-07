@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
-import { toErrorResult, toSuccessResult } from "./util";
+import { isRunTimeoutError, toErrorResult, toPendingRunResult, toSuccessResult } from "./util";
 
 export function registerResearchTools(
   server: McpServer,
@@ -50,7 +50,15 @@ export function registerResearchTools(
           return toErrorResult(runResult.error || "Failed to start research");
         }
 
-        const result = await client.pollRun(runResult.data.run_id);
+        let result;
+        try {
+          result = await client.pollRun(runResult.data.run_id);
+        } catch (err) {
+          if (isRunTimeoutError(err)) {
+            return toPendingRunResult("Research", runResult.data.run_id, threadId);
+          }
+          throw err;
+        }
 
         if (!result.success || !result.data) {
           return toErrorResult("Research failed");

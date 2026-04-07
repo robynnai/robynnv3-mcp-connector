@@ -10,6 +10,7 @@ import { registerStatusTools } from '../tools/status';
 import { registerContentTools } from '../tools/content';
 import { registerResearchTools } from '../tools/research';
 import { registerConversationTools } from '../tools/conversations';
+import { registerRunTools } from '../tools/runs';
 import { registerGeoTools } from '../tools/geo';
 import { registerBattlecardTools } from '../tools/battlecard';
 import { registerSeoTools } from '../tools/seo';
@@ -135,6 +136,7 @@ program
     registerContentTools(server, client);
     registerResearchTools(server, client);
     registerConversationTools(server, client);
+    registerRunTools(server, client);
     registerGeoTools(server, client);
     registerBattlecardTools(server, client);
     registerSeoTools(server, client);
