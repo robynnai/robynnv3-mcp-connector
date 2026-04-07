@@ -1,15 +1,17 @@
 {
-  "name": "robynn-mcp-server",
+  "name": "@robynn-ai/cli",
   "version": "0.1.0",
-  "private": true,
+  "description": "Robynn CLI and local MCP bridge for Robynn organizations.",
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
-    "build:cli": "tsup src/cli/index.ts --format cjs --outDir dist && mv dist/index.cjs dist/cli.cjs",
-    "build": "pnpm typecheck && pnpm build:cli"
+    "build:cli": "rm -rf dist && tsup src/cli/index.ts --format cjs --outDir dist && mv dist/index.cjs dist/robynn",
+    "build": "pnpm typecheck && pnpm build:cli",
+    "prepack": "pnpm build:cli"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^0.3.0",
@@ -29,6 +31,21 @@
     "wrangler": "^4.6.0"
   },
   "bin": {
-    "robynn": "./dist/cli.cjs"
-  }
+    "robynn": "dist/robynn"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robynnai/robynnv3-mcp-connector.git"
+  },
+  "bugs": {
+    "url": "https://github.com/robynnai/robynnv3-mcp-connector/issues"
+  },
+  "homepage": "https://github.com/robynnai/robynnv3-mcp-connector#readme"
 }

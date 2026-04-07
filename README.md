@@ -189,6 +189,8 @@ In addition to the Cloudflare-hosted remote server for Claude Web, this reposito
 
 ### Installation
 
+`@robynn-ai/cli` is intended to be installed from npm once the package has been published.
+
 ```bash
 # Install globally
 npm install -g @robynn-ai/cli
@@ -244,9 +246,23 @@ claude mcp add robynn-local -- robynn mcp
 
 For remote Linux hosts running OpenClaw, the CLI can patch the local OpenClaw MCP config for you:
 
+**After `@robynn-ai/cli` has been published to npm:**
+
 ```bash
+npm install -g @robynn-ai/cli
 robynn install openclaw
 robynn init rbo_YOUR_KEY_HERE
+```
+
+**If you are installing from this repository before package publish:**
+
+```bash
+git clone https://github.com/robynnai/robynnv3-mcp-connector.git
+cd robynnv3-mcp-connector
+pnpm install
+pnpm build:cli
+node dist/robynn install openclaw
+node dist/robynn init rbo_YOUR_KEY_HERE
 ```
 
 What this does:
@@ -271,6 +287,21 @@ What this does:
 
 - If it cannot find or safely patch the config, it prints exact manual instructions instead.
 - `robynn init rbo_...` stores the org key in `~/.robynn/config.json`, which is then used by `robynn mcp`.
+- OpenClaw stores the saved local server entry under `mcp.servers.robynn`.
+
+### Publishing `@robynn-ai/cli`
+
+The package metadata in this repository is set up for npm publication. Publishing still requires npm credentials on the machine that runs the release:
+
+```bash
+npm adduser
+pnpm test
+pnpm typecheck
+pnpm build:cli
+npm publish --access public
+```
+
+After publish completes, remote Linux hosts can install the CLI with `npm install -g @robynn-ai/cli`.
 
 ## Connectors Directory Submission
 
