@@ -169,7 +169,7 @@ Changes are live at `mcp.robynn.ai` within seconds.
 |----------|-------|---------|
 | `ROBYNN_API_BASE_URL` | `https://robynn.ai` | wrangler.toml `[vars]` |
 | `MCP_SERVER_NAME` | `Robynn` | wrangler.toml `[vars]` |
-| `MCP_SERVER_VERSION` | `0.1.4` | wrangler.toml `[vars]` |
+| `MCP_SERVER_VERSION` | `0.1.5` | wrangler.toml `[vars]` |
 | `OAUTH_KEY` | KV namespace | wrangler.toml binding |
 | `MCP_OBJECT` | Durable Object | wrangler.toml binding |
 
