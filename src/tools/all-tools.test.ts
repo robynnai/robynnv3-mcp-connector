@@ -336,6 +336,8 @@ describe("all tools success path", () => {
     expect(res.structuredContent.run_id).toBe("run-1");
     expect(res.structuredContent.thread_id).toBe("thread-1");
     expect(res.content[0].text).toContain("still running");
+    expect(res.content[0].text).toContain("run_id: run-1");
+    expect(res.content[0].text).toContain("thread_id: thread-1");
   });
 
   it("robynn_create_content reuses existing thread_id", async () => {
@@ -371,6 +373,28 @@ describe("all tools success path", () => {
     expect(res.structuredContent.status).toBe("completed");
     expect(res.structuredContent.output).toBe("Generated content here");
     expect(client.getRun).toHaveBeenCalledWith("run-1");
+  });
+
+  it("robynn_run_status returns pending output with the exact run identifiers in text", async () => {
+    setup();
+    client.getRun.mockResolvedValueOnce({
+      success: true,
+      data: {
+        id: "run-1",
+        status: "running",
+        thread_id: "thread-1",
+        output: undefined,
+      },
+    });
+
+    const res = await handlers.get("robynn_run_status")!({
+      run_id: "run-1",
+    });
+
+    expect(res.isError).toBeUndefined();
+    expect(res.structuredContent.status).toBe("pending");
+    expect(res.content[0].text).toContain("run_id: run-1");
+    expect(res.content[0].text).toContain("thread_id: thread-1");
   });
 
   it("robynn_conversations list returns threads", async () => {
