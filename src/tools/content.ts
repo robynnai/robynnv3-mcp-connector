@@ -1,9 +1,17 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
-import { isRunTimeoutError, toErrorResult, toPendingRunResult, toSuccessResult } from "./util";
+import {
+  getShortSyncWaitMs,
+  isRunTimeoutError,
+  toErrorResult,
+  toPendingRunResult,
+  toSuccessResult,
+} from "./util";
 
 export function registerContentTools(server: McpServer, client: RobynnClient) {
+  const syncWaitMs = getShortSyncWaitMs();
+
   server.tool(
     "robynn_create_content",
     "Create marketing content using the Robynn CMO agent. The content is generated using your brand voice, positioning, and guidelines.",
@@ -56,7 +64,7 @@ export function registerContentTools(server: McpServer, client: RobynnClient) {
 
         let result;
         try {
-          result = await client.pollRun(runResult.data.run_id);
+          result = await client.pollRun(runResult.data.run_id, syncWaitMs);
         } catch (err) {
           if (isRunTimeoutError(err)) {
             return toPendingRunResult("Content generation", runResult.data.run_id, threadId);

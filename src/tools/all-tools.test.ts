@@ -321,7 +321,7 @@ describe("all tools success path", () => {
     expect(res.structuredContent.thread_id).toBe("thread-1");
     expect(client.createThread).toHaveBeenCalled();
     expect(client.startRun).toHaveBeenCalled();
-    expect(client.pollRun).toHaveBeenCalledWith("run-1");
+    expect(client.pollRun).toHaveBeenCalledWith("run-1", 8000);
   });
 
   it("robynn_create_content returns pending status when polling times out", async () => {
@@ -360,6 +360,7 @@ describe("all tools success path", () => {
     });
     expect(res.structuredContent.findings).toBe("Generated content here");
     expect(client.createThread).toHaveBeenCalled();
+    expect(client.pollRun).toHaveBeenCalledWith("run-1", 8000);
   });
 
   it("robynn_run_status returns completed output", async () => {

@@ -262,10 +262,14 @@ export class RobynnClient {
   }
 
   /** Poll a run until completion */
-  async pollRun(runId: string): Promise<RobynnApiResponse<RunResult>> {
+  async pollRun(
+    runId: string,
+    timeoutMs = POLL_TIMEOUT_MS,
+  ): Promise<RobynnApiResponse<RunResult>> {
+    const effectiveTimeoutMs = Math.max(0, Math.min(timeoutMs, POLL_TIMEOUT_MS));
     const start = Date.now();
 
-    while (Date.now() - start < POLL_TIMEOUT_MS) {
+    while (Date.now() - start < effectiveTimeoutMs) {
       const result = await this.getRun(runId);
 
       if (result.data?.status === 'completed' || result.data?.status === 'failed') {
@@ -275,6 +279,6 @@ export class RobynnClient {
       await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
     }
 
-    throw new Error('Run timed out after 280 seconds');
+    throw new Error(`Run timed out after ${Math.floor(effectiveTimeoutMs / 1000)} seconds`);
   }
 }
