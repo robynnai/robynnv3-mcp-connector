@@ -9,7 +9,7 @@
     "test": "vitest",
     "typecheck": "tsc --noEmit",
     "build:cli": "tsup src/cli/index.ts --format cjs --outDir dist && mv dist/index.cjs dist/cli.cjs",
-    "build": "npm run build:worker && npm run build:cli"
+    "build": "pnpm typecheck && pnpm build:cli"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^0.3.0",
@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250313.0",
+    "@types/node": "^25.5.2",
     "typescript": "^5.7.3",
     "vitest": "^3.0.0",
     "wrangler": "^4.6.0"
