@@ -15,6 +15,7 @@ import { registerBattlecardTools } from "./tools/battlecard";
 import { registerSeoTools } from "./tools/seo";
 import { registerBrandBookTools } from "./tools/brand-book";
 import { registerWebsiteTools } from "./tools/website";
+import { registerConnectorTools } from "./tools/connectors";
 import type { Env, Props } from "./types";
 import { getPublicBaseUrl, registerReportAppResources } from "./ui/report-app";
 import { APP_VERSION } from "./version";
@@ -70,6 +71,7 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
     registerSeoTools(this.server, client);
     registerBrandBookTools(this.server, client);
     registerWebsiteTools(this.server, client);
+    registerConnectorTools(this.server, client);
   }
 }
 

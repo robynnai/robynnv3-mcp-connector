@@ -25,6 +25,8 @@ import type {
   CompetitiveBattlecardResult,
   SeoOpportunitiesRequest,
   SeoOpportunitiesResult,
+  ConnectedAppsResult,
+  ConnectedAppReadResult,
 } from './types';
 
 const READ_TIMEOUT_MS = 10_000;
@@ -127,6 +129,30 @@ export class RobynnClient {
   /** Get organization status/info */
   async getStatus(): Promise<RobynnApiResponse> {
     return this.fetch('/api/cli/context/summary');
+  }
+
+  /** Get connected app capabilities for the org or a single provider */
+  async getConnectedAppCapabilities(
+    providerKey?: string,
+  ): Promise<RobynnApiResponse<ConnectedAppsResult>> {
+    return this.fetch(
+      this.withQuery('/api/cli/connectors/capabilities', {
+        provider_key: providerKey,
+      }),
+    );
+  }
+
+  /** Execute a curated read-only query against a connected app */
+  async readConnectedApp(payload: {
+    provider_key: string;
+    action_key: string;
+    payload?: Record<string, unknown>;
+    connection_id?: string;
+  }): Promise<RobynnApiResponse<ConnectedAppReadResult>> {
+    return this.fetch('/api/cli/connectors/read', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   /** List conversation threads */
