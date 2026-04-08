@@ -341,6 +341,42 @@ export interface WebsiteStrategyResult extends IntelligenceToolResultBase {
   measurement_plan: MeasurementPlanItem[];
 }
 
+export interface ConnectedAppReadAction {
+  action_key: string;
+  label: string;
+  description: string;
+  result_kind: string;
+  input_schema: Record<string, unknown>;
+  example_prompts: string[];
+}
+
+export interface ConnectedAppProvider {
+  provider_key: string;
+  display_name: string;
+  status: string;
+  default_connection: {
+    id: string;
+    display_name: string | null;
+    status: string;
+    health_status: string;
+  } | null;
+  read_actions: ConnectedAppReadAction[];
+}
+
+export interface ConnectedAppsResult {
+  providers: ConnectedAppProvider[];
+}
+
+export interface ConnectedAppReadResult {
+  provider_key: string;
+  action_key: string;
+  connection_id: string;
+  result_kind: string;
+  summary: string;
+  highlights: Record<string, unknown>;
+  raw_result: Record<string, unknown>;
+}
+
 /** Brand context scope */
 export type BrandScope = 'summary' | 'voice' | 'positioning' | 'competitors' | 'audience' | 'products' | 'rules' | 'full';
 

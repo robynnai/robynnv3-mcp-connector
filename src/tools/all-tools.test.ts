@@ -10,6 +10,7 @@ import { registerBattlecardTools } from "./battlecard";
 import { registerSeoTools } from "./seo";
 import { registerBrandBookTools } from "./brand-book";
 import { registerWebsiteTools } from "./website";
+import { registerConnectorTools } from "./connectors";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Handler = (args: any) => Promise<any>;
@@ -215,6 +216,46 @@ function createFullMockClient() {
         measurement_plan: [],
       },
     }),
+    getConnectedAppCapabilities: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        providers: [
+          {
+            provider_key: "hubspot",
+            display_name: "HubSpot",
+            status: "active",
+            default_connection: {
+              id: "conn-1",
+              display_name: "Marketing Hub",
+              status: "active",
+              health_status: "healthy",
+            },
+            read_actions: [
+              {
+                action_key: "hubspot.list_contacts",
+                label: "List contacts",
+                description: "Read contacts from HubSpot.",
+                result_kind: "list",
+                input_schema: { type: "object", properties: {}, required: [] },
+                example_prompts: ["How many contacts do I have in HubSpot?"],
+              },
+            ],
+          },
+        ],
+      },
+    }),
+    readConnectedApp: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        provider_key: "hubspot",
+        action_key: "hubspot.list_contacts",
+        connection_id: "conn-1",
+        result_kind: "list",
+        summary: "HubSpot returned 128 contacts.",
+        highlights: { count: 128 },
+        raw_result: { results: [] },
+      },
+    }),
   };
 }
 
@@ -233,14 +274,15 @@ function registerAllTools(
   registerSeoTools(server, client as never);
   registerBrandBookTools(server, client as never);
   registerWebsiteTools(server, client as never);
+  registerConnectorTools(server, client as never);
 }
 
 describe("all tools registration", () => {
-  it("registers exactly 17 tools (robynn_brand_rules removed)", () => {
+  it("registers exactly 20 tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(17);
+    expect(handlers.size).toBe(20);
   });
 
   it("registers the expected tool names", () => {
@@ -266,6 +308,9 @@ describe("all tools registration", () => {
       "robynn_publish_brand_book_html",
       "robynn_website_audit",
       "robynn_website_strategy",
+      "robynn_connected_apps",
+      "robynn_connected_app_capabilities",
+      "robynn_query_connected_app",
     ];
 
     for (const name of expected) {
@@ -309,6 +354,51 @@ describe("all tools success path", () => {
     const res = await handlers.get("robynn_usage")!({});
     expect(res.structuredContent.balance).toBe(500);
     expect(res.isError).toBeUndefined();
+  });
+
+  it("robynn_connected_apps returns connected app summaries", async () => {
+    setup();
+    const res = await handlers.get("robynn_connected_apps")!({});
+    expect(res.structuredContent.count).toBe(1);
+    expect(res.structuredContent.providers[0].provider_key).toBe("hubspot");
+    expect(client.getConnectedAppCapabilities).toHaveBeenCalledWith();
+  });
+
+  it("robynn_connected_app_capabilities returns provider capability metadata", async () => {
+    setup();
+    const res = await handlers.get("robynn_connected_app_capabilities")!({
+      provider_key: "hubspot",
+    });
+    expect(res.structuredContent.provider_key).toBe("hubspot");
+    expect(res.structuredContent.read_actions[0].action_key).toBe(
+      "hubspot.list_contacts",
+    );
+    expect(client.getConnectedAppCapabilities).toHaveBeenCalledWith("hubspot");
+  });
+
+  it("robynn_query_connected_app forwards read-only queries", async () => {
+    setup();
+    const res = await handlers.get("robynn_query_connected_app")!({
+      provider_key: "hubspot",
+      action_key: "hubspot.list_contacts",
+      payload: {
+        filters: {
+          lifecycle_stage: "lead",
+        },
+      },
+    });
+    expect(res.structuredContent.summary).toBe("HubSpot returned 128 contacts.");
+    expect(res.structuredContent.highlights.count).toBe(128);
+    expect(client.readConnectedApp).toHaveBeenCalledWith({
+      provider_key: "hubspot",
+      action_key: "hubspot.list_contacts",
+      payload: {
+        filters: {
+          lifecycle_stage: "lead",
+        },
+      },
+      connection_id: undefined,
+    });
   });
 
   it("robynn_create_content creates thread and polls run", async () => {
