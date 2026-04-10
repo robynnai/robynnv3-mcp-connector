@@ -17,13 +17,21 @@ type Handler = (args: any) => Promise<any>;
 
 function createServerHarness() {
   const handlers = new Map<string, Handler>();
+  const toolMetadata = new Map<
+    string,
+    {
+      description: string;
+    }
+  >();
 
   // server.tool() uses positional args: (name, desc, schema, annotations, handler)
   // or (name, desc, annotations, handler) for no-schema tools
   const tool = vi.fn((...args: unknown[]) => {
     const name = args[0] as string;
+    const description = args[1] as string;
     const handler = args[args.length - 1] as Handler;
     handlers.set(name, handler);
+    toolMetadata.set(name, { description });
   });
 
   // registerAppTool calls server.registerTool(name, config, handler)
@@ -35,7 +43,7 @@ function createServerHarness() {
 
   const server = { tool, registerTool } as never;
 
-  return { server, handlers };
+  return { server, handlers, toolMetadata };
 }
 
 function createFullMockClient() {
@@ -318,6 +326,30 @@ describe("all tools registration", () => {
     }
 
     expect(handlers.has("robynn_brand_rules")).toBe(false);
+  });
+});
+
+describe("connector tool guidance", () => {
+  it("describes capability discovery, read-only semantics, and summary-first usage", () => {
+    const { server, toolMetadata } = createServerHarness();
+    const client = createFullMockClient();
+    registerAllTools(server, client);
+
+    expect(
+      toolMetadata.get("robynn_connected_apps")?.description,
+    ).toContain("provider-specific operational questions");
+    expect(
+      toolMetadata.get("robynn_connected_app_capabilities")?.description,
+    ).toContain("Use this before guessing actions");
+    expect(
+      toolMetadata.get("robynn_query_connected_app")?.description,
+    ).toContain("structuredContent.summary");
+    expect(
+      toolMetadata.get("robynn_query_connected_app")?.description,
+    ).toContain("structuredContent.highlights");
+    expect(
+      toolMetadata.get("robynn_query_connected_app")?.description,
+    ).toContain("read-only");
   });
 });
 

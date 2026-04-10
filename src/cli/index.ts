@@ -16,6 +16,7 @@ import { registerBattlecardTools } from '../tools/battlecard';
 import { registerSeoTools } from '../tools/seo';
 import { registerBrandBookTools } from '../tools/brand-book';
 import { registerWebsiteTools } from '../tools/website';
+import { registerConnectorTools } from '../tools/connectors';
 import { installOpenClaw } from './install-openclaw';
 import type { RobynnApiResponse } from '../types';
 import { APP_VERSION } from '../version';
@@ -143,6 +144,7 @@ program
     registerSeoTools(server, client);
     registerBrandBookTools(server, client);
     registerWebsiteTools(server, client);
+    registerConnectorTools(server, client);
 
     const transport = new StdioServerTransport();
     await server.connect(transport);
