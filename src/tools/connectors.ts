@@ -6,7 +6,7 @@ import { toErrorResult, toSuccessResult } from "./util";
 export function registerConnectorTools(server: McpServer, client: RobynnClient) {
   server.tool(
     "robynn_connected_apps",
-    "List connected apps available to the Robynn organization, including the default connection and curated read-only actions.",
+    "List connected apps available to the Robynn organization, including the default connection and curated read-only actions. Use these connected-app tools first for provider-specific operational questions such as CRM counts, pipeline state, or repository facts. Use research tools for strategy and market analysis, not for connected-system facts.",
     { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     async () => {
       try {
@@ -37,7 +37,7 @@ export function registerConnectorTools(server: McpServer, client: RobynnClient) 
 
   server.tool(
     "robynn_connected_app_capabilities",
-    "Describe the curated read-only actions Robynn supports for a connected app, including JSON-schema-like input metadata and example prompts.",
+    "Describe the curated read-only actions Robynn supports for a connected app, including JSON-schema-like input metadata and example prompts. Use this before guessing actions so clients stay on the supported read-only surface.",
     {
       provider_key: z
         .string()
@@ -77,7 +77,7 @@ export function registerConnectorTools(server: McpServer, client: RobynnClient) 
 
   server.tool(
     "robynn_query_connected_app",
-    "Execute a curated read-only action against a connected app. Use robynn_connected_app_capabilities first to discover valid actions and input schema.",
+    "Execute a curated read-only action against a connected app. Use robynn_connected_app_capabilities first to discover valid actions and input schema. Treat structuredContent.summary and structuredContent.highlights as the primary answer surfaces for text-only clients, and use raw_result only when deeper inspection is required.",
     {
       provider_key: z
         .string()
