@@ -5,6 +5,7 @@ import type {
   Thread,
   RunResult,
   RobynnApiResponse,
+  CmoThreadRunRequest,
   BrandBookStatusRequest,
   BrandBookStatusResult,
   BrandBookGapAnalysisRequest,
@@ -274,7 +275,7 @@ export class RobynnClient {
   /** Start a CMO run (content creation or research) */
   async startRun(
     threadId: string,
-    payload: { message: string; type?: string }
+    payload: CmoThreadRunRequest
   ): Promise<RobynnApiResponse<{ run_id: string }>> {
     return this.fetch(`/api/agents/cmo/threads/${threadId}/runs`, {
       method: 'POST',

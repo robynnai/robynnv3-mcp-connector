@@ -8,6 +8,7 @@ import { registerContextTools } from "./tools/context";
 import { registerStatusTools } from "./tools/status";
 import { registerContentTools } from "./tools/content";
 import { registerResearchTools } from "./tools/research";
+import { registerAssistTools } from "./tools/assist";
 import { registerConversationTools } from "./tools/conversations";
 import { registerRunTools } from "./tools/runs";
 import { registerGeoTools } from "./tools/geo";
@@ -64,6 +65,7 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
     registerStatusTools(this.server, client);
     registerContentTools(this.server, client);
     registerResearchTools(this.server, client);
+    registerAssistTools(this.server, client);
     registerConversationTools(this.server, client);
     registerRunTools(this.server, client);
     registerGeoTools(this.server, client);

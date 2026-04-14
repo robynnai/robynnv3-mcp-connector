@@ -195,7 +195,27 @@ Useful asks:
 - "Write a landing page draft for our GEO product"
 - "Draft an email in our brand style for a product launch"
 
-### 9. Research
+### 9. General Robynn assist
+
+Use Robynn when you want a catch-all CMO request that can preserve thread history and forward explicit assistant routing hints.
+
+Available tool:
+
+- `robynn_assist`
+
+Useful asks:
+
+- "Help me plan the launch using our current thread history"
+- "Route this request to the best Robynn assistant and keep memory on"
+- "Continue this thread with a deeper strategic response"
+
+Expected output:
+
+- thread and run metadata
+- assistant routing preserved in the backend request
+- completed output or a pending run reference
+
+### 10. Research
 
 Use Robynn for structured research workflows.
 
@@ -209,7 +229,7 @@ Useful asks:
 - "Research the AI visibility market"
 - "Run competitor research on HubSpot"
 
-### 10. Conversations
+### 11. Conversations
 
 Use Robynn to list or create working threads tied to the Robynn CMO workflow.
 
@@ -221,6 +241,7 @@ Useful asks:
 
 - "List my Robynn conversations"
 - "Create a new Robynn conversation for GEO strategy"
+
 
 ## Best Practices
 

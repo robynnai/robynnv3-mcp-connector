@@ -48,6 +48,7 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 | `robynn_conversations` | Thread management | `robynnv3` CMO thread list/create endpoints | No |
 | `robynn_create_content` | CMO execution | `robynnv3` CMO thread/run pipeline, defaulting to `cmo_v2` unless env overrides it | No |
 | `robynn_research` | CMO execution | `robynnv3` CMO thread/run pipeline, defaulting to `cmo_v2` unless env overrides it | No |
+| `robynn_assist` | CMO execution | `robynnv3` CMO thread/run pipeline with caller-provided assistant routing hints and preserved thread history | No |
 | `robynn_run_status` | Thread management | Direct `robynnv3` CMO run status endpoint for long-running content/research jobs | No |
 | `robynn_geo_analysis` | Intelligence | GEO proxy in `robynnv3` -> LangGraph `geo_researcher` by default | Yes |
 | `robynn_seo_opportunities` | Intelligence | SEO proxy in `robynnv3` -> LangGraph `seo_researcher` -> `seo_researcher_v5` | Yes |
@@ -60,7 +61,7 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 | `robynn_website_audit` | Website intelligence | `robynnv3` website adapter -> LangGraph `website_report_v1` | Yes |
 | `robynn_website_strategy` | Website intelligence | `robynnv3` website adapter -> LangGraph `website_report_v1` | Yes |
 
-All tools return both `content` (text for LLM) and `structuredContent` (machine-readable JSON). Long-running `robynn_create_content` and `robynn_research` runs may return a pending `run_id` instead of blocking until completion; use `robynn_run_status` to fetch the final output. The local CLI now waits only briefly for those runs before returning `pending`, which avoids MCP client timeouts in command-based agents like OpenClaw. You can tune that short wait with `ROBYNN_MCP_SYNC_WAIT_MS` (default `8000`, max `30000`). Tools with inline app support expose MCP Apps resources from the Worker, while the backend agent or service only returns data.
+All tools return both `content` (text for LLM) and `structuredContent` (machine-readable JSON). Long-running `robynn_create_content`, `robynn_research`, and `robynn_assist` runs may return a pending `run_id` instead of blocking until completion; use `robynn_run_status` to fetch the final output. The local CLI now waits only briefly for those runs before returning `pending`, which avoids MCP client timeouts in command-based agents like OpenClaw. You can tune that short wait with `ROBYNN_MCP_SYNC_WAIT_MS` (default `8000`, max `30000`). Tools with inline app support expose MCP Apps resources from the Worker, while the backend agent or service only returns data.
 
 Detailed execution mapping for every tool lives in [docs/architecture/robynn-mcp-tool-execution-matrix.md](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/docs/architecture/robynn-mcp-tool-execution-matrix.md).
 
@@ -100,6 +101,7 @@ src/
     ├── status.ts         # robynn_status + robynn_usage
     ├── content.ts        # robynn_create_content
     ├── research.ts       # robynn_research
+    ├── assist.ts         # robynn_assist
     ├── conversations.ts  # robynn_conversations
     ├── runs.ts           # robynn_run_status
     ├── geo.ts            # robynn_geo_analysis

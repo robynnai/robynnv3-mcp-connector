@@ -422,3 +422,18 @@ export interface RunResult {
   thread_id?: string;
   tokens_used?: number;
 }
+
+export type CmoAssistantId = "cmo_v2" | "cmo_v3" | "auto";
+export type CmoRouteHint = "fast" | "deep" | "auto";
+export type CmoRequestedCapability = "article" | "image" | "research" | "general";
+
+export interface CmoThreadRunRequest {
+  message: string;
+  type?: string;
+  assistant_id?: CmoAssistantId;
+  route_hint?: CmoRouteHint;
+  requested_capability?: CmoRequestedCapability;
+  claude_skill_slug?: string;
+  history_summary?: string;
+  memory_enabled?: boolean;
+}
