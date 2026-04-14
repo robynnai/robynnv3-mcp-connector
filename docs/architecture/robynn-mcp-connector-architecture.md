@@ -107,7 +107,7 @@ Current tool groups:
 
 - context: `robynn_brand_context`, `robynn_brand_rules`
 - status: `robynn_status`, `robynn_usage`
-- execution: `robynn_create_content`, `robynn_research`, `robynn_conversations`
+- execution: `robynn_create_content`, `robynn_research`, `robynn_assist`, `robynn_conversations`
 - intelligence: `robynn_geo_analysis`, `robynn_competitive_battlecard`, `robynn_seo_opportunities`
 - brand book: `robynn_brand_book_status`, `robynn_brand_book_gap_analysis`, `robynn_brand_book_strategy`, `robynn_brand_reflections`, `robynn_publish_brand_book_html`
 - website: `robynn_website_audit`, `robynn_website_strategy`
@@ -214,6 +214,7 @@ This repo is intentionally a thin remote connector layer. It does not implement 
 
 - `robynn_create_content`
 - `robynn_research`
+- `robynn_assist`
 - `robynn_conversations`
 
 ## Reliability Considerations

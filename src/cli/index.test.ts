@@ -9,5 +9,6 @@ describe("robynn mcp CLI", () => {
     );
 
     expect(source).toContain('registerConnectorTools(server, client);');
+    expect(source).toContain("program.command('assist')");
   });
 });

@@ -38,6 +38,7 @@ Backend routes and agents only return data. The Worker turns that data into:
 | `robynn_conversations` | Thread management | `server.tool` | `GET/POST /api/agents/cmo/threads` | `robynnv3` thread persistence around the CMO workflow | No agent run for `list` or `create` | No |
 | `robynn_create_content` | CMO execution | `server.tool` | `POST /api/agents/cmo/threads`, `POST /api/agents/cmo/threads/{id}/runs`, `GET /api/agents/cmo/runs/{id}` | `robynnv3` instant-agent thread/run pipeline | Yes, via the configured CMO assistant. Current default is `env.INSTANT_AGENT_ASSISTANT_ID || "cmo_v2"` | No |
 | `robynn_research` | CMO execution | `server.tool` | `POST /api/agents/cmo/threads`, `POST /api/agents/cmo/threads/{id}/runs`, `GET /api/agents/cmo/runs/{id}` | `robynnv3` instant-agent thread/run pipeline | Yes, via the configured CMO assistant. Current default is `env.INSTANT_AGENT_ASSISTANT_ID || "cmo_v2"` | No |
+| `robynn_assist` | CMO execution | `server.tool` | `POST /api/agents/cmo/threads`, `POST /api/agents/cmo/threads/{id}/runs`, `GET /api/agents/cmo/runs/{id}` | `robynnv3` instant-agent thread/run pipeline with caller-provided routing hints | Yes, via explicit `assistant_id`, `route_hint`, `requested_capability`, and optional history/memory hints | No |
 | `robynn_geo_analysis` | Intelligence | `registerAppTool` | `POST /api/cli/mcp/geo-analysis` -> `/api/agents/geo/execute` | GEO proxy in `robynnv3`, then LangGraph `geo_researcher` by default | Yes | Yes |
 | `robynn_seo_opportunities` | Intelligence | `registerAppTool` | `POST /api/cli/mcp/seo-opportunities` -> `/api/agents/seo/execute` | SEO proxy in `robynnv3`, then LangGraph `env.SEO_ASSISTANT_ID || "seo_researcher"` | Yes. In `robynnv3_agents`, `seo_researcher` maps to `seo_researcher_v5` | Yes |
 | `robynn_competitive_battlecard` | Intelligence | `registerAppTool` | `POST /api/cli/mcp/competitive-battlecard` | Direct LangGraph `competitor_intelligence_v1`, then read latest row from `competitor_battlecards` | Yes | Yes |
@@ -79,6 +80,7 @@ These use the CMO thread/run system exposed by `robynnv3`:
 
 - `robynn_create_content`
 - `robynn_research`
+- `robynn_assist`
 
 They do not call a specialized MCP-safe report route. Instead they:
 
@@ -86,7 +88,7 @@ They do not call a specialized MCP-safe report route. Instead they:
 - start a run
 - poll the run until completion
 
-The current default assistant on that thread/run path is `cmo_v2` unless env overrides it.
+The catch-all `robynn_assist` tool forwards caller hints directly into the existing thread/run path, while the legacy content and research tools continue using the CMO assistant selected by `robynnv3`.
 
 ### 3. Specialized intelligence agents
 
@@ -134,4 +136,3 @@ These are the best tools to test when you want to validate specialized LangGraph
 ### `robynnv3_agents` assistant registry
 
 - [langgraph.json](/Users/madhukarkumar/Developer/robynnv3-standalone/robynnv3_agents/langgraph.json)
-

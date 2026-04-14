@@ -9,6 +9,7 @@ import { registerContextTools } from '../tools/context';
 import { registerStatusTools } from '../tools/status';
 import { registerContentTools } from '../tools/content';
 import { registerResearchTools } from '../tools/research';
+import { registerAssistTools } from '../tools/assist';
 import { registerConversationTools } from '../tools/conversations';
 import { registerRunTools } from '../tools/runs';
 import { registerGeoTools } from '../tools/geo';
@@ -137,6 +138,7 @@ program
     registerStatusTools(server, client);
     registerContentTools(server, client);
     registerResearchTools(server, client);
+    registerAssistTools(server, client);
     registerConversationTools(server, client);
     registerRunTools(server, client);
     registerGeoTools(server, client);
@@ -254,6 +256,52 @@ content
       const runId = requireResponseData(runRes, 'Run creation').run_id;
       const result = await client.pollRun(runId);
       handleOutput(options.json ?? false, requireResponseData(result, 'Content run').output, 'Draft Email');
+    } catch (error: unknown) {
+      exitWithError(`Error: ${formatError(error)}`);
+    }
+  });
+
+const assist = program.command('assist').description('Run a general-purpose Robynn CMO request');
+assist
+  .requiredOption('-m, --message <text>', 'Assistant request message')
+  .option('--thread-id <id>', 'Continue in an existing conversation thread')
+  .option('--assistant-id <id>', 'Assistant override hint (cmo_v2, cmo_v3, auto)')
+  .option('--route-hint <hint>', 'Routing hint (fast, deep, auto)')
+  .option('--requested-capability <capability>', 'Requested capability (article, image, research, general)')
+  .option('--claude-skill-slug <slug>', 'Optional Claude skill slug')
+  .option('--history-summary <text>', 'Optional summary of prior thread history')
+  .option('--memory-enabled', 'Enable backend memory for this run')
+  .option('--json', 'Output strictly as JSON')
+  .action(async (options: {
+    message: string;
+    threadId?: string;
+    assistantId?: 'cmo_v2' | 'cmo_v3' | 'auto';
+    routeHint?: 'fast' | 'deep' | 'auto';
+    requestedCapability?: 'article' | 'image' | 'research' | 'general';
+    claudeSkillSlug?: string;
+    historySummary?: string;
+    memoryEnabled?: boolean;
+    json?: boolean;
+  }) => {
+    const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
+    try {
+      if (!options.json) console.log('⏳ Running assist request...');
+      const threadRes = options.threadId
+        ? { success: true, data: { id: options.threadId } }
+        : await client.createThread(`Assist: ${options.message.slice(0, 50)}`);
+      const threadId = requireResponseData(threadRes, 'Thread creation').id;
+      const runRes = await client.startRun(threadId, {
+        message: options.message,
+        ...(options.assistantId ? { assistant_id: options.assistantId } : {}),
+        ...(options.routeHint ? { route_hint: options.routeHint } : {}),
+        ...(options.requestedCapability ? { requested_capability: options.requestedCapability } : {}),
+        ...(options.claudeSkillSlug ? { claude_skill_slug: options.claudeSkillSlug } : {}),
+        ...(options.historySummary ? { history_summary: options.historySummary } : {}),
+        ...(options.memoryEnabled !== undefined ? { memory_enabled: options.memoryEnabled } : {}),
+      });
+      const runId = requireResponseData(runRes, 'Run creation').run_id;
+      const result = await client.pollRun(runId);
+      handleOutput(options.json ?? false, requireResponseData(result, 'Assist run').output, 'Assist Result');
     } catch (error: unknown) {
       exitWithError(`Error: ${formatError(error)}`);
     }

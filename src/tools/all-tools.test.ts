@@ -3,6 +3,7 @@ import { registerContextTools } from "./context";
 import { registerStatusTools } from "./status";
 import { registerContentTools } from "./content";
 import { registerResearchTools } from "./research";
+import { registerAssistTools } from "./assist";
 import { registerConversationTools } from "./conversations";
 import { registerRunTools } from "./runs";
 import { registerGeoTools } from "./geo";
@@ -275,6 +276,7 @@ function registerAllTools(
   registerStatusTools(server, client as never);
   registerContentTools(server, client as never);
   registerResearchTools(server, client as never);
+  registerAssistTools(server, client as never);
   registerConversationTools(server, client as never);
   registerRunTools(server, client as never);
   registerGeoTools(server, client as never);
@@ -286,11 +288,11 @@ function registerAllTools(
 }
 
 describe("all tools registration", () => {
-  it("registers exactly 20 tools", () => {
+  it("registers exactly 21 tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(20);
+    expect(handlers.size).toBe(21);
   });
 
   it("registers the expected tool names", () => {
@@ -304,6 +306,7 @@ describe("all tools registration", () => {
       "robynn_usage",
       "robynn_create_content",
       "robynn_research",
+      "robynn_assist",
       "robynn_conversations",
       "robynn_run_status",
       "robynn_geo_analysis",
@@ -484,6 +487,34 @@ describe("all tools success path", () => {
     });
     expect(res.structuredContent.findings).toBe("Generated content here");
     expect(client.createThread).toHaveBeenCalled();
+    expect(client.pollRun).toHaveBeenCalledWith("run-1", 8000);
+  });
+
+  it("robynn_assist creates thread and forwards routing hints", async () => {
+    setup();
+    const res = await handlers.get("robynn_assist")!({
+      message: "Draft a strategy memo for the new launch",
+      assistant_id: "cmo_v3",
+      route_hint: "deep",
+      requested_capability: "article",
+      claude_skill_slug: "strategy-memo",
+      history_summary: "Thread summary",
+      memory_enabled: true,
+    });
+    expect(res.structuredContent.output).toBe("Generated content here");
+    expect(client.createThread).toHaveBeenCalled();
+    expect(client.startRun).toHaveBeenCalledWith(
+      "thread-1",
+      expect.objectContaining({
+        message: "Draft a strategy memo for the new launch",
+        assistant_id: "cmo_v3",
+        route_hint: "deep",
+        requested_capability: "article",
+        claude_skill_slug: "strategy-memo",
+        history_summary: "Thread summary",
+        memory_enabled: true,
+      }),
+    );
     expect(client.pollRun).toHaveBeenCalledWith("run-1", 8000);
   });
 
@@ -723,6 +754,7 @@ function getMinimalArgs(toolName: string): Record<string, unknown> {
     robynn_usage: {},
     robynn_create_content: { type: "blog_post", topic: "test" },
     robynn_research: { query: "test" },
+    robynn_assist: { message: "test" },
     robynn_conversations: { action: "list" },
     robynn_run_status: { run_id: "run-1" },
     robynn_geo_analysis: { company_name: "Acme" },

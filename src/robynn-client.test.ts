@@ -115,6 +115,34 @@ describe("RobynnClient intelligence routes", () => {
     expect(result.success).toBe(true);
   });
 
+  it("forwards catch-all CMO run payload fields to the thread run endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { run_id: "run-123" } }))
+    );
+
+    const client = new RobynnClient("https://robynn.test", "token-123");
+    const payload = {
+      message: "Draft a launch plan",
+      assistant_id: "cmo_v3" as const,
+      route_hint: "deep" as const,
+      requested_capability: "article" as const,
+      claude_skill_slug: "launch-plan",
+      history_summary: "Previous thread summary",
+      memory_enabled: true,
+    };
+
+    const result = await client.startRun("thread-123", payload);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/agents/cmo/threads/thread-123/runs",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
   it("calls the brand-book status MCP-safe route with query params", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
