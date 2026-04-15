@@ -437,3 +437,60 @@ export interface CmoThreadRunRequest {
   history_summary?: string;
   memory_enabled?: boolean;
 }
+
+export interface OpenClawProvisionRedeemRequest {
+  token: string;
+  hostname: string;
+  machine_label?: string;
+  openclaw_version?: string;
+  robynn_cli_version?: string;
+}
+
+export interface OpenClawManifest {
+  slug: string;
+  version: string;
+  agent_id?: string;
+  workspace_directory?: string;
+  gateway_service_name?: string;
+  gateway_port?: number;
+  mcp_servers: Record<
+    string,
+    {
+      command: string;
+      args: string[];
+    }
+  >;
+  workspace_seed_files?: string[];
+}
+
+export interface OpenClawProvisionRedeemResult {
+  install_id: string;
+  organization_id: string;
+  organization_name: string;
+  robynn_auth: {
+    api_key: string;
+    base_url: string;
+  };
+  profile: OpenClawManifest;
+  runtime_token: string;
+}
+
+export interface OpenClawInstallHeartbeatRequest {
+  status: "healthy" | "degraded" | "offline";
+  openclaw_version?: string;
+  robynn_cli_version?: string;
+  gateway_running?: boolean;
+  robynn_mcp_healthy?: boolean;
+  last_error?: string | null;
+}
+
+export interface OpenClawInstallHeartbeatResult {
+  install_id: string;
+  last_heartbeat_at?: string;
+  last_health_status: string;
+}
+
+export interface OpenClawManifestResult {
+  install_id: string;
+  profile: OpenClawManifest;
+}

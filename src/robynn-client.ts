@@ -28,6 +28,11 @@ import type {
   SeoOpportunitiesResult,
   ConnectedAppsResult,
   ConnectedAppReadResult,
+  OpenClawInstallHeartbeatRequest,
+  OpenClawInstallHeartbeatResult,
+  OpenClawManifestResult,
+  OpenClawProvisionRedeemRequest,
+  OpenClawProvisionRedeemResult,
 } from './types';
 
 const READ_TIMEOUT_MS = 10_000;
@@ -74,12 +79,18 @@ export class RobynnClient {
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      const authHeaders = this.accessToken
+        ? {
+            Authorization: `Bearer ${this.accessToken}`,
+          }
+        : {};
+
       const response = await fetch(`${this.baseUrl}${path}`, {
         ...options,
         signal: controller.signal,
         headers: {
-          Authorization: `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json',
+          ...authHeaders,
           ...options.headers,
         },
       });
@@ -153,6 +164,44 @@ export class RobynnClient {
     return this.fetch('/api/cli/connectors/read', {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  }
+
+  /** Redeem a one-time RobynnClaw provisioning token on a fresh host */
+  async redeemOpenClawProvisionToken(
+    payload: OpenClawProvisionRedeemRequest,
+  ): Promise<RobynnApiResponse<OpenClawProvisionRedeemResult>> {
+    return this.fetch('/api/robynnclaw/provision/redeem', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /** Post a runtime heartbeat for a provisioned OpenClaw install */
+  async heartbeatOpenClawInstall(
+    installId: string,
+    payload: OpenClawInstallHeartbeatRequest,
+    runtimeToken: string,
+  ): Promise<RobynnApiResponse<OpenClawInstallHeartbeatResult>> {
+    return this.fetch(`/api/robynnclaw/installs/${installId}/heartbeat`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${runtimeToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /** Fetch the current versioned manifest for a provisioned install */
+  async getOpenClawManifest(
+    installId: string,
+    runtimeToken: string,
+  ): Promise<RobynnApiResponse<OpenClawManifestResult>> {
+    return this.fetch(`/api/robynnclaw/installs/${installId}/manifest`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${runtimeToken}`,
+      },
     });
   }
 
