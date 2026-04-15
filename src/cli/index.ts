@@ -18,9 +18,10 @@ import { registerSeoTools } from '../tools/seo';
 import { registerBrandBookTools } from '../tools/brand-book';
 import { registerWebsiteTools } from '../tools/website';
 import { registerConnectorTools } from '../tools/connectors';
-import { installOpenClaw } from './install-openclaw';
 import type { RobynnApiResponse } from '../types';
 import { APP_VERSION } from '../version';
+import { installProvisionedOpenClaw } from '../openclaw/install';
+import { runOpenClawDoctor } from '../openclaw/doctor';
 
 const program = new Command();
 const DEFAULT_API_URL = process.env.ROBYNN_API_BASE_URL || 'https://robynn.ai';
@@ -40,6 +41,10 @@ function getConfiguredApiKey(): string {
     exitWithError('❌ Not authenticated. Run `robynn init <key>` first.');
   }
   return apiKey;
+}
+
+function getConfiguredBaseUrl(): string {
+  return readConfig().baseUrl || DEFAULT_API_URL;
 }
 
 function requireResponseData<T>(
@@ -91,34 +96,49 @@ auth
     }
   });
 
-const install = program.command('install').description('Configure local agent runtimes');
+const openclaw = program.command('openclaw').description('Manage RobynnClaw provisioning on this host');
 
-install
-  .command('openclaw')
-  .description('Configure OpenClaw to launch the local Robynn MCP bridge')
-  .action(() => {
-    const config = readConfig();
-    const result = installOpenClaw({
-      apiKeyConfigured: Boolean(config.apiKey),
-    });
+openclaw
+  .command('install')
+  .description('Provision RobynnClaw on a fresh OpenClaw host')
+  .requiredOption('--provision-token <token>', 'One-time RobynnClaw provision token')
+  .action(async (options: { provisionToken: string }) => {
+    try {
+      console.log('Redeeming RobynnClaw provision token...');
+      const installResult = await installProvisionedOpenClaw({
+        provisionToken: options.provisionToken,
+        baseUrl: getConfiguredBaseUrl(),
+      });
 
-    if (result.status === 'manual-required') {
-      exitWithError(result.instructions || 'OpenClaw install failed.');
+      console.log(`Wrote Robynn config and OpenClaw profile at ${installResult.workspacePath}`);
+      console.log('Running post-install doctor checks...');
+
+      const doctor = await runOpenClawDoctor();
+      for (const check of doctor.checks) {
+        console.log(`${check.ok ? '✓' : '✗'} ${check.name}${check.detail ? ` - ${check.detail}` : ''}`);
+      }
+
+      if (!doctor.ok) {
+        exitWithError('OpenClaw install completed but doctor checks failed.');
+      }
+
+      console.log(`RobynnClaw install ready. Install ID: ${installResult.installId}`);
+    } catch (error: unknown) {
+      exitWithError(`OpenClaw install failed: ${formatError(error)}`);
+    }
+  });
+
+openclaw
+  .command('doctor')
+  .description('Validate a local RobynnClaw install')
+  .action(async () => {
+    const doctor = await runOpenClawDoctor();
+    for (const check of doctor.checks) {
+      console.log(`${check.ok ? '✓' : '✗'} ${check.name}${check.detail ? ` - ${check.detail}` : ''}`);
     }
 
-    const action =
-      result.status === 'installed'
-        ? 'Installed'
-        : result.status === 'updated'
-          ? 'Updated'
-          : 'OpenClaw already has';
-
-    console.log(`${action} MCP server entry at ${result.configPath}`);
-    console.log('Configured OpenClaw server: robynn -> `robynn mcp`');
-    if (result.nextStep) {
-      console.log(`Next step: run \`${result.nextStep}\``);
-    } else {
-      console.log('Robynn API key already configured.');
+    if (!doctor.ok) {
+      exitWithError('OpenClaw doctor found configuration or runtime issues.');
     }
   });
 
@@ -127,7 +147,7 @@ program
   .command('mcp')
   .description('Start the local Stdio MCP Server')
   .action(async () => {
-    const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
+    const client = new RobynnClient(getConfiguredBaseUrl(), getConfiguredApiKey());
     const server = new McpServer({
       name: "Robynn (Local CLI)",
       version: APP_VERSION,
@@ -173,7 +193,7 @@ analyze
   .option('-c, --category <text>', 'Category (required by backend)')
   .option('--json', 'Output strictly as JSON')
   .action(async (options: { query: string; category?: string; json?: boolean }) => {
-    const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
+    const client = new RobynnClient(getConfiguredBaseUrl(), getConfiguredApiKey());
     try {
       if (!options.json) console.log('⏳ Running GEO analysis... (this may take 1-2 minutes)');
       const res = await client.geoAnalysis({ company_name: options.query, category: options.category || "software" });
@@ -189,7 +209,7 @@ analyze
   .requiredOption('-u, --url <url>', 'Website URL')
   .option('--json', 'Output strictly as JSON')
   .action(async (options: { url: string; json?: boolean }) => {
-    const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
+    const client = new RobynnClient(getConfiguredBaseUrl(), getConfiguredApiKey());
     try {
       if (!options.json) console.log('⏳ Running SEO analysis...');
       const res = await client.seoOpportunities({
@@ -209,7 +229,7 @@ brand
   .description('Get the current brand context')
   .option('--json', 'Output strictly as JSON')
   .action(async (options: { json?: boolean }) => {
-    const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
+    const client = new RobynnClient(getConfiguredBaseUrl(), getConfiguredApiKey());
     try {
       const res = await client.getBrandContext('full');
       handleOutput(options.json ?? false, res, 'Brand Context');
@@ -226,7 +246,7 @@ research
   .requiredOption('-q, --query <text>', 'Company name')
   .option('--json', 'Output strictly as JSON')
   .action(async (options: { query: string; json?: boolean }) => {
-    const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
+    const client = new RobynnClient(getConfiguredBaseUrl(), getConfiguredApiKey());
     try {
       if (!options.json) console.log('⏳ Running research on ' + options.query + '...');
       const threadRes = await client.createThread(`Research: ${options.query}`);
@@ -247,7 +267,7 @@ content
   .requiredOption('-p, --prompt <text>', 'Email prompt')
   .option('--json', 'Output strictly as JSON')
   .action(async (options: { prompt: string; json?: boolean }) => {
-    const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
+    const client = new RobynnClient(getConfiguredBaseUrl(), getConfiguredApiKey());
     try {
       if (!options.json) console.log('⏳ Drafting email...');
       const threadRes = await client.createThread(`Email Draft`);
@@ -283,7 +303,7 @@ assist
     memoryEnabled?: boolean;
     json?: boolean;
   }) => {
-    const client = new RobynnClient(DEFAULT_API_URL, getConfiguredApiKey());
+    const client = new RobynnClient(getConfiguredBaseUrl(), getConfiguredApiKey());
     try {
       if (!options.json) console.log('⏳ Running assist request...');
       const threadRes = options.threadId

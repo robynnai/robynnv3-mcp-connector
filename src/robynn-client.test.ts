@@ -250,4 +250,117 @@ describe("RobynnClient intelligence routes", () => {
     );
     expect(result.success).toBe(true);
   });
+
+  it("redeems an OpenClaw provision token", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            install_id: "install-1",
+            organization_id: "org-1",
+            organization_name: "Acme",
+            robynn_auth: {
+              api_key: "rbo_test_key",
+              base_url: "https://robynn.test",
+            },
+            profile: {
+              slug: "robynn-cmo",
+              version: "2026-04-14.1",
+            },
+            runtime_token: "rclaw_rt_123",
+          },
+        }),
+      ),
+    );
+
+    const client = new RobynnClient("https://robynn.test", "");
+    const result = await client.redeemOpenClawProvisionToken({
+      token: "rclaw_pt_123",
+      hostname: "srv1369857",
+      machine_label: "telegram-prod-1",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/robynnclaw/provision/redeem",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          token: "rclaw_pt_123",
+          hostname: "srv1369857",
+          machine_label: "telegram-prod-1",
+        }),
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("posts install heartbeats with the runtime token", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            install_id: "install-1",
+            last_health_status: "healthy",
+          },
+        }),
+      ),
+    );
+
+    const client = new RobynnClient("https://robynn.test", "");
+    const result = await client.heartbeatOpenClawInstall(
+      "install-1",
+      {
+        status: "healthy",
+        gateway_running: true,
+      },
+      "rclaw_rt_123",
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/robynnclaw/installs/install-1/heartbeat",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer rclaw_rt_123",
+        }),
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("fetches the versioned install manifest with the runtime token", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            install_id: "install-1",
+            profile: {
+              slug: "robynn-cmo",
+              version: "2026-04-14.1",
+            },
+          },
+        }),
+      ),
+    );
+
+    const client = new RobynnClient("https://robynn.test", "");
+    const result = await client.getOpenClawManifest(
+      "install-1",
+      "rclaw_rt_123",
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/robynnclaw/installs/install-1/manifest",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          Authorization: "Bearer rclaw_rt_123",
+        }),
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
 });

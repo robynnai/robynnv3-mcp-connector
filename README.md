@@ -259,50 +259,38 @@ claude mcp add robynn-local -- robynn mcp
 
 ### OpenClaw Install
 
-For remote Linux hosts running OpenClaw, the CLI can patch the local OpenClaw MCP config for you:
-
-**After `@robynn-ai/cli` has been published to npm:**
+RobynnClaw installs through the existing CLI using a one-time provisioning token issued by Robynn:
 
 ```bash
 npm install -g @robynn-ai/cli
-robynn install openclaw
-robynn init rbo_YOUR_KEY_HERE
+robynn openclaw install --provision-token rclaw_pt_...
 ```
 
-**If you are installing from this repository before package publish:**
+You can then verify the local runtime with:
 
 ```bash
-git clone https://github.com/robynnai/robynnv3-mcp-connector.git
-cd robynnv3-mcp-connector
-pnpm install
-pnpm build:cli
-node dist/robynn.cjs install openclaw
-node dist/robynn.cjs init rbo_YOUR_KEY_HERE
+robynn openclaw doctor
 ```
 
-What this does:
+What the installer does:
 
-- `robynn install openclaw` looks for OpenClaw config in:
-  - `/home/$USER/.openclaw/openclaw.json`
-  - `~/.openclaw/openclaw.json`
-- If it finds a config file, it adds or updates:
+- redeems the RobynnClaw provision token against Robynn
+- writes `~/.robynn/config.json` with the returned org CLI key
+- writes `~/.openclaw/openclaw.json` with the `robynn -> robynn mcp` MCP registration
+- seeds `~/.openclaw/workspace-robynn-cmo`
+- installs `~/.config/systemd/user/openclaw-gateway.service`
+- runs `systemctl --user daemon-reload`
+- runs `systemctl --user enable --now openclaw-gateway.service`
+- posts an initial heartbeat back to Robynn
 
-```json
-{
-  "mcp": {
-    "servers": {
-      "robynn": {
-        "command": "robynn",
-        "args": ["mcp"]
-      }
-    }
-  }
-}
-```
+The doctor command checks:
 
-- If it cannot find or safely patch the config, it prints exact manual instructions instead.
-- `robynn init rbo_...` stores the org key in `~/.robynn/config.json`, which is then used by `robynn mcp`.
-- OpenClaw stores the saved local server entry under `mcp.servers.robynn`.
+- `openclaw` binary exists
+- `robynn` binary exists
+- `~/.robynn/config.json` exists
+- `~/.openclaw/openclaw.json` contains the Robynn MCP registration
+- `robynn mcp` starts cleanly
+- the user-scoped `openclaw-gateway.service` is active
 
 ### Publishing `@robynn-ai/cli`
 
