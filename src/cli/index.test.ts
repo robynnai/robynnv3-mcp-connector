@@ -10,5 +10,10 @@ describe("robynn mcp CLI", () => {
 
     expect(source).toContain('registerConnectorTools(server, client);');
     expect(source).toContain("program.command('assist')");
+    expect(source).toContain("const openclaw = program.command('openclaw')");
+    expect(source).toContain(".command('install')");
+    expect(source).toContain(".requiredOption('--provision-token <token>'");
+    expect(source).toContain(".command('doctor')");
+    expect(source).not.toContain("install').description('Configure local agent runtimes'");
   });
 });

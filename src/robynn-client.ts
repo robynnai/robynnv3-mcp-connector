@@ -79,18 +79,18 @@ export class RobynnClient {
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const authHeaders = this.accessToken
-        ? {
-            Authorization: `Bearer ${this.accessToken}`,
-          }
-        : {};
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (this.accessToken) {
+        headers.Authorization = `Bearer ${this.accessToken}`;
+      }
 
       const response = await fetch(`${this.baseUrl}${path}`, {
         ...options,
         signal: controller.signal,
         headers: {
-          'Content-Type': 'application/json',
-          ...authHeaders,
+          ...headers,
           ...options.headers,
         },
       });
