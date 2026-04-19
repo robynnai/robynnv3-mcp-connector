@@ -6,6 +6,8 @@ import type {
   RunResult,
   RobynnApiResponse,
   CmoThreadRunRequest,
+  CmoAgentRequest,
+  CmoAgentResult,
   BrandBookStatusRequest,
   BrandBookStatusResult,
   BrandBookGapAnalysisRequest,
@@ -26,6 +28,9 @@ import type {
   CompetitiveBattlecardResult,
   SeoOpportunitiesRequest,
   SeoOpportunitiesResult,
+  MarketingCampaignCreatorRequest,
+  MarketingCampaignCreatorResult,
+  MarketingCampaignStatusRequest,
   ConnectedAppsResult,
   ConnectedAppReadResult,
 } from './types';
@@ -286,6 +291,40 @@ export class RobynnClient {
   /** Fetch the latest state for a CMO run */
   async getRun(runId: string): Promise<RobynnApiResponse<RunResult>> {
     return this.fetch(`/api/agents/cmo/runs/${runId}`);
+  }
+
+  /** Execute a top-level CMO agent request through the MCP-safe API route */
+  async cmoAgent(
+    payload: CmoAgentRequest
+  ): Promise<RobynnApiResponse<CmoAgentResult>> {
+    return this.fetch("/api/cli/mcp/cmo/run", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Execute the marketing campaign creator through the MCP-safe API route */
+  async campaignCreator(
+    payload: MarketingCampaignCreatorRequest
+  ): Promise<RobynnApiResponse<MarketingCampaignCreatorResult>> {
+    return this.fetch("/api/cli/mcp/marketing-campaign", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Fetch the current status for a marketing campaign run */
+  async campaignStatus(
+    payload: MarketingCampaignStatusRequest
+  ): Promise<RobynnApiResponse<MarketingCampaignCreatorResult>> {
+    return this.fetch(
+      this.withQuery("/api/cli/mcp/marketing-campaign/status", {
+        threadId: payload.langgraph_thread_id,
+        runId: payload.langgraph_run_id,
+        company_name: payload.company_name,
+        company_url: payload.company_url,
+      })
+    );
   }
 
   /** Poll a run until completion */

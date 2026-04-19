@@ -15,6 +15,8 @@ import { registerGeoTools } from "./tools/geo";
 import { registerBattlecardTools } from "./tools/battlecard";
 import { registerSeoTools } from "./tools/seo";
 import { registerBrandBookTools } from "./tools/brand-book";
+import { registerCampaignTools } from "./tools/campaign";
+import { registerCmoAgentTools } from "./tools/cmo-agent";
 import { registerWebsiteTools } from "./tools/website";
 import { registerConnectorTools } from "./tools/connectors";
 import type { Env, Props } from "./types";
@@ -72,6 +74,8 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
     registerBattlecardTools(this.server, client);
     registerSeoTools(this.server, client);
     registerBrandBookTools(this.server, client);
+    registerCmoAgentTools(this.server, client);
+    registerCampaignTools(this.server, client);
     registerWebsiteTools(this.server, client);
     registerConnectorTools(this.server, client);
   }

@@ -13,6 +13,8 @@ It is best for:
 - website audit and website strategy
 - competitive battlecards
 - content generation in your brand voice
+- direct CMO orchestration
+- marketing campaign planning and status polling
 
 ## How To Connect
 
@@ -215,7 +217,47 @@ Expected output:
 - assistant routing preserved in the backend request
 - completed output or a pending run reference
 
-### 10. Research
+### 10. Direct CMO agent
+
+Use Robynn when you want a direct top-level CMO request without the legacy content or research wrappers.
+
+Available tool:
+
+- `robynn_cmo_agent`
+
+Useful asks:
+
+- "Create a launch plan for Acme's new analytics product"
+- "Run a direct CMO request with the current thread history"
+
+Expected output:
+
+- completed output text when the run finishes
+- thread and run metadata
+- a pending response with a `run_id` when the backend needs more time
+
+### 11. Marketing campaigns
+
+Use Robynn when you want a marketing campaign plan saved as a Rory artifact and a follow-up status lookup for pending campaign runs.
+
+Available tools:
+
+- `robynn_campaign_creator`
+- `robynn_campaign_status`
+
+Useful asks:
+
+- "Generate a marketing campaign for Acme targeting VP Marketing"
+- "Check the status of the campaign run and return the saved artifact"
+
+Expected output:
+
+- markdown campaign strategy text
+- Rory artifact and thread metadata
+- LangGraph thread/run IDs for follow-up polling
+- pending instructions when the campaign is still running
+
+### 12. Research
 
 Use Robynn for structured research workflows.
 
@@ -229,7 +271,7 @@ Useful asks:
 - "Research the AI visibility market"
 - "Run competitor research on HubSpot"
 
-### 11. Conversations
+### 13. Conversations
 
 Use Robynn to list or create working threads tied to the Robynn CMO workflow.
 
