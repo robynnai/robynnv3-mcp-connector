@@ -67,6 +67,12 @@ export type GuidedWorkflowToolName =
   | "robynn_website_audit"
   | "robynn_website_strategy";
 
+export type CmoAgentToolName = "robynn_cmo_agent";
+
+export type CampaignToolName =
+  | "robynn_campaign_creator"
+  | "robynn_campaign_status";
+
 /** Shared status values for MCP intelligence responses */
 export type IntelligenceToolStatus =
   | "pending"
@@ -436,4 +442,55 @@ export interface CmoThreadRunRequest {
   claude_skill_slug?: string;
   history_summary?: string;
   memory_enabled?: boolean;
+}
+
+export type CmoAgentStatus = "pending" | "success" | "failed";
+
+export interface CmoAgentRequest {
+  message: string;
+  thread_id?: string;
+  assistant_id?: CmoAssistantId;
+  route_hint?: CmoRouteHint;
+  requested_capability?: CmoRequestedCapability;
+  claude_skill_slug?: string;
+  history_summary?: string;
+  memory_enabled?: boolean;
+}
+
+export interface CmoAgentResult extends IntelligenceToolResultBase {
+  output?: string | null;
+  thread_id: string;
+  run_id: string;
+  tokens_used?: number | null;
+  poll_after_seconds?: number;
+}
+
+export interface MarketingCampaignCreatorRequest {
+  company_name: string;
+  company_url?: string;
+  industry?: string;
+  target_audience?: string;
+  goals?: string;
+  budget_range?: string;
+  geography?: string;
+  additional_context?: string;
+}
+
+export interface MarketingCampaignCreatorResult extends IntelligenceToolResultBase {
+  markdown?: string;
+  thread_id?: string;
+  artifact_id?: string;
+  langgraph_thread_id: string;
+  langgraph_run_id: string;
+  assistant_id: "marketing_campaign_builder";
+  poll_after_seconds?: number;
+  company_name?: string;
+  company_url?: string;
+}
+
+export interface MarketingCampaignStatusRequest {
+  langgraph_thread_id: string;
+  langgraph_run_id: string;
+  company_name?: string;
+  company_url?: string;
 }

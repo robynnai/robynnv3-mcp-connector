@@ -16,6 +16,8 @@ import { registerGeoTools } from '../tools/geo';
 import { registerBattlecardTools } from '../tools/battlecard';
 import { registerSeoTools } from '../tools/seo';
 import { registerBrandBookTools } from '../tools/brand-book';
+import { registerCampaignTools } from '../tools/campaign';
+import { registerCmoAgentTools } from '../tools/cmo-agent';
 import { registerWebsiteTools } from '../tools/website';
 import { registerConnectorTools } from '../tools/connectors';
 import { installOpenClaw } from './install-openclaw';
@@ -145,6 +147,8 @@ program
     registerBattlecardTools(server, client);
     registerSeoTools(server, client);
     registerBrandBookTools(server, client);
+    registerCmoAgentTools(server, client);
+    registerCampaignTools(server, client);
     registerWebsiteTools(server, client);
     registerConnectorTools(server, client);
 

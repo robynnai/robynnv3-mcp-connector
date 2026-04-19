@@ -39,6 +39,9 @@ Backend routes and agents only return data. The Worker turns that data into:
 | `robynn_create_content` | CMO execution | `server.tool` | `POST /api/agents/cmo/threads`, `POST /api/agents/cmo/threads/{id}/runs`, `GET /api/agents/cmo/runs/{id}` | `robynnv3` instant-agent thread/run pipeline | Yes, via the configured CMO assistant. Current default is `env.INSTANT_AGENT_ASSISTANT_ID || "cmo_v2"` | No |
 | `robynn_research` | CMO execution | `server.tool` | `POST /api/agents/cmo/threads`, `POST /api/agents/cmo/threads/{id}/runs`, `GET /api/agents/cmo/runs/{id}` | `robynnv3` instant-agent thread/run pipeline | Yes, via the configured CMO assistant. Current default is `env.INSTANT_AGENT_ASSISTANT_ID || "cmo_v2"` | No |
 | `robynn_assist` | CMO execution | `server.tool` | `POST /api/agents/cmo/threads`, `POST /api/agents/cmo/threads/{id}/runs`, `GET /api/agents/cmo/runs/{id}` | `robynnv3` instant-agent thread/run pipeline with caller-provided routing hints | Yes, via explicit `assistant_id`, `route_hint`, `requested_capability`, and optional history/memory hints | No |
+| `robynn_cmo_agent` | CMO execution | `server.tool` | `POST /api/cli/mcp/cmo/run` | MCP-safe CMO run route in `robynnv3` | No | No |
+| `robynn_campaign_creator` | Campaign strategy | `server.tool` | `POST /api/cli/mcp/marketing-campaign` | MCP-safe marketing campaign route in `robynnv3` | Yes, via the marketing-campaign LangGraph runner | No |
+| `robynn_campaign_status` | Campaign strategy | `server.tool` | `GET /api/cli/mcp/marketing-campaign/status` | Campaign status route in `robynnv3` with idempotent artifact readback | Yes, via the marketing-campaign LangGraph runner | No |
 | `robynn_geo_analysis` | Intelligence | `registerAppTool` | `POST /api/cli/mcp/geo-analysis` -> `/api/agents/geo/execute` | GEO proxy in `robynnv3`, then LangGraph `geo_researcher` by default | Yes | Yes |
 | `robynn_seo_opportunities` | Intelligence | `registerAppTool` | `POST /api/cli/mcp/seo-opportunities` -> `/api/agents/seo/execute` | SEO proxy in `robynnv3`, then LangGraph `env.SEO_ASSISTANT_ID || "seo_researcher"` | Yes. In `robynnv3_agents`, `seo_researcher` maps to `seo_researcher_v5` | Yes |
 | `robynn_competitive_battlecard` | Intelligence | `registerAppTool` | `POST /api/cli/mcp/competitive-battlecard` | Direct LangGraph `competitor_intelligence_v1`, then read latest row from `competitor_battlecards` | Yes | Yes |
@@ -81,6 +84,9 @@ These use the CMO thread/run system exposed by `robynnv3`:
 - `robynn_create_content`
 - `robynn_research`
 - `robynn_assist`
+- `robynn_cmo_agent`
+- `robynn_campaign_creator`
+- `robynn_campaign_status`
 
 They do not call a specialized MCP-safe report route. Instead they:
 
@@ -112,6 +118,8 @@ These are the best tools to test when you want to validate specialized LangGraph
 - [src/tools/content.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/src/tools/content.ts)
 - [src/tools/research.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/src/tools/research.ts)
 - [src/tools/conversations.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/src/tools/conversations.ts)
+- [src/tools/cmo-agent.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/src/tools/cmo-agent.ts)
+- [src/tools/campaign.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/src/tools/campaign.ts)
 - [src/tools/geo.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/src/tools/geo.ts)
 - [src/tools/seo.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/src/tools/seo.ts)
 - [src/tools/battlecard.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/src/tools/battlecard.ts)

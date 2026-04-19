@@ -10,6 +10,8 @@ import { registerGeoTools } from "./geo";
 import { registerBattlecardTools } from "./battlecard";
 import { registerSeoTools } from "./seo";
 import { registerBrandBookTools } from "./brand-book";
+import { registerCampaignTools } from "./campaign";
+import { registerCmoAgentTools } from "./cmo-agent";
 import { registerWebsiteTools } from "./website";
 import { registerConnectorTools } from "./connectors";
 
@@ -225,6 +227,52 @@ function createFullMockClient() {
         measurement_plan: [],
       },
     }),
+    cmoAgent: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        summary: "CMO run completed.",
+        status: "success",
+        output: "Final CMO response text",
+        thread_id: "thread-1",
+        run_id: "run-1",
+        tokens_used: 25,
+        artifacts: {},
+        recommended_actions: [],
+        next_steps: [],
+      },
+    }),
+    campaignCreator: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        summary: "Generated campaign",
+        status: "success",
+        markdown: "# Campaign",
+        thread_id: "thread-1",
+        artifact_id: "artifact-1",
+        langgraph_thread_id: "lg-thread-1",
+        langgraph_run_id: "lg-run-1",
+        assistant_id: "marketing_campaign_builder",
+        artifacts: {
+          campaign_artifact_id: "artifact-1",
+        },
+        recommended_actions: [],
+        next_steps: [],
+      },
+    }),
+    campaignStatus: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        summary: "Campaign still running.",
+        status: "pending",
+        langgraph_thread_id: "lg-thread-1",
+        langgraph_run_id: "lg-run-1",
+        poll_after_seconds: 5,
+        assistant_id: "marketing_campaign_builder",
+        artifacts: {},
+        recommended_actions: [],
+        next_steps: ["Keep waiting"],
+      },
+    }),
     getConnectedAppCapabilities: vi.fn().mockResolvedValue({
       success: true,
       data: {
@@ -283,16 +331,18 @@ function registerAllTools(
   registerBattlecardTools(server, client as never);
   registerSeoTools(server, client as never);
   registerBrandBookTools(server, client as never);
+  registerCmoAgentTools(server, client as never);
+  registerCampaignTools(server, client as never);
   registerWebsiteTools(server, client as never);
   registerConnectorTools(server, client as never);
 }
 
 describe("all tools registration", () => {
-  it("registers exactly 21 tools", () => {
+  it("registers exactly 24 tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(21);
+    expect(handlers.size).toBe(24);
   });
 
   it("registers the expected tool names", () => {
@@ -317,6 +367,9 @@ describe("all tools registration", () => {
       "robynn_brand_book_strategy",
       "robynn_brand_reflections",
       "robynn_publish_brand_book_html",
+      "robynn_cmo_agent",
+      "robynn_campaign_creator",
+      "robynn_campaign_status",
       "robynn_website_audit",
       "robynn_website_strategy",
       "robynn_connected_apps",

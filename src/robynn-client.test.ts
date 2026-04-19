@@ -143,6 +143,129 @@ describe("RobynnClient intelligence routes", () => {
     expect(result.success).toBe(true);
   });
 
+  it("posts CMO agent requests to the MCP-safe API route", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            summary: "done",
+            status: "success",
+            output: "Final answer",
+            thread_id: "thread-123",
+            run_id: "run-123",
+            tokens_used: 24,
+            artifacts: {},
+            recommended_actions: [],
+            next_steps: [],
+          },
+        })
+      )
+    );
+
+    const client = new RobynnClient("https://robynn.test", "token-123");
+    const result = await client.cmoAgent({
+      message: "Create a launch plan",
+      thread_id: "thread-123",
+      assistant_id: "cmo_v3",
+      route_hint: "deep",
+      requested_capability: "research",
+      claude_skill_slug: "launch-plan",
+      history_summary: "Prior context",
+      memory_enabled: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/cli/mcp/cmo/run",
+      expect.objectContaining({
+        method: "POST",
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("posts marketing campaign creator requests to the MCP-safe API route", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            summary: "campaign",
+            status: "success",
+            markdown: "# Campaign",
+            thread_id: "rory-thread-1",
+            artifact_id: "artifact-1",
+            langgraph_thread_id: "lg-thread-1",
+            langgraph_run_id: "lg-run-1",
+            assistant_id: "marketing_campaign_builder",
+            artifacts: { campaign_artifact_id: "artifact-1" },
+            recommended_actions: [],
+            next_steps: [],
+          },
+        })
+      )
+    );
+
+    const client = new RobynnClient("https://robynn.test", "token-123");
+    const result = await client.campaignCreator({
+      company_name: "Acme",
+      company_url: "https://acme.test",
+      industry: "B2B SaaS",
+      target_audience: "VP Marketing",
+      goals: "Generate demo requests",
+      budget_range: "$10k/month",
+      geography: "United States",
+      additional_context: "Focus on SEO",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/cli/mcp/marketing-campaign",
+      expect.objectContaining({
+        method: "POST",
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("calls the marketing campaign status MCP-safe route with query params", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            summary: "status",
+            status: "pending",
+            langgraph_thread_id: "lg-thread-1",
+            langgraph_run_id: "lg-run-1",
+            poll_after_seconds: 5,
+            assistant_id: "marketing_campaign_builder",
+            artifacts: {},
+            recommended_actions: [],
+            next_steps: ["Keep waiting"],
+          },
+        })
+      )
+    );
+
+    const client = new RobynnClient("https://robynn.test", "token-123");
+    const result = await client.campaignStatus({
+      langgraph_thread_id: "lg-thread-1",
+      langgraph_run_id: "lg-run-1",
+      company_name: "Acme",
+      company_url: "https://acme.test",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/cli/mcp/marketing-campaign/status?threadId=lg-thread-1&runId=lg-run-1&company_name=Acme&company_url=https%3A%2F%2Facme.test",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer token-123",
+        }),
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
   it("calls the brand-book status MCP-safe route with query params", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
