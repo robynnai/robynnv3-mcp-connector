@@ -65,6 +65,7 @@ export type GuidedWorkflowToolName =
   | "robynn_brand_reflections"
   | "robynn_publish_brand_book_html"
   | "robynn_website_audit"
+  | "robynn_website_audit_status"
   | "robynn_website_strategy";
 
 export type CmoAgentToolName = "robynn_cmo_agent";
@@ -95,6 +96,23 @@ export interface IntelligenceToolResultBase {
   artifacts: Record<string, unknown>;
   recommended_actions: RecommendedAction[];
   next_steps: string[];
+}
+
+export interface ProspectingReportLinks {
+  artifact_id?: string;
+  thread_id?: string;
+  report_url?: string;
+  report_download_url?: string;
+  pdf_url?: string;
+  storage_status?: "not_requested" | "stored" | "updated" | "failed";
+  storage_bucket?: string;
+  storage_paths?: {
+    markdown?: string;
+    html?: string;
+    pdf?: string;
+  };
+  existing?: boolean;
+  updated?: boolean;
 }
 
 export interface GeoAnalysisRequest {
@@ -317,18 +335,33 @@ export interface PublishBrandBookHtmlResult extends IntelligenceToolResultBase {
 
 export interface WebsiteAuditRequest {
   website_url?: string;
+  company_name?: string;
+  booking_url?: string;
   goals?: string[];
   competitors?: string[];
   analysis_depth?: "standard" | "deep";
 }
 
-export interface WebsiteAuditResult extends IntelligenceToolResultBase {
+export interface WebsiteAuditResult extends IntelligenceToolResultBase, ProspectingReportLinks {
   website_url: string;
+  company_name?: string;
+  prospect_audit_id?: string;
+  audit_url?: string;
+  html_url?: string;
+  markdown_url?: string;
+  langgraph_thread_id?: string;
+  langgraph_run_id?: string;
+  prospect_status?: string;
+  poll_after_seconds?: number;
   messaging_findings: WebsiteFinding[];
   seo_findings: WebsiteFinding[];
   geo_findings: WebsiteFinding[];
   conversion_findings: WebsiteFinding[];
   competitor_findings: WebsiteFinding[];
+}
+
+export interface WebsiteAuditStatusRequest {
+  prospect_audit_id: string;
 }
 
 export interface WebsiteStrategyRequest {
@@ -476,7 +509,7 @@ export interface MarketingCampaignCreatorRequest {
   additional_context?: string;
 }
 
-export interface MarketingCampaignCreatorResult extends IntelligenceToolResultBase {
+export interface MarketingCampaignCreatorResult extends IntelligenceToolResultBase, ProspectingReportLinks {
   markdown?: string;
   thread_id?: string;
   artifact_id?: string;
