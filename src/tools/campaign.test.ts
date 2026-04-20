@@ -28,6 +28,10 @@ describe("robynn_campaign_creator", () => {
           markdown: "# Acme Marketing Campaign Strategy",
           thread_id: "rory-thread-1",
           artifact_id: "artifact-1",
+          report_url:
+            "https://robynn.ai/share/prospecting/reports/html?storagePath=report.html&token=33333333-3333-4333-8333-333333333333",
+          pdf_url:
+            "https://robynn.ai/share/prospecting/reports/pdf?storagePath=report.pdf&token=33333333-3333-4333-8333-333333333333",
           langgraph_thread_id: "lg-thread-1",
           langgraph_run_id: "lg-run-1",
           assistant_id: "marketing_campaign_builder",
@@ -66,6 +70,12 @@ describe("robynn_campaign_creator", () => {
       }),
     );
     expect(res.content[0].text).toContain("# Acme Marketing Campaign Strategy");
+    expect(res.content[0].text).toContain(
+      "Report: https://robynn.ai/share/prospecting/reports/html",
+    );
+    expect(res.content[0].text).toContain(
+      "PDF: https://robynn.ai/share/prospecting/reports/pdf",
+    );
     expect(res.structuredContent.artifact_id).toBe("artifact-1");
     expect(res.structuredContent.thread_id).toBe("rory-thread-1");
     expect(res.structuredContent.langgraph_thread_id).toBe("lg-thread-1");
@@ -140,6 +150,8 @@ describe("robynn_campaign_status", () => {
           markdown: "# Acme Marketing Campaign Strategy",
           thread_id: "rory-thread-1",
           artifact_id: "artifact-1",
+          report_url:
+            "https://robynn.ai/share/prospecting/reports/html?storagePath=report.html&token=33333333-3333-4333-8333-333333333333",
           langgraph_thread_id: "lg-thread-1",
           langgraph_run_id: "lg-run-1",
           assistant_id: "marketing_campaign_builder",
@@ -168,6 +180,9 @@ describe("robynn_campaign_status", () => {
       company_url: "https://acme.test",
     });
     expect(res.content[0].text).toContain("# Acme Marketing Campaign Strategy");
+    expect(res.content[0].text).toContain(
+      "Report: https://robynn.ai/share/prospecting/reports/html",
+    );
     expect(res.structuredContent.artifact_id).toBe("artifact-1");
     expect(res.structuredContent.status).toBe("success");
     expect(res.isError).toBeUndefined();

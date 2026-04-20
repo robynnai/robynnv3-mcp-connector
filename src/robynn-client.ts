@@ -20,6 +20,7 @@ import type {
   PublishBrandBookHtmlResult,
   WebsiteAuditRequest,
   WebsiteAuditResult,
+  WebsiteAuditStatusRequest,
   WebsiteStrategyRequest,
   WebsiteStrategyResult,
   GeoAnalysisRequest,
@@ -257,6 +258,19 @@ export class RobynnClient {
       method: "POST",
       body: JSON.stringify(payload),
     }, POLL_TIMEOUT_MS);
+  }
+
+  /** Poll a prospect audit created by the website audit tool */
+  async websiteAuditStatus(
+    payload: WebsiteAuditStatusRequest
+  ): Promise<RobynnApiResponse<WebsiteAuditResult>> {
+    return this.fetch(
+      this.withQuery("/api/cli/mcp/website/audit/status", {
+        prospect_audit_id: payload.prospect_audit_id,
+      }),
+      {},
+      POLL_TIMEOUT_MS
+    );
   }
 
   /** Translate website audit findings into a prioritized website strategy */

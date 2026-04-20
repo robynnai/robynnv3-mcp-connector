@@ -17,15 +17,26 @@ function buildCampaignPendingText(threadId: string | undefined, runId: string | 
 }
 
 function campaignResponseSummary(data: Record<string, unknown>) {
+  const reportLines = [
+    typeof data.report_url === "string" && data.report_url.trim()
+      ? `Report: ${data.report_url}`
+      : undefined,
+    typeof data.pdf_url === "string" && data.pdf_url.trim()
+      ? `PDF: ${data.pdf_url}`
+      : undefined,
+  ].filter(Boolean);
+  const appendLinks = (text: string) =>
+    reportLines.length ? `${text}\n\n${reportLines.join("\n")}` : text;
+
   if (typeof data.markdown === "string" && data.markdown.trim()) {
-    return data.markdown;
+    return appendLinks(data.markdown);
   }
 
   if (typeof data.summary === "string" && data.summary.trim()) {
-    return data.summary;
+    return appendLinks(data.summary);
   }
 
-  return "Campaign generation completed.";
+  return appendLinks("Campaign generation completed.");
 }
 
 export function registerCampaignTools(server: McpServer, client: RobynnClient) {

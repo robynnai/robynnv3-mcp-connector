@@ -198,11 +198,35 @@ function createFullMockClient() {
     websiteAudit: vi.fn().mockResolvedValue({
       success: true,
       data: {
-        summary: "Website audit complete",
+        summary: "Website audit started",
+        status: "pending",
+        artifacts: {},
+        recommended_actions: [],
+        next_steps: [],
+        prospect_audit_id: "33333333-3333-4333-8333-333333333333",
+        audit_url: "https://robynn.ai/audit/acme/acm-abcdefg",
+        langgraph_thread_id: "lg-thread-1",
+        langgraph_run_id: "lg-run-1",
+        website_url: "https://acme.test",
+        messaging_findings: [],
+        seo_findings: [],
+        geo_findings: [],
+        conversion_findings: [],
+        competitor_findings: [],
+      },
+    }),
+    websiteAuditStatus: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        summary: "Website audit ready",
         status: "success",
         artifacts: {},
         recommended_actions: [],
         next_steps: [],
+        prospect_audit_id: "33333333-3333-4333-8333-333333333333",
+        audit_url: "https://robynn.ai/audit/acme/acm-abcdefg",
+        html_url: "https://robynn.ai/audit/acme/acm-abcdefg/download?format=html",
+        markdown_url: "https://robynn.ai/audit/acme/acm-abcdefg/download?format=md",
         website_url: "https://acme.test",
         messaging_findings: [],
         seo_findings: [],
@@ -338,11 +362,11 @@ function registerAllTools(
 }
 
 describe("all tools registration", () => {
-  it("registers exactly 24 tools", () => {
+  it("registers exactly 25 tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(24);
+    expect(handlers.size).toBe(25);
   });
 
   it("registers the expected tool names", () => {
@@ -371,6 +395,7 @@ describe("all tools registration", () => {
       "robynn_campaign_creator",
       "robynn_campaign_status",
       "robynn_website_audit",
+      "robynn_website_audit_status",
       "robynn_website_strategy",
       "robynn_connected_apps",
       "robynn_connected_app_capabilities",
@@ -687,8 +712,22 @@ describe("all tools success path", () => {
     const res = await handlers.get("robynn_website_audit")!({
       website_url: "https://acme.test",
     });
-    expect(res.content[0].text).toBe("Website audit complete");
+    expect(res.content[0].text).toContain("Website audit started");
+    expect(res.content[0].text).toContain("Audit page: https://robynn.ai/audit/acme/acm-abcdefg");
     expect(res.structuredContent.website_url).toBe("https://acme.test");
+  });
+
+  it("robynn_website_audit_status returns audit page links", async () => {
+    setup();
+    const res = await handlers.get("robynn_website_audit_status")!({
+      prospect_audit_id: "33333333-3333-4333-8333-333333333333",
+    });
+    expect(res.content[0].text).toContain("Website audit ready");
+    expect(res.content[0].text).toContain("Audit page: https://robynn.ai/audit/acme/acm-abcdefg");
+    expect(res.content[0].text).toContain("HTML: https://robynn.ai/audit/acme/acm-abcdefg/download?format=html");
+    expect(res.structuredContent.prospect_audit_id).toBe(
+      "33333333-3333-4333-8333-333333333333"
+    );
   });
 
   it("robynn_website_strategy returns summary text", async () => {
@@ -819,6 +858,9 @@ function getMinimalArgs(toolName: string): Record<string, unknown> {
     robynn_brand_reflections: {},
     robynn_publish_brand_book_html: {},
     robynn_website_audit: {},
+    robynn_website_audit_status: {
+      prospect_audit_id: "33333333-3333-4333-8333-333333333333",
+    },
     robynn_website_strategy: {},
   };
   return argsMap[toolName] ?? {};

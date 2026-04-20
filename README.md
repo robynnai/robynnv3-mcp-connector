@@ -51,8 +51,8 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 | `robynn_assist` | CMO execution | `robynnv3` CMO thread/run pipeline with caller-provided assistant routing hints and preserved thread history | No |
 | `robynn_cmo_agent` | CMO execution | `robynnv3` MCP-safe CMO execution route | No |
 | `robynn_run_status` | Thread management | Direct `robynnv3` CMO run status endpoint for long-running content/research jobs | No |
-| `robynn_campaign_creator` | Campaign strategy | `robynnv3` MCP-safe marketing campaign route with artifact persistence | No |
-| `robynn_campaign_status` | Campaign strategy | Direct `robynnv3` marketing campaign status route for pending or completed campaign runs | No |
+| `robynn_campaign_creator` | Campaign strategy | `robynnv3` MCP-safe marketing campaign route with Rory artifact persistence and unlisted report URLs for Robynn prospecting | No |
+| `robynn_campaign_status` | Campaign strategy | Direct `robynnv3` marketing campaign status route for pending or completed campaign runs with report URLs on completion | No |
 | `robynn_geo_analysis` | Intelligence | GEO proxy in `robynnv3` -> LangGraph `geo_researcher` by default | Yes |
 | `robynn_seo_opportunities` | Intelligence | SEO proxy in `robynnv3` -> LangGraph `seo_researcher` -> `seo_researcher_v5` | Yes |
 | `robynn_competitive_battlecard` | Intelligence | Direct LangGraph `competitor_intelligence_v1` plus Supabase battlecard readback | Yes |
@@ -61,10 +61,13 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 | `robynn_brand_book_strategy` | Brand book | Direct `robynnv3` brand-book adapter logic | Yes |
 | `robynn_brand_reflections` | Brand book | Direct `robynnv3` changelog/reflection query logic | No |
 | `robynn_publish_brand_book_html` | Brand book | Direct `robynnv3` export aggregation and HTML generation | No |
-| `robynn_website_audit` | Website intelligence | `robynnv3` website adapter -> LangGraph `website_report_v1` | Yes |
+| `robynn_website_audit` | Website intelligence | `robynnv3` prospect-audit flow -> LangGraph `cmo_audit_v1`, returning the unlisted designed `/audit/{slug}/{token}` page | Yes |
+| `robynn_website_audit_status` | Website intelligence | Polls the prospect audit row/run created by `robynn_website_audit` until the designed audit page has report data and download artifacts | Yes |
 | `robynn_website_strategy` | Website intelligence | `robynnv3` website adapter -> LangGraph `website_report_v1` | Yes |
 
 All tools return both `content` (text for LLM) and `structuredContent` (machine-readable JSON). Long-running `robynn_create_content`, `robynn_research`, and `robynn_assist` runs may return a pending `run_id` instead of blocking until completion; use `robynn_run_status` to fetch the final output. `robynn_cmo_agent` follows the same pending model through `robynn_run_status`, while `robynn_campaign_creator` may return a pending LangGraph thread/run pair that should be checked with `robynn_campaign_status`. The local CLI now waits only briefly for those runs before returning `pending`, which avoids MCP client timeouts in command-based agents like OpenClaw. You can tune that short wait with `ROBYNN_MCP_SYNC_WAIT_MS` (default `8000`, max `30000`). Tools with inline app support expose MCP Apps resources from the Worker, while the backend agent or service only returns data.
+
+For Robynn-owned prospecting, `robynn_website_audit` creates the same public prospect audit page used by Super Admin and returns an unlisted `audit_url`, `prospect_audit_id`, and LangGraph thread/run IDs. Use `robynn_website_audit_status` with the returned `prospect_audit_id` to poll until the designed audit page is complete; completed status responses include `pdf_url` only when the underlying Super Admin PDF artifact exists. Completed `robynn_campaign_creator` / `robynn_campaign_status` responses persist canonical content as Rory/Brand Hub artifacts and include unlisted robynn.ai `report_url` links. These URLs are tokenized share links intended for prospecting handoff; raw Supabase Storage URLs are not returned.
 
 Detailed execution mapping for every tool lives in [docs/architecture/robynn-mcp-tool-execution-matrix.md](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/docs/architecture/robynn-mcp-tool-execution-matrix.md).
 
@@ -233,8 +236,8 @@ robynn auth status
 The direct CMO and campaign tools are available in both the remote connector and the local CLI bridge:
 
 - `robynn_cmo_agent` for direct top-level CMO requests
-- `robynn_campaign_creator` for campaign generation
-- `robynn_campaign_status` for follow-up polling on pending campaign runs
+- `robynn_campaign_creator` for campaign generation; completed runs include unlisted robynn.ai report URLs
+- `robynn_campaign_status` for follow-up polling on pending campaign runs; completed polls include the same saved artifact and report URLs
 
 Example asks:
 
