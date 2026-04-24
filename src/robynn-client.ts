@@ -341,6 +341,97 @@ export class RobynnClient {
     );
   }
 
+  /** Create or update a Hermes-originated thread in Robynn (multiplayer mirror) */
+  async upsertHermesThread(
+    payload: {
+      hermes_host_id: string;
+      hermes_session_id: string;
+      platform:
+        | "cli"
+        | "telegram"
+        | "slack"
+        | "whatsapp"
+        | "discord"
+        | "signal"
+        | "email"
+        | "sms"
+        | "cron"
+        | "other";
+      platform_user?: string;
+      title?: string;
+    }
+  ): Promise<{ id: string }> {
+    return this.fetch("/api/cli/threads", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /** Append a single message turn to a Hermes thread */
+  async appendHermesMessage(
+    threadId: string,
+    payload: {
+      role: "user" | "assistant" | "tool" | "system";
+      content: string;
+      tool_calls?: unknown[];
+      tool_name?: string;
+      tokens_in?: number;
+      tokens_out?: number;
+      latency_ms?: number;
+    }
+  ): Promise<{ id: string }> {
+    return this.fetch(`/api/cli/threads/${threadId}/messages`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /** Write an org/user/session scoped memory */
+  async writeHermesMemory(payload: {
+    scope: "org" | "user" | "session";
+    key: string;
+    value: string;
+  }): Promise<{ ok: boolean }> {
+    return this.fetch("/api/cli/memory", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /** Read a scoped memory by key */
+  async getHermesMemory(
+    scope: "org" | "user" | "session",
+    key: string
+  ): Promise<{ key: string; value: string; updated_at?: string } | null> {
+    return this.fetch(
+      this.withQuery("/api/cli/memory", { scope, key })
+    );
+  }
+
+  /**
+   * Execute a write action against a connected app (HubSpot/Salesforce/...).
+   * Audit-logged server-side; idempotent by idempotency_key.
+   */
+  async actOnConnectedApp(payload: {
+    service: string;
+    action: string;
+    parameters: Record<string, unknown>;
+    idempotency_key: string;
+    dry_run?: boolean;
+    provider_access_token?: string;
+  }): Promise<{
+    ok: boolean;
+    replayed: boolean;
+    audit_id: string;
+    result?: unknown;
+    dry_run?: boolean;
+  }> {
+    return this.fetch("/api/cli/connectors/act", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
   /** Poll a run until completion */
   async pollRun(
     runId: string,
