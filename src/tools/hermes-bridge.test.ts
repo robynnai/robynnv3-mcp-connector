@@ -21,13 +21,26 @@ describe("registerHermesBridgeTools", () => {
       appendHermesMessage: vi.fn().mockResolvedValue({ id: "m-1" }),
       writeHermesMemory: vi.fn().mockResolvedValue({ ok: true }),
       getHermesMemory: vi.fn().mockResolvedValue({ key: "k", value: "v" }),
+      searchHermesMemory: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            id: "m1",
+            scope: "org",
+            key: "theme",
+            value: "distribution-led",
+            updated_at: "2026-04-24T00:00:00Z",
+            score: 0.81,
+          },
+        ],
+      }),
     };
   });
 
-  it("registers exactly the four hermes-bridge tools", () => {
+  it("registers exactly the five hermes-bridge tools", () => {
     registerHermesBridgeTools(server, client as RobynnClient);
     expect(Object.keys(registered).sort()).toEqual([
       "robynn_memory_get",
+      "robynn_memory_search",
       "robynn_memory_write",
       "robynn_thread_append",
       "robynn_thread_upsert",
@@ -82,6 +95,30 @@ describe("registerHermesBridgeTools", () => {
     registerHermesBridgeTools(server, client as RobynnClient);
     const res = await registered["robynn_memory_get"]({ scope: "org", key: "missing" });
     expect(res.structuredContent).toEqual({ value: null });
+  });
+
+  it("robynn_memory_search forwards query + scope + limit", async () => {
+    registerHermesBridgeTools(server, client as RobynnClient);
+    const res = await registered["robynn_memory_search"]({
+      query: "Q2 go-to-market",
+      scope: "org",
+      limit: 5,
+    });
+    expect(client.searchHermesMemory).toHaveBeenCalledWith({
+      query: "Q2 go-to-market",
+      scope: "org",
+      limit: 5,
+    });
+    expect(res.structuredContent).toMatchObject({
+      rows: [expect.objectContaining({ key: "theme", score: 0.81 })],
+    });
+  });
+
+  it("robynn_memory_search returns isError on client failure", async () => {
+    (client.searchHermesMemory as any).mockRejectedValueOnce(new Error("rpc down"));
+    registerHermesBridgeTools(server, client as RobynnClient);
+    const res = await registered["robynn_memory_search"]({ query: "x" });
+    expect(res.isError).toBe(true);
   });
 
   it("robynn_thread_upsert returns isError on client failure", async () => {
