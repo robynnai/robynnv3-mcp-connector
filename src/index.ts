@@ -19,6 +19,8 @@ import { registerCampaignTools } from "./tools/campaign";
 import { registerCmoAgentTools } from "./tools/cmo-agent";
 import { registerWebsiteTools } from "./tools/website";
 import { registerConnectorTools } from "./tools/connectors";
+import { registerHermesBridgeTools } from "./tools/hermes-bridge";
+import { registerConnectorActionTools } from "./tools/connector-act";
 import type { Env, Props } from "./types";
 import { getPublicBaseUrl, registerReportAppResources } from "./ui/report-app";
 import { APP_VERSION } from "./version";
@@ -78,6 +80,8 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
     registerCampaignTools(this.server, client);
     registerWebsiteTools(this.server, client);
     registerConnectorTools(this.server, client);
+    registerHermesBridgeTools(this.server, client);
+    registerConnectorActionTools(this.server, client);
   }
 }
 

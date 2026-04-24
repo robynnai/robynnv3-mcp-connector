@@ -20,6 +20,8 @@ import { registerCampaignTools } from '../tools/campaign';
 import { registerCmoAgentTools } from '../tools/cmo-agent';
 import { registerWebsiteTools } from '../tools/website';
 import { registerConnectorTools } from '../tools/connectors';
+import { registerHermesBridgeTools } from '../tools/hermes-bridge';
+import { registerConnectorActionTools } from '../tools/connector-act';
 import { installOpenClaw } from './install-openclaw';
 import type { RobynnApiResponse } from '../types';
 import { APP_VERSION } from '../version';
@@ -151,6 +153,8 @@ program
     registerCampaignTools(server, client);
     registerWebsiteTools(server, client);
     registerConnectorTools(server, client);
+    registerHermesBridgeTools(server, client);
+    registerConnectorActionTools(server, client);
 
     const transport = new StdioServerTransport();
     await server.connect(transport);
