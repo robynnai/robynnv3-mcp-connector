@@ -1,6 +1,6 @@
 {
   "name": "@robynn-ai/cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Robynn CLI and local MCP bridge for Robynn organizations.",
   "license": "UNLICENSED",
   "type": "module",

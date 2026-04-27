@@ -116,4 +116,25 @@ export function registerHermesBridgeTools(server: McpServer, client: RobynnClien
       }
     },
   );
+
+  server.tool(
+    "robynn_memory_search",
+    "Find Robynn memories by intent using hybrid vector + keyword search. Use when you don't know the exact memory key — e.g. 'what did we decide about Q2 go-to-market?'. Returns up to `limit` ranked rows.",
+    {
+      query: z.string().describe("Natural-language search query."),
+      scope: SCOPE_ENUM.optional().describe("Restrict to org|user|session scope; omit to search all scopes."),
+      limit: z.number().int().min(1).max(50).optional().describe("Max results (default 10, cap 50)."),
+    },
+    { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    async (args) => {
+      try {
+        const result = await client.searchHermesMemory(args);
+        return toSuccessResult(result as unknown as Record<string, unknown>);
+      } catch (err) {
+        return toErrorResult(
+          `robynn_memory_search failed: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
+      }
+    },
+  );
 }

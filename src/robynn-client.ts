@@ -408,6 +408,27 @@ export class RobynnClient {
     );
   }
 
+  /** Hybrid search over hermes_memories (0.7 cosine + 0.3 ts_rank) */
+  async searchHermesMemory(payload: {
+    query: string;
+    scope?: "org" | "user" | "session";
+    limit?: number;
+  }): Promise<{
+    rows: Array<{
+      id: string;
+      scope: string;
+      key: string;
+      value: string;
+      updated_at: string;
+      score: number;
+    }>;
+  }> {
+    return this.fetch("/api/cli/memory/search", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
   /**
    * Execute a write action against a connected app (HubSpot/Salesforce/...).
    * Audit-logged server-side; idempotent by idempotency_key.
