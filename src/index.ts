@@ -21,7 +21,9 @@ import { registerWebsiteTools } from "./tools/website";
 import { registerConnectorTools } from "./tools/connectors";
 import { registerHermesBridgeTools } from "./tools/hermes-bridge";
 import { registerConnectorActionTools } from "./tools/connector-act";
+import { registerVaultTools } from "./tools/vault";
 import type { Env, Props } from "./types";
+import { VaultR2 } from "./vault-r2";
 import { getPublicBaseUrl, registerReportAppResources } from "./ui/report-app";
 import { APP_VERSION } from "./version";
 
@@ -82,6 +84,20 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
     registerConnectorTools(this.server, client);
     registerHermesBridgeTools(this.server, client);
     registerConnectorActionTools(this.server, client);
+
+    // Vault tools depend on the R2 binding + the OAuth-bound org id.
+    // Skip silently when either is missing (e.g. local dev without the
+    // binding, or a mis-issued token); other tools still work.
+    const organizationId = this.props?.organizationId;
+    const vaultBucket = this.env.VAULT;
+    if (organizationId && vaultBucket) {
+      registerVaultTools(this.server, new VaultR2(vaultBucket, organizationId));
+    } else {
+      console.warn(
+        "[RobynnMCP] Vault tools skipped — " +
+          (!vaultBucket ? "no VAULT binding" : "no organizationId in props"),
+      );
+    }
   }
 }
 

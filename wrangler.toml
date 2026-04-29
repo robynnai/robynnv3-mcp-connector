@@ -27,6 +27,15 @@ bindings = [
 tag = "v1"
 new_sqlite_classes = ["RobynnMCP"]
 
+# R2 binding: read-only access to the vault bucket the materializer cron
+# writes to (robynnv3 /api/cron/vault-materializer). Bind directly so the
+# Worker reads via env.VAULT.get / .list with no IAM tokens crossing the
+# wire. Per-org gating happens in the tool handler against
+# this.props.organizationId from the OAuth session.
+[[r2_buckets]]
+binding = "VAULT"
+bucket_name = "robynn-materialized"
+
 # Uncomment when deploying with custom domain:
 # [[routes]]
 # pattern = "mcp.robynn.ai/*"

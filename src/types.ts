@@ -9,6 +9,13 @@ export interface Env {
   MCP_SERVER_NAME: string;
   MCP_SERVER_VERSION: string;
   MCP_OBJECT: DurableObjectNamespace;
+  /**
+   * R2 bucket binding for the vault. Bound to robynn-materialized in
+   * production via wrangler.toml. Reads happen via env.VAULT.get /
+   * .list — no IAM token in the Worker. Per-org gating lives in the
+   * tool handler (uses props.organizationId from the OAuth session).
+   */
+  VAULT: R2Bucket;
   // Injected by OAuthProvider at runtime
   OAUTH_PROVIDER: {
     parseAuthRequest(request: Request): Promise<OAuthRequestInfo>;
