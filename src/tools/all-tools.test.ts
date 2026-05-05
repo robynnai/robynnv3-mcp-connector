@@ -14,6 +14,7 @@ import { registerCampaignTools } from "./campaign";
 import { registerCmoAgentTools } from "./cmo-agent";
 import { registerWebsiteTools } from "./website";
 import { registerConnectorTools } from "./connectors";
+import { registerStrapiTools } from "./strapi";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Handler = (args: any) => Promise<any>;
@@ -337,6 +338,19 @@ function createFullMockClient() {
         raw_result: { results: [] },
       },
     }),
+    publishStrapiDraft: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        success: true,
+        is_draft: true,
+        published_url: "https://cms.test/admin/content-manager",
+        platform_post_id: "doc-1",
+        publishing_metadata: {
+          strapi_document_id: "doc-1",
+          strapi_content_type_uid: "api::blog-post.blog-post",
+        },
+      },
+    }),
   };
 }
 
@@ -359,14 +373,15 @@ function registerAllTools(
   registerCampaignTools(server, client as never);
   registerWebsiteTools(server, client as never);
   registerConnectorTools(server, client as never);
+  registerStrapiTools(server, client as never);
 }
 
 describe("all tools registration", () => {
-  it("registers exactly 25 tools", () => {
+  it("registers exactly 26 tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(25);
+    expect(handlers.size).toBe(26);
   });
 
   it("registers the expected tool names", () => {
@@ -397,6 +412,7 @@ describe("all tools registration", () => {
       "robynn_website_audit",
       "robynn_website_audit_status",
       "robynn_website_strategy",
+      "robynn_publish_strapi_draft",
       "robynn_connected_apps",
       "robynn_connected_app_capabilities",
       "robynn_query_connected_app",
@@ -862,6 +878,11 @@ function getMinimalArgs(toolName: string): Record<string, unknown> {
       prospect_audit_id: "33333333-3333-4333-8333-333333333333",
     },
     robynn_website_strategy: {},
+    robynn_publish_strapi_draft: {
+      write_confirmed: true,
+      content: "Draft body",
+      title: "Draft title",
+    },
   };
   return argsMap[toolName] ?? {};
 }

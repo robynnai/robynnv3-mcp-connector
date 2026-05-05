@@ -340,6 +340,28 @@ export interface PublishBrandBookHtmlResult extends IntelligenceToolResultBase {
   exported_at: string;
 }
 
+export interface StrapiDraftPublishRequest {
+  write_confirmed: boolean;
+  artifact_id?: string;
+  title?: string;
+  content?: string;
+  excerpt?: string;
+  website_id?: string;
+  website_publish_target_id?: string;
+}
+
+export interface StrapiDraftPublishResult {
+  success: boolean;
+  is_draft: true;
+  published_url?: string | null;
+  platform_post_id?: string | null;
+  publishing_metadata?: {
+    strapi_document_id?: string | null;
+    strapi_content_type_uid?: string | null;
+    [key: string]: unknown;
+  };
+}
+
 export interface WebsiteAuditRequest {
   website_url?: string;
   company_name?: string;

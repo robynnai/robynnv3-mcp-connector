@@ -22,6 +22,7 @@ import { registerConnectorTools } from "./tools/connectors";
 import { registerHermesBridgeTools } from "./tools/hermes-bridge";
 import { registerConnectorActionTools } from "./tools/connector-act";
 import { registerVaultTools } from "./tools/vault";
+import { registerStrapiTools } from "./tools/strapi";
 import type { Env, Props } from "./types";
 import { VaultR2 } from "./vault-r2";
 import { getPublicBaseUrl, registerReportAppResources } from "./ui/report-app";
@@ -82,6 +83,7 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
     registerCampaignTools(this.server, client);
     registerWebsiteTools(this.server, client);
     registerConnectorTools(this.server, client);
+    registerStrapiTools(this.server, client);
     registerHermesBridgeTools(this.server, client);
     registerConnectorActionTools(this.server, client);
 
