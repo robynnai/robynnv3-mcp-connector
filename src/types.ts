@@ -196,6 +196,41 @@ export interface SeoOpportunitiesResult extends IntelligenceToolResultBase {
   competitor_comparison: Record<string, unknown>[];
 }
 
+export type BrandContextSearchProfile =
+  | "seo"
+  | "core"
+  | "content"
+  | "competitive"
+  | "full";
+
+export interface BrandContextSearchRequest {
+  query: string;
+  profile?: BrandContextSearchProfile;
+  max_tokens?: number;
+  organization_website_id?: string;
+  sub_brand_id?: string;
+}
+
+export interface BrandContextSearchSnippet {
+  title: string;
+  content: string;
+  score: number;
+}
+
+export interface BrandContextSearchResult extends IntelligenceToolResultBase {
+  query: string;
+  profile: BrandContextSearchProfile;
+  organization_website_id?: string | null;
+  website_label?: string | null;
+  website_url?: string | null;
+  prompt_context: string;
+  snippets: BrandContextSearchSnippet[];
+  source_labels: string[];
+  retrieval_mode?: string;
+  brand_context_available: boolean;
+  ttl_seconds: number;
+}
+
 export interface BrandBookSectionItem {
   name: string;
   completed: boolean;

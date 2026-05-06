@@ -32,7 +32,7 @@ Backend routes and agents only return data. The Worker turns that data into:
 | Tool | Category | Worker registration | robynnv3 entrypoint | Actual execution backend | Uses `robynnv3_agents`? | Inline MCP App UI |
 |---|---|---|---|---|---|---|
 | `robynn_brand_context` | Brand context | `server.tool` | `GET /api/cli/context/{scope}` | Direct `robynnv3` context API | No | No |
-| `robynn_brand_rules` | Brand context | `server.tool` | `GET /api/cli/context/rules` | Direct `robynnv3` context API | No | No |
+| `robynn_brand_context_search` | Brand context | `server.tool` | `POST /api/cli/mcp/brand-context/search` | Direct `robynnv3` effective brand context service with query ranking | No | No |
 | `robynn_status` | Status | `server.tool` | `GET /api/cli/context/summary` | Direct `robynnv3` status API | No | No |
 | `robynn_usage` | Status | `server.tool` | `GET /api/cli/usage` | Direct `robynnv3` usage API | No | No |
 | `robynn_conversations` | Thread management | `server.tool` | `GET/POST /api/agents/cmo/threads` | `robynnv3` thread persistence around the CMO workflow | No agent run for `list` or `create` | No |
@@ -60,7 +60,7 @@ Backend routes and agents only return data. The Worker turns that data into:
 These do not call `robynnv3_agents`:
 
 - `robynn_brand_context`
-- `robynn_brand_rules`
+- `robynn_brand_context_search`
 - `robynn_status`
 - `robynn_usage`
 - `robynn_brand_book_status`
@@ -72,6 +72,7 @@ These do not call `robynnv3_agents`:
 These are fulfilled by `robynnv3` routes and service-layer logic, mainly:
 
 - brand context APIs
+- effective brand context service
 - usage/status APIs
 - brand-book export aggregation
 - brand hub changelog/reflection queries
