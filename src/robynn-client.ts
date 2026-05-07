@@ -29,6 +29,8 @@ import type {
   CompetitiveBattlecardResult,
   SeoOpportunitiesRequest,
   SeoOpportunitiesResult,
+  BrandContextSearchRequest,
+  BrandContextSearchResult,
   MarketingCampaignCreatorRequest,
   MarketingCampaignCreatorResult,
   MarketingCampaignStatusRequest,
@@ -197,6 +199,16 @@ export class RobynnClient {
       method: 'POST',
       body: JSON.stringify(payload),
     }, POLL_TIMEOUT_MS);
+  }
+
+  /** Search the authenticated organization's effective brand context */
+  async brandContextSearch(
+    payload: BrandContextSearchRequest
+  ): Promise<RobynnApiResponse<BrandContextSearchResult>> {
+    return this.fetch('/api/cli/mcp/brand-context/search', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   /** Get the current brand-book completeness snapshot */

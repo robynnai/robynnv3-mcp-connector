@@ -31,6 +31,7 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 ┌──────────────────────────────────────────────────────────────────┐
 │  robynnv3 (SvelteKit) — robynn.ai                                │
 │  /api/cli/context/[scope]  — Granular brand context              │
+│  /api/cli/mcp/brand-context/search — Query-focused brand context │
 │  /api/cli/usage            — Token balance                       │
 │  /api/agents/cmo/*         — CMO threads/runs                    │
 │  /oauth/authorize          — OAuth consent page                  │
@@ -43,6 +44,7 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 | Tool | Category | Execution backend | Inline MCP App UI |
 |---|---|---|---|
 | `robynn_brand_context` | Brand context | Direct `robynnv3` context API | No |
+| `robynn_brand_context_search` | Brand context | Direct `robynnv3` MCP-safe brand-context search API | No |
 | `robynn_status` | Status | Direct `robynnv3` status API | No |
 | `robynn_usage` | Status | Direct `robynnv3` usage API | No |
 | `robynn_conversations` | Thread management | `robynnv3` CMO thread list/create endpoints | No |
@@ -103,7 +105,7 @@ src/
 ├── types.ts              # Env, Props, API response types
 ├── ui/                   # Shared Robynn MCP Apps report resources and runtime
 └── tools/
-    ├── context.ts        # robynn_brand_context + robynn_brand_rules
+    ├── context.ts        # robynn_brand_context + robynn_brand_context_search
     ├── status.ts         # robynn_status + robynn_usage
     ├── content.ts        # robynn_create_content
     ├── research.ts       # robynn_research

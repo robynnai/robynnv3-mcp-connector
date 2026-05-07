@@ -56,6 +56,29 @@ function createFullMockClient() {
       success: true,
       data: { scope: "summary", company_name: "Acme", documents: {} },
     }),
+    brandContextSearch: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        summary: "Found 2 brand context sections for this query.",
+        status: "success",
+        artifacts: {},
+        recommended_actions: [],
+        next_steps: [],
+        query: "homepage SEO messaging",
+        profile: "seo",
+        prompt_context: "## Positioning\nAcme helps operations teams.",
+        snippets: [
+          {
+            title: "Positioning",
+            content: "Acme helps operations teams.",
+            score: 3,
+          },
+        ],
+        source_labels: ["Structured Brand Context"],
+        brand_context_available: true,
+        ttl_seconds: 300,
+      },
+    }),
     getStatus: vi.fn().mockResolvedValue({
       success: true,
       data: { company_name: "Acme" },
@@ -391,6 +414,7 @@ describe("all tools registration", () => {
 
     const expected = [
       "robynn_brand_context",
+      "robynn_brand_context_search",
       "robynn_status",
       "robynn_usage",
       "robynn_create_content",
@@ -469,6 +493,24 @@ describe("all tools success path", () => {
     expect(res.structuredContent.company_name).toBe("Acme");
     expect(res.isError).toBeUndefined();
     expect(client.getBrandContext).toHaveBeenCalledWith("summary");
+  });
+
+  it("robynn_brand_context_search returns focused brand context", async () => {
+    setup();
+    const res = await handlers.get("robynn_brand_context_search")!({
+      query: "homepage SEO messaging",
+      profile: "seo",
+      max_tokens: 800,
+    });
+    expect(res.structuredContent.brand_context_available).toBe(true);
+    expect(res.content[0].text).toContain("Found 2 brand context sections");
+    expect(client.brandContextSearch).toHaveBeenCalledWith({
+      query: "homepage SEO messaging",
+      profile: "seo",
+      max_tokens: 800,
+      organization_website_id: undefined,
+      sub_brand_id: undefined,
+    });
   });
 
   it("robynn_status returns connected status", async () => {
@@ -858,6 +900,7 @@ describe("RobynnClient retry logic", () => {
 function getMinimalArgs(toolName: string): Record<string, unknown> {
   const argsMap: Record<string, Record<string, unknown>> = {
     robynn_brand_context: { scope: "summary" },
+    robynn_brand_context_search: { query: "homepage SEO messaging" },
     robynn_status: {},
     robynn_usage: {},
     robynn_create_content: { type: "blog_post", topic: "test" },
