@@ -22,6 +22,7 @@ import { registerWebsiteTools } from '../tools/website';
 import { registerConnectorTools } from '../tools/connectors';
 import { registerHermesBridgeTools } from '../tools/hermes-bridge';
 import { registerConnectorActionTools } from '../tools/connector-act';
+import { registerStrapiTools } from '../tools/strapi';
 import { installOpenClaw } from './install-openclaw';
 import type { RobynnApiResponse } from '../types';
 import { APP_VERSION } from '../version';
@@ -153,6 +154,7 @@ program
     registerCampaignTools(server, client);
     registerWebsiteTools(server, client);
     registerConnectorTools(server, client);
+    registerStrapiTools(server, client);
     registerHermesBridgeTools(server, client);
     registerConnectorActionTools(server, client);
 

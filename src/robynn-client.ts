@@ -34,6 +34,8 @@ import type {
   MarketingCampaignStatusRequest,
   ConnectedAppsResult,
   ConnectedAppReadResult,
+  StrapiDraftPublishRequest,
+  StrapiDraftPublishResult,
 } from './types';
 
 const READ_TIMEOUT_MS = 10_000;
@@ -245,6 +247,16 @@ export class RobynnClient {
     payload: PublishBrandBookHtmlRequest = {}
   ): Promise<RobynnApiResponse<PublishBrandBookHtmlResult>> {
     return this.fetch("/api/cli/mcp/brand-book/publish-html", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Create or update a draft in a connected self-hosted Strapi instance */
+  async publishStrapiDraft(
+    payload: StrapiDraftPublishRequest
+  ): Promise<RobynnApiResponse<StrapiDraftPublishResult>> {
+    return this.fetch("/api/cli/mcp/strapi-draft", {
       method: "POST",
       body: JSON.stringify(payload),
     }, POLL_TIMEOUT_MS);
