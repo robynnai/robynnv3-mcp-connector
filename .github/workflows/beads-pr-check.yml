@@ -1,0 +1,70 @@
+name: Beads PR Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, edited, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  beads-pr-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate Beads PR contract
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          body_file="$(mktemp)"
+          printf '%s\n' "${PR_BODY:-}" > "$body_file"
+
+          beads_line="$(grep -Eim1 '^[[:space:]]*Beads:[[:space:]]*' "$body_file" || true)"
+          if [ -z "$beads_line" ]; then
+            echo "::error::PR body must include a 'Beads: <issue-id|none>' line."
+            exit 1
+          fi
+
+          beads_value="$(printf '%s\n' "$beads_line" | sed -E 's/^[[:space:]]*Beads:[[:space:]]*//; s/[[:space:]]+$//')"
+          if [ -z "$beads_value" ] || [ "$beads_value" = "<issue-id|none>" ]; then
+            echo "::error::Replace the Beads placeholder with an issue id or 'none'."
+            exit 1
+          fi
+
+          if [ "$(printf '%s' "$beads_value" | tr '[:upper:]' '[:lower:]')" = "none" ]; then
+            echo "Beads marked none; skipping issues.jsonl enforcement."
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$BASE_SHA" HEAD)"
+          if ! printf '%s\n' "$changed_files" | grep -qx '.beads/issues.jsonl'; then
+            echo "::error::PR references Beads issue(s) but does not change .beads/issues.jsonl."
+            exit 1
+          fi
+
+          if [ ! -f .beads/issues.jsonl ]; then
+            echo "::error::.beads/issues.jsonl is missing."
+            exit 1
+          fi
+
+          issue_ids="$(printf '%s\n' "$beads_value" | tr ',' ' ')"
+          for issue_id in $issue_ids; do
+            if ! printf '%s\n' "$issue_id" | grep -Eq '^[A-Za-z0-9_]+-[A-Za-z0-9_.-]+$'; then
+              echo "::error::Invalid Beads issue id: $issue_id"
+              exit 1
+            fi
+
+            if ! grep -Fq "\"id\":\"$issue_id\"" .beads/issues.jsonl; then
+              echo "::error::Referenced Beads issue $issue_id was not found in .beads/issues.jsonl."
+              exit 1
+            fi
+          done
+
+          echo "Beads PR contract satisfied for: $beads_value"
