@@ -1,0 +1,4 @@
+# Beads configuration for robynn-mcp-server.
+#
+# Keep this file portable. Machine-local runtime state belongs in ignored files
+# under .beads/, not in git.

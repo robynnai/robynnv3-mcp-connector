@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "robynn_mcp_server",
+  "project_id": "8e42766b-c474-4fdb-8796-fca95eb2f12b"
+}
