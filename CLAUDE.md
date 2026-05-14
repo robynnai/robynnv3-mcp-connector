@@ -6,6 +6,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Remote MCP server deployed on Cloudflare Workers at `mcp.robynn.ai`. Exposes 17 brand-aware marketing tools to Claude via the Connectors Directory, including MCP Apps UI for intelligence reports. Uses OAuth 2.0 for authentication, with the actual user data stored on `robynn.ai` (SvelteKit frontend).
 
+## Beads PR Workflow
+
+Every PR must account for Beads before it is opened or updated.
+
+1. Run `bd bootstrap --yes` and `bd ready --json`.
+2. If the work maps to an existing Beads issue, claim it with `bd update <issue-id> --claim --json`.
+3. Before committing, close or update the issue. Completed work should use `bd close <issue-id> --reason "Completed in this PR" --json`.
+4. Commit `.beads/issues.jsonl` with the code/docs changes whenever Beads state changes.
+5. Include this line in the PR body:
+
+```md
+Beads: <issue-id|none>
+```
+
+Use `Beads: none` only for mechanical changes that do not represent durable task state, and explain why. If follow-up work is discovered, create a linked issue:
+
+```bash
+bd create "Follow-up title" --description "Context..." -t task -p 2 --deps discovered-from:<issue-id> --json
+```
+
 ## Quick Start
 
 ```bash

@@ -37,3 +37,14 @@ bd ready --json
 ```
 
 When Beads issues exist, the tracked source of truth is `.beads/issues.jsonl`. Local Dolt/runtime files must stay untracked.
+
+## Beads PR Workflow
+
+Every PR must account for Beads before it is opened or updated.
+
+- Run `bd bootstrap --yes` and `bd ready --json` before starting tracked work.
+- If the work maps to an existing Beads issue, claim it with `bd update <issue-id> --claim --json`.
+- Before committing, close or update the issue. Completed work should use `bd close <issue-id> --reason "Completed in this PR" --json`.
+- Commit `.beads/issues.jsonl` with the code/docs changes whenever Beads state changes.
+- Include a `Beads: <issue-id|none>` line in the PR body. Use `Beads: none` only for mechanical changes that do not represent durable task state, and explain why.
+- If follow-up work is discovered, create a linked issue with `bd create "Follow-up title" --description "Context..." -t task -p 2 --deps discovered-from:<issue-id> --json`.
