@@ -36,6 +36,12 @@ import type {
   MarketingCampaignStatusRequest,
   ConnectedAppsResult,
   ConnectedAppReadResult,
+  ConnectedAppActionRequest,
+  BridgeCapabilitiesResult,
+  BrandSourceAddRequest,
+  BrandSourceAddResult,
+  BrandRebuildRequest,
+  BrandRebuildResult,
   StrapiDraftPublishRequest,
   StrapiDraftPublishResult,
 } from './types';
@@ -164,6 +170,31 @@ export class RobynnClient {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+
+  /** Get semantic bridge capability metadata for Hermes and other MCP clients */
+  async getBridgeCapabilities(): Promise<RobynnApiResponse<BridgeCapabilitiesResult>> {
+    return this.fetch('/api/cli/mcp/capabilities');
+  }
+
+  /** Add a Brand Hub website draft or text source through robynnv3 */
+  async addBrandSource(
+    payload: BrandSourceAddRequest,
+  ): Promise<RobynnApiResponse<BrandSourceAddResult>> {
+    return this.fetch('/api/cli/brand/sources', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /** Rebuild Brand Context through robynnv3 */
+  async rebuildBrandContext(
+    payload: BrandRebuildRequest,
+  ): Promise<RobynnApiResponse<BrandRebuildResult>> {
+    return this.fetch('/api/cli/brand/rebuild', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
   }
 
   /** List conversation threads */
@@ -457,18 +488,12 @@ export class RobynnClient {
    * Execute a write action against a connected app (HubSpot/Salesforce/...).
    * Audit-logged server-side; idempotent by idempotency_key.
    */
-  async actOnConnectedApp(payload: {
-    service: string;
-    action: string;
-    parameters: Record<string, unknown>;
-    idempotency_key: string;
-    dry_run?: boolean;
-    provider_access_token?: string;
-  }): Promise<{
+  async actOnConnectedApp(payload: ConnectedAppActionRequest): Promise<{
     ok: boolean;
     replayed: boolean;
     audit_id: string;
     result?: unknown;
+    error?: string;
     dry_run?: boolean;
   }> {
     return this.fetch("/api/cli/connectors/act", {

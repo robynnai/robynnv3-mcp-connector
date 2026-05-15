@@ -480,6 +480,88 @@ export interface ConnectedAppReadResult {
   raw_result: Record<string, unknown>;
 }
 
+export type BridgeCapabilityMode = "read" | "write" | "destructive";
+export type BridgeCapabilityStatus = "available" | "partial" | "planned";
+export type BridgeCapabilityConfirmation =
+  | "none"
+  | "idempotency_key"
+  | "write_confirmation";
+
+export interface BridgeCapability {
+  id: string;
+  label: string;
+  domain: string;
+  mode: BridgeCapabilityMode;
+  status: BridgeCapabilityStatus;
+  confirmation: BridgeCapabilityConfirmation;
+  required_role: "member" | "admin" | "super_admin";
+  mcp_tools: string[];
+  api_routes: string[];
+  notes: string;
+}
+
+export interface BridgeCapabilitiesResult {
+  version: number;
+  organization_id: string;
+  capabilities: BridgeCapability[];
+  connectors: {
+    active_connection_count: number;
+    active_provider_keys: string[];
+    write_execution: {
+      route: string;
+      credential_mode: "server_side";
+      accepts_provider_access_token: false;
+    };
+  };
+}
+
+export type BrandSourceAddRequest =
+  | {
+      source_type: "website";
+      url: string;
+      title?: string;
+      idempotency_key: string;
+      page_limit?: number;
+    }
+  | {
+      source_type: "text";
+      title: string;
+      content: string;
+      content_type?: "markdown" | "plain";
+      idempotency_key: string;
+    };
+
+export interface BrandSourceAddResult {
+  source_type: "website" | "text";
+  source_id: string;
+  status: string;
+  url?: string;
+  title?: string;
+}
+
+export interface BrandRebuildRequest {
+  mode?: "derive";
+  write_confirmed: true;
+}
+
+export interface BrandRebuildResult {
+  status: "rebuilt";
+  mode: "derive";
+  organization_id: string;
+  derived_at: string | null;
+  company_name: string | null;
+}
+
+export interface ConnectedAppActionRequest {
+  service: string;
+  action: string;
+  parameters: Record<string, unknown>;
+  idempotency_key: string;
+  dry_run?: boolean;
+  write_confirmed?: boolean;
+  connection_id?: string;
+}
+
 /** Brand context scope */
 export type BrandScope = 'summary' | 'voice' | 'positioning' | 'competitors' | 'audience' | 'products' | 'rules' | 'full';
 

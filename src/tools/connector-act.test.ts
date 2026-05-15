@@ -40,6 +40,8 @@ describe("registerConnectorActionTools", () => {
       parameters: { subject: "follow up" },
       idempotency_key: "uuid-1",
       dry_run: true,
+      write_confirmed: true,
+      connection_id: "11111111-1111-4111-8111-111111111111",
     });
     expect(client.actOnConnectedApp).toHaveBeenCalledWith({
       service: "hubspot",
@@ -47,6 +49,8 @@ describe("registerConnectorActionTools", () => {
       parameters: { subject: "follow up" },
       idempotency_key: "uuid-1",
       dry_run: true,
+      write_confirmed: true,
+      connection_id: "11111111-1111-4111-8111-111111111111",
     });
     expect(res.structuredContent).toMatchObject({ ok: true, audit_id: "a-1" });
   });

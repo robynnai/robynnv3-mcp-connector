@@ -14,6 +14,9 @@ import { registerCampaignTools } from "./campaign";
 import { registerCmoAgentTools } from "./cmo-agent";
 import { registerWebsiteTools } from "./website";
 import { registerConnectorTools } from "./connectors";
+import { registerCapabilityTools } from "./capabilities";
+import { registerBrandOperationTools } from "./brand-operations";
+import { registerConnectorActionTools } from "./connector-act";
 import { registerStrapiTools } from "./strapi";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -361,6 +364,64 @@ function createFullMockClient() {
         raw_result: { results: [] },
       },
     }),
+    getBridgeCapabilities: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        version: 1,
+        organization_id: "org-1",
+        capabilities: [
+          {
+            id: "agents.cmo.run",
+            label: "Run Robynn CMO agent",
+            domain: "agents",
+            mode: "write",
+            status: "available",
+            confirmation: "none",
+            required_role: "member",
+            mcp_tools: ["robynn_cmo_agent"],
+            api_routes: ["/api/cli/mcp/cmo/run"],
+            notes: "CMO v3 is available.",
+          },
+        ],
+        connectors: {
+          active_connection_count: 1,
+          active_provider_keys: ["hubspot"],
+          write_execution: {
+            route: "/api/cli/connectors/act",
+            credential_mode: "server_side",
+            accepts_provider_access_token: false,
+          },
+        },
+      },
+    }),
+    addBrandSource: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        source_type: "text",
+        source_id: "source-1",
+        status: "created",
+        title: "Positioning notes",
+      },
+    }),
+    rebuildBrandContext: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        status: "rebuilt",
+        mode: "derive",
+        organization_id: "org-1",
+        derived_at: "2026-05-15T22:00:00.000Z",
+        company_name: "Acme",
+      },
+    }),
+    actOnConnectedApp: vi.fn().mockResolvedValue({
+      ok: true,
+      replayed: false,
+      audit_id: "audit-1",
+      result: {
+        provider_key: "hubspot",
+        action_key: "hubspot.create_task",
+      },
+    }),
     publishStrapiDraft: vi.fn().mockResolvedValue({
       success: true,
       data: {
@@ -395,16 +456,19 @@ function registerAllTools(
   registerCmoAgentTools(server, client as never);
   registerCampaignTools(server, client as never);
   registerWebsiteTools(server, client as never);
+  registerCapabilityTools(server, client as never);
+  registerBrandOperationTools(server, client as never);
   registerConnectorTools(server, client as never);
+  registerConnectorActionTools(server, client as never);
   registerStrapiTools(server, client as never);
 }
 
 describe("all tools registration", () => {
-  it("registers exactly 26 tools", () => {
+  it("registers exactly 31 tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(26);
+    expect(handlers.size).toBe(31);
   });
 
   it("registers the expected tool names", () => {
@@ -436,10 +500,14 @@ describe("all tools registration", () => {
       "robynn_website_audit",
       "robynn_website_audit_status",
       "robynn_website_strategy",
+      "robynn_capabilities",
+      "robynn_brand_source_add",
+      "robynn_brand_rebuild",
       "robynn_publish_strapi_draft",
       "robynn_connected_apps",
       "robynn_connected_app_capabilities",
       "robynn_query_connected_app",
+      "robynn_connected_app_action",
     ];
 
     for (const name of expected) {
@@ -921,10 +989,31 @@ function getMinimalArgs(toolName: string): Record<string, unknown> {
       prospect_audit_id: "33333333-3333-4333-8333-333333333333",
     },
     robynn_website_strategy: {},
+    robynn_capabilities: {},
+    robynn_brand_source_add: {
+      source_type: "text",
+      title: "Positioning notes",
+      content: "# Notes",
+      idempotency_key: "idem-1",
+    },
+    robynn_brand_rebuild: { write_confirmed: true },
     robynn_publish_strapi_draft: {
       write_confirmed: true,
       content: "Draft body",
       title: "Draft title",
+    },
+    robynn_connected_apps: {},
+    robynn_connected_app_capabilities: { provider_key: "hubspot" },
+    robynn_query_connected_app: {
+      provider_key: "hubspot",
+      action_key: "hubspot.list_contacts",
+    },
+    robynn_connected_app_action: {
+      service: "hubspot",
+      action: "hubspot.create_task",
+      parameters: {},
+      idempotency_key: "idem-1",
+      write_confirmed: true,
     },
   };
   return argsMap[toolName] ?? {};

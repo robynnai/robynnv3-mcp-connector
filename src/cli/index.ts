@@ -20,6 +20,8 @@ import { registerCampaignTools } from '../tools/campaign';
 import { registerCmoAgentTools } from '../tools/cmo-agent';
 import { registerWebsiteTools } from '../tools/website';
 import { registerConnectorTools } from '../tools/connectors';
+import { registerCapabilityTools } from '../tools/capabilities';
+import { registerBrandOperationTools } from '../tools/brand-operations';
 import { registerHermesBridgeTools } from '../tools/hermes-bridge';
 import { registerConnectorActionTools } from '../tools/connector-act';
 import { registerStrapiTools } from '../tools/strapi';
@@ -153,6 +155,8 @@ program
     registerCmoAgentTools(server, client);
     registerCampaignTools(server, client);
     registerWebsiteTools(server, client);
+    registerCapabilityTools(server, client);
+    registerBrandOperationTools(server, client);
     registerConnectorTools(server, client);
     registerStrapiTools(server, client);
     registerHermesBridgeTools(server, client);
