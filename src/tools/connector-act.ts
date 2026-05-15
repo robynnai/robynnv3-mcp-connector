@@ -36,19 +36,33 @@ export function registerConnectorActionTools(
         .boolean()
         .optional()
         .describe(
-          "If true, validate parameters and record the intent but do NOT call the provider.",
+          "If true, validate policy and connection availability but do NOT call the provider.",
         ),
-      provider_access_token: z
-        .string()
+      write_confirmed: z
+        .boolean()
         .optional()
         .describe(
-          "Temporary: supply the provider OAuth token. Will be removed once Composio handles token resolution server-side.",
+          "Set true after the user confirms a write action. Required by org policy for protected writes.",
+        ),
+      connection_id: z
+        .string()
+        .uuid()
+        .optional()
+        .describe(
+          "Optional specific connected-account id. Omit to use the provider default.",
         ),
     },
     { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     async (args) => {
       try {
         const result = await client.actOnConnectedApp(args);
+        if (!result.ok) {
+          return toErrorResult(
+            typeof result.error === "string"
+              ? result.error
+              : "Connected app action was blocked or failed",
+          );
+        }
         return toSuccessResult(result as unknown as Record<string, unknown>);
       } catch (err) {
         return toErrorResult(
