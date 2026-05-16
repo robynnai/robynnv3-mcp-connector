@@ -55,5 +55,7 @@ describe("registerCapabilityTools", () => {
     expect(res.structuredContent.connectors.write_execution).toMatchObject({
       accepts_provider_access_token: false,
     });
+    expect(res.content[0].text).toContain('"agents.cmo.run"');
+    expect(res.content[0].text).toContain('"accepts_provider_access_token": false');
   });
 });

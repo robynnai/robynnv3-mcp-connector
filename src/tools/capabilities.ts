@@ -20,10 +20,7 @@ export function registerCapabilityTools(
           );
         }
 
-        return toSuccessResult(
-          result.data as unknown as Record<string, unknown>,
-          `Loaded ${result.data.capabilities.length} Robynn bridge capabilities.`,
-        );
+        return toSuccessResult(result.data as unknown as Record<string, unknown>);
       } catch (err) {
         return toErrorResult(
           `robynn_capabilities failed: ${err instanceof Error ? err.message : "Unknown error"}`,
