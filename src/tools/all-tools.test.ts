@@ -940,6 +940,7 @@ describe("RobynnClient retry logic", () => {
 
   it("does not retry on 401", async () => {
     const { RobynnClient } = await import("../robynn-client");
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     let callCount = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       callCount++;

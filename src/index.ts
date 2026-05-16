@@ -66,13 +66,24 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
       this.env.ROBYNN_API_BASE_URL,
       accessToken,
       {
+        authLogContext: "hosted-mcp",
         refreshAccessToken: async () => {
           const refreshed = await refreshUpstreamAccessToken(
             this.props,
             this.env.ROBYNN_API_BASE_URL,
           );
 
-          if (!refreshed) return undefined;
+          if (!refreshed) {
+            console.warn("[TokenRefresh] No refreshed upstream token available", {
+              source: "hosted-mcp-tool-call",
+              hasProps: Boolean(this.props),
+              hasRefreshToken: Boolean(this.props?.refreshToken),
+              hasApiBaseUrl: Boolean(
+                this.props?._apiBaseUrl || this.env.ROBYNN_API_BASE_URL,
+              ),
+            });
+            return undefined;
+          }
 
           await this.updateProps(refreshed.props);
           return refreshed.accessToken;
@@ -162,6 +173,11 @@ async function refreshUpstreamAccessToken(
       refresh_token?: string;
       expires_in?: number;
     };
+
+    console.log("[TokenRefresh] Upstream Robynn token refreshed", {
+      hasRotatedRefreshToken: Boolean(tokens.refresh_token),
+      expiresIn: tokens.expires_in,
+    });
 
     return {
       accessToken: tokens.access_token,
@@ -267,6 +283,16 @@ export default {
         rewrittenPath,
         status: response.status,
         location: response.headers.get("location"),
+        wwwAuthenticate: response.headers.get("www-authenticate"),
+      });
+    }
+
+    if (shouldTrace && response.status === 401) {
+      console.warn("[OAuth401] Claude request rejected before MCP tool execution", {
+        method: request.method,
+        path: originalUrl.pathname,
+        rewrittenPath,
+        hasAuthHeader: request.headers.has("authorization"),
         wwwAuthenticate: response.headers.get("www-authenticate"),
       });
     }

@@ -56,6 +56,7 @@ const POLL_INTERVAL_MS = 2_000;
  */
 export interface RobynnClientOptions {
   refreshAccessToken?: () => Promise<string | null | undefined>;
+  authLogContext?: string;
 }
 
 export class RobynnClient {
@@ -110,6 +111,15 @@ export class RobynnClient {
         const text = await response.text().catch(() => '');
         const status = response.status;
 
+        if (status === 401) {
+          console.warn("[RobynnApi401] upstream Robynn API returned 401", {
+            path,
+            context: this.options.authLogContext ?? "robynn-client",
+            refreshAvailable: Boolean(this.options.refreshAccessToken),
+            alreadyRefreshed: hasRefreshedAuth,
+          });
+        }
+
         if (
           status === 401 &&
           !hasRefreshedAuth &&
@@ -118,6 +128,10 @@ export class RobynnClient {
           clearTimeout(timeout);
           const refreshedToken = await this.options.refreshAccessToken();
           if (refreshedToken) {
+            console.log("[RobynnApi401] refreshed upstream token; retrying", {
+              path,
+              context: this.options.authLogContext ?? "robynn-client",
+            });
             this.accessToken = refreshedToken;
             return this.fetchWithRetry(
               path,
@@ -127,6 +141,11 @@ export class RobynnClient {
               true,
             );
           }
+
+          console.warn("[RobynnApi401] upstream token refresh unavailable", {
+            path,
+            context: this.options.authLogContext ?? "robynn-client",
+          });
         }
 
         // Retry on 5xx server errors only
