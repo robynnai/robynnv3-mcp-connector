@@ -374,3 +374,62 @@ describe("RobynnClient intelligence routes", () => {
     expect(result.success).toBe(true);
   });
 });
+
+describe("RobynnClient auth refresh", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("refreshes a stale access token on 401 and retries the request once", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("Unauthorized", { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { ok: true } })),
+      );
+    const refreshAccessToken = vi.fn().mockResolvedValue("fresh-token");
+
+    const client = new RobynnClient("https://robynn.test", "stale-token", {
+      refreshAccessToken,
+    });
+
+    const result = await client.getStatus();
+
+    expect(result.success).toBe(true);
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://robynn.test/api/cli/context/summary",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer stale-token",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://robynn.test/api/cli/context/summary",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer fresh-token",
+        }),
+      }),
+    );
+  });
+
+  it("does not loop forever when a refreshed access token still returns 401", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("Unauthorized", { status: 401 }));
+    const refreshAccessToken = vi.fn().mockResolvedValue("fresh-token");
+
+    const client = new RobynnClient("https://robynn.test", "stale-token", {
+      refreshAccessToken,
+    });
+
+    await expect(client.getStatus()).rejects.toThrow("API error 401");
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});

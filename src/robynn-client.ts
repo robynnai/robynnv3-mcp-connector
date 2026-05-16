@@ -54,10 +54,15 @@ const POLL_INTERVAL_MS = 2_000;
  * HTTP client for the Robynn API (robynn.ai).
  * Authenticated with an OAuth access token passed as Bearer header.
  */
+export interface RobynnClientOptions {
+  refreshAccessToken?: () => Promise<string | null | undefined>;
+}
+
 export class RobynnClient {
   constructor(
     private readonly baseUrl: string,
-    private readonly accessToken: string
+    private accessToken: string,
+    private readonly options: RobynnClientOptions = {},
   ) {}
 
   private withQuery(
@@ -85,6 +90,7 @@ export class RobynnClient {
     options: RequestInit,
     timeoutMs: number,
     retriesLeft: number,
+    hasRefreshedAuth = false,
   ): Promise<T> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -104,11 +110,36 @@ export class RobynnClient {
         const text = await response.text().catch(() => '');
         const status = response.status;
 
+        if (
+          status === 401 &&
+          !hasRefreshedAuth &&
+          this.options.refreshAccessToken
+        ) {
+          clearTimeout(timeout);
+          const refreshedToken = await this.options.refreshAccessToken();
+          if (refreshedToken) {
+            this.accessToken = refreshedToken;
+            return this.fetchWithRetry(
+              path,
+              options,
+              timeoutMs,
+              retriesLeft,
+              true,
+            );
+          }
+        }
+
         // Retry on 5xx server errors only
         if (status >= 500 && retriesLeft > 0) {
           clearTimeout(timeout);
           await new Promise((r) => setTimeout(r, 1_000));
-          return this.fetchWithRetry(path, options, timeoutMs, retriesLeft - 1);
+          return this.fetchWithRetry(
+            path,
+            options,
+            timeoutMs,
+            retriesLeft - 1,
+            hasRefreshedAuth,
+          );
         }
 
         throw new Error(`API error ${status}: ${text}`);
@@ -125,7 +156,13 @@ export class RobynnClient {
       ) {
         clearTimeout(timeout);
         await new Promise((r) => setTimeout(r, 1_000));
-        return this.fetchWithRetry(path, options, timeoutMs, retriesLeft - 1);
+        return this.fetchWithRetry(
+          path,
+          options,
+          timeoutMs,
+          retriesLeft - 1,
+          hasRefreshedAuth,
+        );
       }
       throw err;
     } finally {
