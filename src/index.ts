@@ -65,6 +65,19 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
     const client = new RobynnClient(
       this.env.ROBYNN_API_BASE_URL,
       accessToken,
+      {
+        refreshAccessToken: async () => {
+          const refreshed = await refreshUpstreamAccessToken(
+            this.props,
+            this.env.ROBYNN_API_BASE_URL,
+          );
+
+          if (!refreshed) return undefined;
+
+          await this.updateProps(refreshed.props);
+          return refreshed.accessToken;
+        },
+      },
     );
     const publicBaseUrl = getPublicBaseUrl(this.env.MCP_PUBLIC_BASE_URL);
 
@@ -110,6 +123,62 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
 const OAUTH_CLIENT_ID = "robynn-mcp-worker";
 const SUPPORTED_OAUTH_SCOPES = ["brand:read", "tools:execute"];
 
+interface UpstreamTokenRefreshResult {
+  accessToken: string;
+  expiresIn?: number;
+  props: Props;
+}
+
+async function refreshUpstreamAccessToken(
+  props: Props | undefined,
+  fallbackApiBaseUrl?: string,
+): Promise<UpstreamTokenRefreshResult | undefined> {
+  const refreshToken = props?.refreshToken;
+  const apiBaseUrl = props?._apiBaseUrl || fallbackApiBaseUrl;
+  if (!props || !refreshToken || !apiBaseUrl) return undefined;
+
+  try {
+    const res = await fetch(`${apiBaseUrl}/api/oauth/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        client_id: OAUTH_CLIENT_ID,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error(
+        "[TokenRefresh] Upstream refresh failed:",
+        res.status,
+        await res.text(),
+      );
+      return undefined;
+    }
+
+    const tokens = (await res.json()) as {
+      access_token: string;
+      refresh_token?: string;
+      expires_in?: number;
+    };
+
+    return {
+      accessToken: tokens.access_token,
+      expiresIn: tokens.expires_in,
+      props: {
+        ...props,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token || refreshToken,
+        _apiBaseUrl: apiBaseUrl,
+      },
+    };
+  } catch (err) {
+    console.error("[TokenRefresh] Failed to refresh upstream token:", err);
+    return undefined;
+  }
+}
+
 /**
  * Refresh the upstream robynn.ai JWT when the OAuthProvider rotates tokens.
  * On authorization_code grant the props already contain a fresh JWT, so we
@@ -121,41 +190,13 @@ async function tokenExchangeCallback(
   if (options.grantType !== GrantType.REFRESH_TOKEN) return;
 
   const props = options.props as Props;
-  if (!props.refreshToken || !props._apiBaseUrl) return;
+  const refreshed = await refreshUpstreamAccessToken(props);
+  if (!refreshed) return;
 
-  try {
-    const res = await fetch(`${props._apiBaseUrl}/api/oauth/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        grant_type: "refresh_token",
-        refresh_token: props.refreshToken,
-        client_id: OAUTH_CLIENT_ID,
-      }),
-    });
-
-    if (!res.ok) {
-      console.error("[TokenExchange] Upstream refresh failed:", res.status, await res.text());
-      return;
-    }
-
-    const tokens = (await res.json()) as {
-      access_token: string;
-      refresh_token: string;
-      expires_in: number;
-    };
-
-    return {
-      newProps: {
-        ...props,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-      },
-      accessTokenTTL: tokens.expires_in,
-    };
-  } catch (err) {
-    console.error("[TokenExchange] Failed to refresh upstream token:", err);
-  }
+  return {
+    newProps: refreshed.props,
+    accessTokenTTL: refreshed.expiresIn,
+  };
 }
 
 function createOAuthProvider(env: Env) {
