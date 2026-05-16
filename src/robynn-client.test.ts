@@ -381,6 +381,8 @@ describe("RobynnClient auth refresh", () => {
   });
 
   it("refreshes a stale access token on 401 and retries the request once", async () => {
+    const warnMock = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const logMock = vi.spyOn(console, "log").mockImplementation(() => {});
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response("Unauthorized", { status: 401 }))
@@ -398,6 +400,20 @@ describe("RobynnClient auth refresh", () => {
     expect(result.success).toBe(true);
     expect(refreshAccessToken).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(warnMock).toHaveBeenCalledWith(
+      "[RobynnApi401] upstream Robynn API returned 401",
+      expect.objectContaining({
+        path: "/api/cli/context/summary",
+        refreshAvailable: true,
+        alreadyRefreshed: false,
+      }),
+    );
+    expect(logMock).toHaveBeenCalledWith(
+      "[RobynnApi401] refreshed upstream token; retrying",
+      expect.objectContaining({
+        path: "/api/cli/context/summary",
+      }),
+    );
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "https://robynn.test/api/cli/context/summary",
@@ -419,6 +435,8 @@ describe("RobynnClient auth refresh", () => {
   });
 
   it("does not loop forever when a refreshed access token still returns 401", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response("Unauthorized", { status: 401 }));
