@@ -43,7 +43,9 @@ export function registerConnectorTools(server: McpServer, client: RobynnClient) 
         .string()
         .trim()
         .min(1)
-        .describe("Connected app provider key, for example hubspot or github."),
+        .describe(
+          "Connected app provider key, for example hubspot, highlevel, or github.",
+        ),
     },
     { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     async ({ provider_key }) => {
@@ -88,7 +90,9 @@ export function registerConnectorTools(server: McpServer, client: RobynnClient) 
         .string()
         .trim()
         .min(1)
-        .describe("Curated Robynn read action key, for example hubspot.list_contacts."),
+        .describe(
+          "Curated Robynn read action key, for example hubspot.list_contacts or highlevel.list_contacts.",
+        ),
       payload: z
         .record(z.unknown())
         .optional()
