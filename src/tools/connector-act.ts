@@ -14,15 +14,17 @@ export function registerConnectorActionTools(
 ) {
   server.tool(
     "robynn_connected_app_action",
-    "Execute a write action (create/update) against a connected app like HubSpot or Salesforce. Audit-logged and idempotent — pass the same idempotency_key to replay a prior successful call without re-executing.",
+    "Execute a write action (create/update) against a connected app like HubSpot, Salesforce, or HighLevel. Audit-logged and idempotent — pass the same idempotency_key to replay a prior successful call without re-executing.",
     {
       service: z
         .string()
-        .describe("Connected app identifier, e.g. 'hubspot', 'salesforce'."),
+        .describe(
+          "Connected app identifier, e.g. 'hubspot', 'salesforce', 'highlevel'.",
+        ),
       action: z
         .string()
         .describe(
-          "Action key scoped to the service, e.g. 'create_task', 'log_activity'. Call robynn_connected_app_capabilities to discover what's available.",
+          "Action key scoped to the service, e.g. 'create_task', 'log_activity', 'highlevel.publish_email_template'. Call robynn_connected_app_capabilities to discover what's available.",
         ),
       parameters: z
         .record(z.unknown())
