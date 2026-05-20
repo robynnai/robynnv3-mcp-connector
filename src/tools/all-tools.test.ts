@@ -13,6 +13,7 @@ import { registerBrandBookTools } from "./brand-book";
 import { registerCampaignTools } from "./campaign";
 import { registerCmoAgentTools } from "./cmo-agent";
 import { registerWebsiteTools } from "./website";
+import { registerContentPlanTools } from "./content-plan";
 import { registerConnectorTools } from "./connectors";
 import { registerCapabilityTools } from "./capabilities";
 import { registerBrandOperationTools } from "./brand-operations";
@@ -278,6 +279,28 @@ function createFullMockClient() {
         measurement_plan: [],
       },
     }),
+    contentPlan: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        summary: "Content plan ready",
+        status: "success",
+        project_id: "project-1",
+        planner_version: "v2",
+        content_plan_rows: [
+          {
+            title: "Refresh pricing page for enterprise proof",
+            target_slug: "/pricing",
+            premise: "Existing research shows enterprise buyers need more proof.",
+            source_references: ["geo:prompt-1"],
+            proof_assets_needed: ["customer quote"],
+            target_geo_prompts: ["best enterprise marketing platform"],
+            distribution_derivatives: ["LinkedIn carousel"],
+            existing_content_decision: "refresh_existing_page",
+          },
+        ],
+        existing_content_decisions: [],
+      },
+    }),
     cmoAgent: vi.fn().mockResolvedValue({
       success: true,
       data: {
@@ -456,6 +479,7 @@ function registerAllTools(
   registerCmoAgentTools(server, client as never);
   registerCampaignTools(server, client as never);
   registerWebsiteTools(server, client as never);
+  registerContentPlanTools(server, client as never);
   registerCapabilityTools(server, client as never);
   registerBrandOperationTools(server, client as never);
   registerConnectorTools(server, client as never);
@@ -464,11 +488,11 @@ function registerAllTools(
 }
 
 describe("all tools registration", () => {
-  it("registers exactly 31 tools", () => {
+  it("registers exactly 32 tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(31);
+    expect(handlers.size).toBe(32);
   });
 
   it("registers the expected tool names", () => {
@@ -500,6 +524,7 @@ describe("all tools registration", () => {
       "robynn_website_audit",
       "robynn_website_audit_status",
       "robynn_website_strategy",
+      "robynn_content_plan",
       "robynn_capabilities",
       "robynn_brand_source_add",
       "robynn_brand_rebuild",
@@ -864,6 +889,21 @@ describe("all tools success path", () => {
     expect(res.content[0].text).toBe("Strategy complete");
     expect(res.structuredContent.website_url).toBe("https://acme.test");
   });
+
+  it("robynn_content_plan returns v2 rows as structured content", async () => {
+    setup();
+    const res = await handlers.get("robynn_content_plan")!({
+      project_id: "project-1",
+    });
+    expect(res.content[0].text).toBe("Content plan ready");
+    expect(res.structuredContent.planner_version).toBe("v2");
+    expect(res.structuredContent.content_plan_rows[0].source_references).toContain(
+      "geo:prompt-1",
+    );
+    expect(client.contentPlan).toHaveBeenCalledWith({
+      project_id: "project-1",
+    });
+  });
 });
 
 describe("all tools error path", () => {
@@ -990,6 +1030,7 @@ function getMinimalArgs(toolName: string): Record<string, unknown> {
       prospect_audit_id: "33333333-3333-4333-8333-333333333333",
     },
     robynn_website_strategy: {},
+    robynn_content_plan: { project_id: "project-1" },
     robynn_capabilities: {},
     robynn_brand_source_add: {
       source_type: "text",
