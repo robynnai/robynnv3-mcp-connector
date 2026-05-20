@@ -32,6 +32,8 @@ import type {
   WebsiteAuditOrchestratorStatusResult,
   WebsiteStrategyRequest,
   WebsiteStrategyResult,
+  ContentPlanRequest,
+  ContentPlanResult,
   GeoAnalysisRequest,
   GeoAnalysisResult,
   CompetitiveBattlecardRequest,
@@ -451,6 +453,16 @@ export class RobynnClient {
     payload: WebsiteStrategyRequest
   ): Promise<RobynnApiResponse<WebsiteStrategyResult>> {
     return this.fetch("/api/cli/mcp/website/strategy", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Create a Content Studio plan through the MCP-safe Content Planner V2 route */
+  async contentPlan(
+    payload: ContentPlanRequest
+  ): Promise<RobynnApiResponse<ContentPlanResult>> {
+    return this.fetch("/api/cli/mcp/content-plan", {
       method: "POST",
       body: JSON.stringify(payload),
     }, POLL_TIMEOUT_MS);

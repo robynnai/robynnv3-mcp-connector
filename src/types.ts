@@ -85,6 +85,8 @@ export type CampaignToolName =
   | "robynn_campaign_creator"
   | "robynn_campaign_status";
 
+export type ContentPlanToolName = "robynn_content_plan";
+
 /** Shared status values for MCP intelligence responses */
 export type IntelligenceToolStatus =
   | "pending"
@@ -583,6 +585,64 @@ export interface WebsiteStrategyResult extends IntelligenceToolResultBase {
   messaging_changes: string[];
   seo_geo_changes: string[];
   measurement_plan: MeasurementPlanItem[];
+}
+
+export type ContentPlanStatus =
+  | "success"
+  | "missing_context"
+  | "partial"
+  | "failed";
+
+export type ExistingContentDecision =
+  | "new_content"
+  | "refresh_existing_page"
+  | "calendar_duplicate"
+  | "supporting_asset";
+
+export interface ContentPlanRequest {
+  project_id?: string;
+  research_artifact_id?: string;
+  brand_or_topic?: string;
+  planning_goal?: string;
+  research_packet?: Record<string, unknown>;
+  include_existing_calendar?: boolean;
+  include_existing_site_inventory?: boolean;
+  max_rows?: number;
+  dry_run?: boolean;
+}
+
+export interface ContentPlanRow {
+  title: string;
+  target_slug: string;
+  content_format?: string;
+  content_type?: string;
+  funnel_stage?: string;
+  priority?: "high" | "medium" | "low" | string;
+  premise: string;
+  reason_to_create?: string;
+  source_references: string[];
+  proof_assets_needed: string[];
+  target_geo_prompts: string[];
+  distribution_derivatives: string[];
+  existing_content_decision: ExistingContentDecision;
+  existing_content_match?: Record<string, unknown> | null;
+  existing_content_match_reason?: string;
+  internal_links?: string[];
+}
+
+export interface ContentPlanResult {
+  summary: string;
+  status: ContentPlanStatus;
+  project_id?: string;
+  planner_version?: "v2" | string;
+  content_plan_rows: ContentPlanRow[];
+  existing_content_decisions?: Record<string, unknown>[];
+  langgraph_thread_id?: string | null;
+  langgraph_run_id?: string | null;
+  assistant_id?: string | null;
+  trace_id?: string | null;
+  missing?: string[];
+  next_step?: string;
 }
 
 export interface ConnectedAppReadAction {

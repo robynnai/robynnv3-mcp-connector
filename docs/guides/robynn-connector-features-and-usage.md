@@ -12,6 +12,7 @@ It is best for:
 - GEO and SEO analysis
 - website audit and website strategy
 - competitive battlecards
+- Content Studio content planning
 - content generation in your brand voice
 - direct CMO orchestration
 - marketing campaign planning and status polling
@@ -271,7 +272,37 @@ Useful asks:
 - "Research the AI visibility market"
 - "Run competitor research on HubSpot"
 
-### 13. Conversations
+### 13. Content planning
+
+Use Robynn when you want Content Studio to turn completed research into a content calendar plan.
+
+Available tool:
+
+- `robynn_content_plan`
+
+Useful asks:
+
+- "Create a Content Studio content plan for project `<project_id>`"
+- "Use this completed research packet to create a content plan"
+- "Check whether this topic has enough research context for a plan"
+
+Expected output:
+
+- Content Planner V2 rows
+- source references for every recommendation
+- existing-content decisions such as new, refresh existing page, or calendar duplicate
+- proof assets, GEO prompts, and distribution derivatives
+- `missing_context` guidance when Robynn does not have completed research to synthesize
+
+Best input order:
+
+1. `project_id`, so Robynn hydrates completed SEO, GEO, deep research, site inventory, and calendar rows server-side
+2. `research_artifact_id`, when you want to plan from a specific completed Content Studio research artifact
+3. `research_packet`, when you already have the completed research payload in the MCP client
+
+The content planner is synthesis-only. It does not run fresh keyword research, web search, scraping, or news search. If you only provide `brand_or_topic`, Robynn returns `status: "missing_context"` instead of inventing a plan.
+
+### 14. Conversations
 
 Use Robynn to list or create working threads tied to the Robynn CMO workflow.
 
@@ -298,13 +329,15 @@ Useful asks:
 1. Ask for a GEO analysis
 2. Ask for a battlecard against the competitor that appears most often
 3. Ask for SEO opportunities based on the same market
-4. Ask Robynn to create content or messaging based on those findings
+4. Ask Robynn to create a content plan from the completed Content Studio research project
+5. Ask Robynn to create content or messaging based on those findings
 
 Example:
 
 - "Run GEO analysis for Robynn in AI marketing platforms"
 - "Now build a battlecard for Robynn vs HubSpot"
 - "Now show me SEO opportunities we should prioritize"
+- "Now create a Content Studio content plan for project `<project_id>`"
 - "Now draft a LinkedIn post based on those findings in our brand voice"
 
 ## Permissions In Claude
@@ -323,7 +356,7 @@ Not every Robynn tool uses the same backend path:
 
 - brand context, status, usage, and the new brand-book tools are served directly from `robynnv3`
 - content creation and research use the CMO thread/run workflow
-- GEO, SEO, battlecards, and website reports use specialized intelligence paths
+- GEO, SEO, battlecards, website reports, and Content Planner V2 use specialized intelligence paths
 - interactive MCP Apps UI is rendered by the Worker, not by the backend agents
 
 For the full execution matrix, see [robynn-mcp-tool-execution-matrix.md](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/docs/architecture/robynn-mcp-tool-execution-matrix.md).

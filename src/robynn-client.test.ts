@@ -373,6 +373,41 @@ describe("RobynnClient intelligence routes", () => {
     );
     expect(result.success).toBe(true);
   });
+
+  it("posts content planner requests to the MCP-safe API route", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            summary: "content plan",
+            status: "success",
+            planner_version: "v2",
+            project_id: "project-1",
+            content_plan_rows: [],
+            existing_content_decisions: [],
+          },
+        })
+      )
+    );
+
+    const client = new RobynnClient("https://robynn.test", "token-123");
+    const payload = {
+      project_id: "project-1",
+      planning_goal: "Build a 90-day plan",
+      max_rows: 12,
+    };
+    const result = await client.contentPlan(payload);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/cli/mcp/content-plan",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+    );
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("RobynnClient auth refresh", () => {
