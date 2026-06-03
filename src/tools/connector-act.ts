@@ -14,7 +14,7 @@ export function registerConnectorActionTools(
 ) {
   server.tool(
     "robynn_connected_app_action",
-    "Execute a write action (create/update) against a connected app like HubSpot, Salesforce, or HighLevel. Audit-logged and idempotent — pass the same idempotency_key to replay a prior successful call without re-executing.",
+    "Execute a write action (create/update) against a connected app like HubSpot, Salesforce, or HighLevel. Audit-logged and idempotent — pass the same idempotency_key to replay a prior successful call without re-executing. HighLevel guarded writes such as highlevel.publish_email_template require explicit user confirmation and write_confirmed=true.",
     {
       service: z
         .string()
