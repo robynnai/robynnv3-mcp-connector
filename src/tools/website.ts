@@ -29,8 +29,27 @@ function appendReportLinks(
   if (data.status === "pending" && typeof data.prospect_audit_id === "string") {
     lines.push(`Poll with robynn_website_audit_status using prospect_audit_id=${data.prospect_audit_id}`);
   }
+  if (data.status === "pending" && typeof data.scan_id === "string") {
+    lines.push(`Poll with robynn_website_audit_v2_status using scan_id=${data.scan_id}`);
+  }
   return lines.join("\n");
 }
+
+const websiteAuditV2GoalSchema = z
+  .object({
+    label: z.string(),
+    type: z.enum([
+      "seo_score",
+      "geo_visibility",
+      "keyword_visibility",
+      "conversion_event",
+      "page_event",
+    ]),
+    target: z.string(),
+    page_url: z.string().optional(),
+  })
+  .optional()
+  .describe("Optional goal to bind the audit to");
 
 export function registerWebsiteTools(server: McpServer, client: RobynnClient) {
   registerAppTool(
@@ -146,6 +165,117 @@ export function registerWebsiteTools(server: McpServer, client: RobynnClient) {
       } catch (err) {
         return toErrorResult(
           `Error polling website audit: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "robynn_website_audit_v2",
+    {
+      description:
+        "Start a Website Auto-Healer v2 audit for an owned or external site.",
+      inputSchema: {
+        website_url: z
+          .string()
+          .optional()
+          .describe("Optional explicit website URL override"),
+        site_id: z
+          .string()
+          .optional()
+          .describe("Optional Robynn organization website ID"),
+        goal_id: z
+          .string()
+          .optional()
+          .describe("Optional existing website goal ID to bind the audit to"),
+        goal: websiteAuditV2GoalSchema,
+        manual_pages: z
+          .array(z.string())
+          .optional()
+          .describe("Optional page URLs to include in the audit"),
+        mode: z
+          .enum(["owned", "external"])
+          .optional()
+          .describe("Audit mode for owned Robynn sites or external URLs"),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        ui: {
+          resourceUri: REPORT_RESOURCE_URIS.websiteAudit,
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async ({ website_url, site_id, goal_id, goal, manual_pages, mode }) => {
+      try {
+        const result = await client.websiteAuditV2({
+          website_url,
+          site_id,
+          goal_id,
+          goal,
+          manual_pages,
+          mode,
+        });
+
+        if (!result.success || !result.data) {
+          return toErrorResult(result.error || "Website audit v2 failed");
+        }
+
+        const data = result.data as unknown as Record<string, unknown>;
+        return toSuccessResult(
+          data,
+          appendReportLinks((data.summary as string) || undefined, data),
+        );
+      } catch (err) {
+        return toErrorResult(
+          `Error running website audit v2: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "robynn_website_audit_v2_status",
+    {
+      description:
+        "Poll a Website Auto-Healer v2 audit created by robynn_website_audit_v2.",
+      inputSchema: {
+        scan_id: z.string().describe("Scan ID returned by robynn_website_audit_v2"),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        ui: {
+          resourceUri: REPORT_RESOURCE_URIS.websiteAudit,
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async ({ scan_id }) => {
+      try {
+        const result = await client.websiteAuditV2Status({ scan_id });
+
+        if (!result.success || !result.data) {
+          return toErrorResult(result.error || "Website audit v2 status failed");
+        }
+
+        const data = result.data as unknown as Record<string, unknown>;
+        return toSuccessResult(
+          data,
+          appendReportLinks((data.summary as string) || undefined, data),
+        );
+      } catch (err) {
+        return toErrorResult(
+          `Error polling website audit v2: ${err instanceof Error ? err.message : "Unknown error"}`,
         );
       }
     },

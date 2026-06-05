@@ -119,6 +119,62 @@ describe("registerWebsiteTools", () => {
     );
   });
 
+  it("registers and calls website audit v2", async () => {
+    const { server, handlers, configs } = createServerHarness();
+    const client = {
+      websiteAudit: vi.fn(),
+      websiteAuditStatus: vi.fn(),
+      websiteStrategy: vi.fn(),
+      websiteAuditV2: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          version: "v2",
+          status: "pending",
+          scan_id: "11111111-1111-4111-8111-111111111111",
+          summary: "Started Website Auto-Healer v2 audit.",
+          goal_contract: { label: "Improve pricing demo clicks" },
+          healing_plan: { groups: { draft_fix: [] } },
+          recommendations: [],
+          next_steps: ["Poll robynn_website_audit_v2_status."],
+        },
+      }),
+      websiteAuditV2Status: vi.fn(),
+    };
+
+    registerWebsiteTools(server as never, client as never);
+
+    const response = await handlers.get("robynn_website_audit_v2")?.({
+      website_url: "https://example.com",
+      goal: {
+        label: "Improve pricing demo clicks",
+        type: "conversion_event",
+        target: "Reach 4%",
+        page_url: "https://example.com/pricing",
+      },
+    });
+
+    expect(client.websiteAuditV2).toHaveBeenCalledWith({
+      website_url: "https://example.com",
+      site_id: undefined,
+      goal_id: undefined,
+      goal: {
+        label: "Improve pricing demo clicks",
+        type: "conversion_event",
+        target: "Reach 4%",
+        page_url: "https://example.com/pricing",
+      },
+      manual_pages: undefined,
+      mode: undefined,
+    });
+    expect(response?.structuredContent.version).toBe("v2");
+    expect(response?.content[0].text).toContain(
+      "Started Website Auto-Healer v2 audit."
+    );
+    expect(
+      configs.get("robynn_website_audit_v2")?.annotations?.readOnlyHint
+    ).toBe(true);
+  });
+
   it("returns an MCP error result on upstream failure", async () => {
     const { server, handlers } = createServerHarness();
     const client = {

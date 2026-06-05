@@ -73,6 +73,8 @@ export type GuidedWorkflowToolName =
   | "robynn_publish_brand_book_html"
   | "robynn_website_audit"
   | "robynn_website_audit_status"
+  | "robynn_website_audit_v2"
+  | "robynn_website_audit_v2_status"
   | "robynn_website_strategy";
 
 export type CmoAgentToolName = "robynn_cmo_agent";
@@ -426,6 +428,39 @@ export interface WebsiteAuditResult extends IntelligenceToolResultBase, Prospect
 
 export interface WebsiteAuditStatusRequest {
   prospect_audit_id: string;
+}
+
+export interface WebsiteAuditV2GoalInput {
+  label: string;
+  type:
+    | "seo_score"
+    | "geo_visibility"
+    | "keyword_visibility"
+    | "conversion_event"
+    | "page_event";
+  target: string;
+  page_url?: string;
+}
+
+export interface WebsiteAuditV2Request {
+  website_url?: string;
+  site_id?: string;
+  goal_id?: string;
+  goal?: WebsiteAuditV2GoalInput;
+  manual_pages?: string[];
+  mode?: "owned" | "external";
+}
+
+export interface WebsiteAuditV2StatusRequest {
+  scan_id: string;
+}
+
+export interface WebsiteAuditV2Result extends IntelligenceToolResultBase {
+  version: "v2";
+  scan_id: string;
+  goal_contract?: Record<string, unknown>;
+  healing_plan?: Record<string, unknown>;
+  recommendations?: Record<string, unknown>[];
 }
 
 export interface WebsiteStrategyRequest {
