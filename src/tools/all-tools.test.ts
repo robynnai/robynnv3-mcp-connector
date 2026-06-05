@@ -262,6 +262,36 @@ function createFullMockClient() {
         competitor_findings: [],
       },
     }),
+    websiteAuditV2: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        version: "v2",
+        summary: "Website Auto-Healer v2 started",
+        status: "pending",
+        artifacts: {},
+        recommended_actions: [],
+        next_steps: [],
+        scan_id: "11111111-1111-4111-8111-111111111111",
+        goal_contract: { label: "Improve demo clicks" },
+        healing_plan: { groups: { draft_fix: [] } },
+        recommendations: [],
+      },
+    }),
+    websiteAuditV2Status: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        version: "v2",
+        summary: "Website Auto-Healer v2 ready",
+        status: "success",
+        artifacts: {},
+        recommended_actions: [],
+        next_steps: [],
+        scan_id: "11111111-1111-4111-8111-111111111111",
+        goal_contract: { label: "Improve demo clicks" },
+        healing_plan: { groups: { draft_fix: [] } },
+        recommendations: [],
+      },
+    }),
     websiteStrategy: vi.fn().mockResolvedValue({
       success: true,
       data: {
@@ -464,11 +494,11 @@ function registerAllTools(
 }
 
 describe("all tools registration", () => {
-  it("registers exactly 31 tools", () => {
+  it("registers exactly 33 tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(31);
+    expect(handlers.size).toBe(33);
   });
 
   it("registers the expected tool names", () => {
@@ -499,6 +529,8 @@ describe("all tools registration", () => {
       "robynn_campaign_status",
       "robynn_website_audit",
       "robynn_website_audit_status",
+      "robynn_website_audit_v2",
+      "robynn_website_audit_v2_status",
       "robynn_website_strategy",
       "robynn_capabilities",
       "robynn_brand_source_add",
@@ -856,6 +888,30 @@ describe("all tools success path", () => {
     );
   });
 
+  it("robynn_website_audit_v2 returns summary text", async () => {
+    setup();
+    const res = await handlers.get("robynn_website_audit_v2")!({
+      website_url: "https://acme.test",
+    });
+    expect(res.content[0].text).toContain("Website Auto-Healer v2 started");
+    expect(res.structuredContent.version).toBe("v2");
+    expect(res.structuredContent.scan_id).toBe(
+      "11111111-1111-4111-8111-111111111111"
+    );
+  });
+
+  it("robynn_website_audit_v2_status returns scan status", async () => {
+    setup();
+    const res = await handlers.get("robynn_website_audit_v2_status")!({
+      scan_id: "11111111-1111-4111-8111-111111111111",
+    });
+    expect(res.content[0].text).toContain("Website Auto-Healer v2 ready");
+    expect(res.structuredContent.version).toBe("v2");
+    expect(res.structuredContent.scan_id).toBe(
+      "11111111-1111-4111-8111-111111111111"
+    );
+  });
+
   it("robynn_website_strategy returns summary text", async () => {
     setup();
     const res = await handlers.get("robynn_website_strategy")!({
@@ -988,6 +1044,10 @@ function getMinimalArgs(toolName: string): Record<string, unknown> {
     robynn_website_audit: {},
     robynn_website_audit_status: {
       prospect_audit_id: "33333333-3333-4333-8333-333333333333",
+    },
+    robynn_website_audit_v2: {},
+    robynn_website_audit_v2_status: {
+      scan_id: "11111111-1111-4111-8111-111111111111",
     },
     robynn_website_strategy: {},
     robynn_capabilities: {},
