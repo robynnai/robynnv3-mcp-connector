@@ -24,6 +24,9 @@ import type {
   WebsiteAuditV2Request,
   WebsiteAuditV2Result,
   WebsiteAuditV2StatusRequest,
+  WebsiteOptimizationAuditRequest,
+  WebsiteOptimizationAuditResult,
+  WebsiteOptimizationAuditStatusRequest,
   WebsiteStrategyRequest,
   WebsiteStrategyResult,
   GeoAnalysisRequest,
@@ -404,6 +407,29 @@ export class RobynnClient {
     return this.fetch(
       this.withQuery("/api/cli/mcp/website/audit-v2/status", {
         scan_id: payload.scan_id,
+      }),
+      {},
+      POLL_TIMEOUT_MS
+    );
+  }
+
+  /** Start a Website Optimization V3 audit MVP run */
+  async websiteOptimizationAudit(
+    payload: WebsiteOptimizationAuditRequest
+  ): Promise<RobynnApiResponse<WebsiteOptimizationAuditResult>> {
+    return this.fetch("/api/cli/mcp/website/optimization-audit", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Poll a Website Optimization V3 audit MVP run */
+  async websiteOptimizationAuditStatus(
+    payload: WebsiteOptimizationAuditStatusRequest
+  ): Promise<RobynnApiResponse<WebsiteOptimizationAuditResult>> {
+    return this.fetch(
+      this.withQuery("/api/cli/mcp/website/optimization-audit/status", {
+        run_id: payload.run_id,
       }),
       {},
       POLL_TIMEOUT_MS

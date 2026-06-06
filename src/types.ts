@@ -75,6 +75,8 @@ export type GuidedWorkflowToolName =
   | "robynn_website_audit_status"
   | "robynn_website_audit_v2"
   | "robynn_website_audit_v2_status"
+  | "robynn_website_optimization_audit"
+  | "robynn_website_optimization_audit_status"
   | "robynn_website_strategy";
 
 export type CmoAgentToolName = "robynn_cmo_agent";
@@ -461,6 +463,44 @@ export interface WebsiteAuditV2Result extends IntelligenceToolResultBase {
   goal_contract?: Record<string, unknown>;
   healing_plan?: Record<string, unknown>;
   recommendations?: Record<string, unknown>[];
+}
+
+export type WebsiteOptimizationAuditDepth =
+  | "top_level"
+  | "top_plus_1"
+  | "top_plus_2"
+  | "all";
+
+export type WebsiteOptimizationReportMode = "full" | "prospecting_abridged";
+
+export interface WebsiteOptimizationAuditRequest {
+  website_url: string;
+  audit_depth?: WebsiteOptimizationAuditDepth;
+  report_mode?: WebsiteOptimizationReportMode;
+  account_name?: string;
+  industry?: string;
+  prospecting_goal?: string;
+}
+
+export interface WebsiteOptimizationAuditStatusRequest {
+  run_id: string;
+}
+
+export interface WebsiteOptimizationAuditResult
+  extends IntelligenceToolResultBase,
+    ProspectingReportLinks {
+  run_id: string;
+  website_url?: string;
+  audit_depth?: WebsiteOptimizationAuditDepth;
+  report_mode?: WebsiteOptimizationReportMode;
+  account_name?: string;
+  industry?: string;
+  prospecting_goal?: string;
+  poll_after_seconds?: number;
+  report_url?: string;
+  pdf_url?: string;
+  html_url?: string;
+  markdown_url?: string;
 }
 
 export interface WebsiteStrategyRequest {
