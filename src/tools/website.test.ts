@@ -175,6 +175,105 @@ describe("registerWebsiteTools", () => {
     ).toBe(true);
   });
 
+  it("registers website optimization audit tools and sends default args", async () => {
+    const { server, handlers, configs } = createServerHarness();
+    const client = {
+      websiteAudit: vi.fn(),
+      websiteAuditStatus: vi.fn(),
+      websiteStrategy: vi.fn(),
+      websiteAuditV2: vi.fn(),
+      websiteAuditV2Status: vi.fn(),
+      websiteOptimizationAudit: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          summary: "Website optimization audit ready",
+          status: "success",
+          run_id: "opt-run-1",
+          website_url: "https://acme.test",
+          audit_depth: "top_level",
+          report_mode: "prospecting_abridged",
+          report_url: "https://robynn.ai/reports/opt-run-1",
+          artifacts: {},
+          recommended_actions: [],
+          next_steps: [],
+        },
+      }),
+      websiteOptimizationAuditStatus: vi.fn(),
+    };
+
+    registerWebsiteTools(server as never, client as never);
+
+    const response = await handlers.get("robynn_website_optimization_audit")?.({
+      website_url: "https://acme.test",
+    });
+
+    expect(handlers.has("robynn_website_optimization_audit")).toBe(true);
+    expect(handlers.has("robynn_website_optimization_audit_status")).toBe(true);
+    expect(client.websiteOptimizationAudit).toHaveBeenCalledWith({
+      website_url: "https://acme.test",
+      audit_depth: "top_level",
+      report_mode: "prospecting_abridged",
+      account_name: undefined,
+      industry: undefined,
+      prospecting_goal: undefined,
+    });
+    expect(response?.structuredContent.run_id).toBe("opt-run-1");
+    expect(response?.structuredContent.report_mode).toBe("prospecting_abridged");
+    expect(response?.content[0].text).toContain("Website optimization audit ready");
+    expect(response?.content[0].text).toContain("run_id: opt-run-1");
+    expect(response?.content[0].text).toContain(
+      "Report: https://robynn.ai/reports/opt-run-1"
+    );
+    expect(
+      configs.get("robynn_website_optimization_audit")?._meta?.ui?.resourceUri
+    ).toBe(REPORT_RESOURCE_URIS.websiteAudit);
+  });
+
+  it("polls website optimization audit status and includes pending instructions", async () => {
+    const { server, handlers } = createServerHarness();
+    const client = {
+      websiteAudit: vi.fn(),
+      websiteAuditStatus: vi.fn(),
+      websiteStrategy: vi.fn(),
+      websiteAuditV2: vi.fn(),
+      websiteAuditV2Status: vi.fn(),
+      websiteOptimizationAudit: vi.fn(),
+      websiteOptimizationAuditStatus: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          summary: "Website optimization audit still running",
+          status: "pending",
+          website_url: "https://acme.test",
+          poll_after_seconds: 5,
+          artifacts: {},
+          recommended_actions: [],
+          next_steps: [],
+        },
+      }),
+    };
+
+    registerWebsiteTools(server as never, client as never);
+
+    const response = await handlers
+      .get("robynn_website_optimization_audit_status")
+      ?.({
+        run_id: "opt-run-1",
+      });
+
+    expect(client.websiteOptimizationAuditStatus).toHaveBeenCalledWith({
+      run_id: "opt-run-1",
+    });
+    expect(response?.structuredContent.run_id).toBe("opt-run-1");
+    expect(response?.structuredContent.status).toBe("pending");
+    expect(response?.content[0].text).toContain(
+      "Website optimization audit still running"
+    );
+    expect(response?.content[0].text).toContain("run_id: opt-run-1");
+    expect(response?.content[0].text).toContain(
+      "robynn_website_optimization_audit_status"
+    );
+  });
+
   it("returns an MCP error result on upstream failure", async () => {
     const { server, handlers } = createServerHarness();
     const client = {
