@@ -292,6 +292,40 @@ function createFullMockClient() {
         recommendations: [],
       },
     }),
+    websiteOptimizationAudit: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        summary: "Website optimization audit started",
+        status: "pending",
+        artifacts: {},
+        recommended_actions: [],
+        next_steps: [],
+        run_id: "22222222-2222-4222-8222-222222222222",
+        website_url: "https://acme.test",
+        audit_depth: "top_level",
+        report_mode: "prospecting_abridged",
+        prospecting_brief: {
+          websiteHealthVerdict: {
+            label: "mixed",
+            summary: "The site has visible SEO and conversion opportunities.",
+          },
+        },
+      },
+    }),
+    websiteOptimizationAuditStatus: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        summary: "Website optimization audit still running",
+        status: "pending",
+        artifacts: {},
+        recommended_actions: [],
+        next_steps: [],
+        run_id: "22222222-2222-4222-8222-222222222222",
+        website_url: "https://acme.test",
+        audit_depth: "top_level",
+        report_mode: "prospecting_abridged",
+      },
+    }),
     websiteStrategy: vi.fn().mockResolvedValue({
       success: true,
       data: {
@@ -494,11 +528,11 @@ function registerAllTools(
 }
 
 describe("all tools registration", () => {
-  it("registers exactly 33 tools", () => {
+  it("registers exactly 35 tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(33);
+    expect(handlers.size).toBe(35);
   });
 
   it("registers the expected tool names", () => {
@@ -531,6 +565,8 @@ describe("all tools registration", () => {
       "robynn_website_audit_status",
       "robynn_website_audit_v2",
       "robynn_website_audit_v2_status",
+      "robynn_website_optimization_audit",
+      "robynn_website_optimization_audit_status",
       "robynn_website_strategy",
       "robynn_capabilities",
       "robynn_brand_source_add",
