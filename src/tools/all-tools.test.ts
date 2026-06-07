@@ -379,6 +379,70 @@ function createFullMockClient() {
               },
             ],
           },
+          {
+            provider_key: "highlevel",
+            display_name: "HighLevel",
+            status: "active",
+            default_connection: {
+              id: "conn-ghl-1",
+              display_name: "Default location",
+              status: "active",
+              health_status: "healthy",
+            },
+            read_actions: [
+              {
+                action_key: "highlevel.list_contacts",
+                label: "List contacts",
+                description: "Read contacts from HighLevel.",
+                result_kind: "list",
+                input_schema: { type: "object", properties: {}, required: [] },
+                example_prompts: ["Show my HighLevel contacts."],
+              },
+              {
+                action_key: "highlevel.list_opportunities",
+                label: "List opportunities",
+                description: "Read opportunities from HighLevel.",
+                result_kind: "list",
+                input_schema: { type: "object", properties: {}, required: [] },
+                example_prompts: ["Which HighLevel opportunities are open?"],
+              },
+              {
+                action_key: "highlevel.list_conversations",
+                label: "List conversations",
+                description: "Read HighLevel conversation metadata.",
+                result_kind: "list",
+                input_schema: { type: "object", properties: {}, required: [] },
+                example_prompts: ["List recent HighLevel conversations."],
+              },
+              {
+                action_key: "highlevel.list_conversation_messages",
+                label: "List conversation messages",
+                description:
+                  "Read messages for a specific HighLevel conversation id.",
+                result_kind: "list",
+                input_schema: { type: "object", properties: {}, required: [] },
+                example_prompts: [
+                  "Read messages for this HighLevel conversation id.",
+                ],
+              },
+              {
+                action_key: "highlevel.list_email_templates",
+                label: "List email templates",
+                description: "Read HighLevel email templates.",
+                result_kind: "list",
+                input_schema: { type: "object", properties: {}, required: [] },
+                example_prompts: ["Which HighLevel email templates exist?"],
+              },
+              {
+                action_key: "highlevel.list_bulk_action_campaigns",
+                label: "List bulk action campaigns",
+                description: "Read HighLevel bulk action campaigns.",
+                result_kind: "list",
+                input_schema: { type: "object", properties: {}, required: [] },
+                example_prompts: ["List HighLevel bulk action campaigns."],
+              },
+            ],
+          },
         ],
       },
     }),
@@ -571,6 +635,21 @@ describe("connector tool guidance", () => {
     expect(
       toolMetadata.get("robynn_query_connected_app")?.description,
     ).toContain("read-only");
+    expect(
+      toolMetadata.get("robynn_connected_apps")?.description,
+    ).toContain("HighLevel contacts");
+    expect(
+      toolMetadata.get("robynn_connected_app_capabilities")?.description,
+    ).toContain("highlevel.list_email_templates");
+    expect(
+      toolMetadata.get("robynn_query_connected_app")?.description,
+    ).toContain("highlevel.list_bulk_action_campaigns");
+    expect(
+      toolMetadata.get("robynn_connected_app_action")?.description,
+    ).toContain("highlevel.publish_email_template");
+    expect(
+      toolMetadata.get("robynn_connected_app_action")?.description,
+    ).toContain("write_confirmed=true");
   });
 });
 
@@ -630,8 +709,19 @@ describe("all tools success path", () => {
   it("robynn_connected_apps returns connected app summaries", async () => {
     setup();
     const res = await handlers.get("robynn_connected_apps")!({});
-    expect(res.structuredContent.count).toBe(1);
+    expect(res.structuredContent.count).toBe(2);
     expect(res.structuredContent.providers[0].provider_key).toBe("hubspot");
+    expect(res.structuredContent.providers[1].provider_key).toBe("highlevel");
+    expect(res.structuredContent.providers[1].read_actions.map(
+      (action: { action_key: string }) => action.action_key,
+    )).toEqual([
+      "highlevel.list_contacts",
+      "highlevel.list_opportunities",
+      "highlevel.list_conversations",
+      "highlevel.list_conversation_messages",
+      "highlevel.list_email_templates",
+      "highlevel.list_bulk_action_campaigns",
+    ]);
     expect(client.getConnectedAppCapabilities).toHaveBeenCalledWith();
   });
 
