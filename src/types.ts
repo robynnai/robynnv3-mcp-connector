@@ -367,6 +367,30 @@ export interface BrandReflectionsResult extends IntelligenceToolResultBase {
   recent_reflections: ReflectionItem[];
 }
 
+export interface TriggerBrandReflectionsRequest {
+  lookback_hours?: number;
+  limit?: number;
+  dry_run?: boolean;
+}
+
+export interface TriggerBrandReflectionsRuleItem {
+  id: string;
+  rule_number?: number | null;
+  rule_text: string;
+  accepted_at: string;
+  source_changelog_id?: string | null;
+}
+
+export interface TriggerBrandReflectionsResult extends IntelligenceToolResultBase {
+  patterns_detected: number;
+  patterns_queued: number;
+  changes_analyzed: number;
+  reflections: ReflectionItem[];
+  newly_accepted_rules: TriggerBrandReflectionsRuleItem[];
+  bulleted_summary: string;
+  cooldown_ends_at?: string;
+}
+
 export interface PublishBrandBookHtmlRequest {
   theme?: string;
   include_private_sections?: boolean;
