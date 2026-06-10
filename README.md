@@ -62,6 +62,7 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 | `robynn_brand_book_gap_analysis` | Brand book | Direct `robynnv3` brand-book adapter logic | No |
 | `robynn_brand_book_strategy` | Brand book | Direct `robynnv3` brand-book adapter logic | Yes |
 | `robynn_brand_reflections` | Brand book | Direct `robynnv3` changelog/reflection query logic | No |
+| `robynn_trigger_brand_reflections` | Brand book | `robynnv3` MCP-safe trigger route running the aggregate analyser on demand (5-min per-org cooldown) | No |
 | `robynn_publish_brand_book_html` | Brand book | Direct `robynnv3` export aggregation and HTML generation | No |
 | `robynn_website_audit` | Website intelligence | `robynnv3` prospect-audit flow -> LangGraph `cmo_audit_v1`, returning the unlisted designed `/audit/{slug}/{token}` page | Yes |
 | `robynn_website_audit_status` | Website intelligence | Polls the prospect audit row/run created by `robynn_website_audit` until the designed audit page has report data and download artifacts | Yes |

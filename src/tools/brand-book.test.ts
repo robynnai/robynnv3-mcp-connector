@@ -43,6 +43,7 @@ describe("registerBrandBookTools", () => {
       brandBookGapAnalysis: vi.fn(),
       brandBookStrategy: vi.fn(),
       brandReflections: vi.fn(),
+      triggerBrandReflections: vi.fn(),
       publishBrandBookHtml: vi.fn(),
     };
 
@@ -69,6 +70,7 @@ describe("registerBrandBookTools", () => {
       brandBookGapAnalysis: vi.fn(),
       brandBookStrategy: vi.fn(),
       brandReflections: vi.fn(),
+      triggerBrandReflections: vi.fn(),
       publishBrandBookHtml: vi.fn(),
     };
 
@@ -77,5 +79,75 @@ describe("registerBrandBookTools", () => {
     const response = await handlers.get("robynn_brand_book_status")?.({});
 
     expect(response?.isError).toBe(true);
+  });
+
+  it("returns the bulleted summary for robynn_trigger_brand_reflections", async () => {
+    const { server, handlers, configs } = createServerHarness();
+    const client = {
+      brandBookStatus: vi.fn(),
+      brandBookGapAnalysis: vi.fn(),
+      brandBookStrategy: vi.fn(),
+      brandReflections: vi.fn(),
+      triggerBrandReflections: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          summary: "1 reflection surfaced",
+          status: "success",
+          artifacts: { lookback_hours: 24, limit: 10, dry_run: false },
+          recommended_actions: [],
+          next_steps: [],
+          patterns_detected: 3,
+          patterns_queued: 1,
+          changes_analyzed: 5,
+          reflections: [],
+          newly_accepted_rules: [],
+          bulleted_summary: "- New reflection: voice drift detected",
+        },
+      }),
+      publishBrandBookHtml: vi.fn(),
+    };
+
+    registerBrandBookTools(server as never, client as never);
+
+    const response = await handlers
+      .get("robynn_trigger_brand_reflections")
+      ?.({ lookback_hours: 24, limit: 10, dry_run: false });
+
+    expect(client.triggerBrandReflections).toHaveBeenCalledWith({
+      lookback_hours: 24,
+      limit: 10,
+      dry_run: false,
+    });
+    expect(response?.content[0].text).toBe(
+      "- New reflection: voice drift detected",
+    );
+    expect(response?.structuredContent.patterns_detected).toBe(3);
+    expect(
+      configs.get("robynn_trigger_brand_reflections")?.annotations?.readOnlyHint,
+    ).toBe(false);
+  });
+
+  it("surfaces cooldown errors from robynn_trigger_brand_reflections", async () => {
+    const { server, handlers } = createServerHarness();
+    const client = {
+      brandBookStatus: vi.fn(),
+      brandBookGapAnalysis: vi.fn(),
+      brandBookStrategy: vi.fn(),
+      brandReflections: vi.fn(),
+      triggerBrandReflections: vi.fn().mockResolvedValue({
+        success: false,
+        error: "Rate limited. Please wait before triggering reflections again",
+      }),
+      publishBrandBookHtml: vi.fn(),
+    };
+
+    registerBrandBookTools(server as never, client as never);
+
+    const response = await handlers
+      .get("robynn_trigger_brand_reflections")
+      ?.({});
+
+    expect(response?.isError).toBe(true);
+    expect(response?.content[0].text).toContain("Rate limited");
   });
 });

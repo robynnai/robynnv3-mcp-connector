@@ -16,6 +16,8 @@ import type {
   BrandBookStrategyResult,
   BrandReflectionsRequest,
   BrandReflectionsResult,
+  TriggerBrandReflectionsRequest,
+  TriggerBrandReflectionsResult,
   PublishBrandBookHtmlRequest,
   PublishBrandBookHtmlResult,
   WebsiteAuditRequest,
@@ -342,6 +344,16 @@ export class RobynnClient {
         limit: payload.limit,
       })
     );
+  }
+
+  /** Manually trigger the brand reflection pipeline for the caller's org */
+  async triggerBrandReflections(
+    payload: TriggerBrandReflectionsRequest = {}
+  ): Promise<RobynnApiResponse<TriggerBrandReflectionsResult>> {
+    return this.fetch("/api/cli/mcp/brand-book/trigger-reflections", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
   }
 
   /** Generate an HTML brand book artifact through the MCP-safe API route */

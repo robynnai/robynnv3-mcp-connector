@@ -213,6 +213,70 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
 
   registerAppTool(
     server,
+    "robynn_trigger_brand_reflections",
+    {
+      description:
+        "Manually trigger the nightly brand-reflection pipeline for the caller's organization. Pulls the latest brand-hub docs, runs aggregate pattern analysis, and returns a bulleted summary of new reflections plus any rules accepted in the lookback window. Subject to a 5-minute per-org cooldown.",
+      inputSchema: {
+        lookback_hours: z
+          .number()
+          .int()
+          .min(1)
+          .max(168)
+          .optional()
+          .describe("How many hours of changelog history to analyze (default 24, max 168)"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(25)
+          .optional()
+          .describe("Maximum reflections to return in the response (default 10)"),
+        dry_run: z
+          .boolean()
+          .optional()
+          .describe("Run the full analysis but skip persisting new changelog entries"),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+      _meta: {
+        ui: {
+          resourceUri: REPORT_RESOURCE_URIS.brandBookStatus,
+          visibility: ["model"],
+        },
+      },
+    },
+    async ({ lookback_hours, limit, dry_run }) => {
+      try {
+        const result = await client.triggerBrandReflections({
+          lookback_hours,
+          limit,
+          dry_run,
+        });
+
+        if (!result.success || !result.data) {
+          return toErrorResult(result.error || "Trigger brand reflections failed");
+        }
+
+        const data = result.data as unknown as Record<string, unknown>;
+        const summary =
+          (data.bulleted_summary as string) ||
+          (data.summary as string) ||
+          undefined;
+        return toSuccessResult(data, summary);
+      } catch (err) {
+        return toErrorResult(
+          `Error triggering brand reflections: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
     "robynn_publish_brand_book_html",
     {
       description:
