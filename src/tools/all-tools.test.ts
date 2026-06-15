@@ -210,6 +210,22 @@ function createFullMockClient() {
         recent_reflections: [],
       },
     }),
+    triggerBrandReflections: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        summary: "1 reflection surfaced",
+        status: "success",
+        artifacts: { lookback_hours: 24, limit: 10, dry_run: false },
+        recommended_actions: [],
+        next_steps: [],
+        patterns_detected: 2,
+        patterns_queued: 1,
+        changes_analyzed: 4,
+        reflections: [{ id: "r1", doc_name: "voice", operation: "update" }],
+        newly_accepted_rules: [],
+        bulleted_summary: "- Voice drift detected across recent docs",
+      },
+    }),
     publishBrandBookHtml: vi.fn().mockResolvedValue({
       success: true,
       data: {
@@ -562,7 +578,7 @@ describe("all tools registration", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(33);
+    expect(handlers.size).toBe(34);
   });
 
   it("registers the expected tool names", () => {
@@ -587,6 +603,7 @@ describe("all tools registration", () => {
       "robynn_brand_book_gap_analysis",
       "robynn_brand_book_strategy",
       "robynn_brand_reflections",
+      "robynn_trigger_brand_reflections",
       "robynn_publish_brand_book_html",
       "robynn_cmo_agent",
       "robynn_campaign_creator",
@@ -948,6 +965,15 @@ describe("all tools success path", () => {
     expect(res.structuredContent.pending_reflections).toHaveLength(1);
   });
 
+  it("robynn_trigger_brand_reflections returns the bulleted summary", async () => {
+    setup();
+    const res = await handlers.get("robynn_trigger_brand_reflections")!({});
+    expect(res.content[0].text).toBe(
+      "- Voice drift detected across recent docs",
+    );
+    expect(res.structuredContent.patterns_detected).toBe(2);
+  });
+
   it("robynn_publish_brand_book_html returns export data", async () => {
     setup();
     const res = await handlers.get("robynn_publish_brand_book_html")!({});
@@ -1130,6 +1156,7 @@ function getMinimalArgs(toolName: string): Record<string, unknown> {
     robynn_brand_book_gap_analysis: {},
     robynn_brand_book_strategy: {},
     robynn_brand_reflections: {},
+    robynn_trigger_brand_reflections: {},
     robynn_publish_brand_book_html: {},
     robynn_website_audit: {},
     robynn_website_audit_status: {
