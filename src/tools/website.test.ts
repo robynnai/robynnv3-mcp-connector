@@ -192,4 +192,98 @@ describe("registerWebsiteTools", () => {
 
     expect(response?.isError).toBe(true);
   });
+
+  it("registers and calls website audit orchestrator", async () => {
+    const { server, handlers, configs } = createServerHarness();
+    const client = {
+      websiteAuditOrchestrator: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          run_id: "11111111-1111-4111-8111-111111111111",
+          scan_id: "11111111-1111-4111-8111-111111111111",
+          status: "pending",
+          version: "orchestrator_v1",
+          audit_depth: "top_level",
+          report_mode: "full",
+          summary: "Started website audit orchestrator.",
+          next_steps: ["Poll status."],
+        },
+      }),
+      websiteAuditOrchestratorStatus: vi.fn(),
+    };
+
+    registerWebsiteTools(server as never, client as never);
+
+    const response = await handlers.get("robynn_website_audit_orchestrator")?.({
+      website_url: "https://example.com",
+      audit_depth: "top_level",
+      max_pages: 25,
+    });
+
+    expect(client.websiteAuditOrchestrator).toHaveBeenCalledWith({
+      website_url: "https://example.com",
+      audit_depth: "top_level",
+      max_pages: 25,
+    });
+    expect(response?.structuredContent.version).toBe("orchestrator_v1");
+    expect(response?.content[0].text).toContain(
+      "Started website audit orchestrator."
+    );
+    expect(
+      configs.get("robynn_website_audit_orchestrator")?.annotations
+        ?.readOnlyHint
+    ).toBe(true);
+  });
+
+  it("polls website audit orchestrator status with pagination", async () => {
+    const { server, handlers } = createServerHarness();
+    const client = {
+      websiteAuditOrchestrator: vi.fn(),
+      websiteAuditOrchestratorStatus: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          run_id: "11111111-1111-4111-8111-111111111111",
+          scan_id: "11111111-1111-4111-8111-111111111111",
+          status: "completed",
+          version: "orchestrator_v1",
+          audit_depth: "top_level",
+          report_mode: "full",
+          summary: "Website audit completed.",
+          page_reports: [],
+          accepted_recommendations: [],
+          pagination: {
+            page_reports: {
+              limit: 2,
+              returned: 2,
+              total: 3,
+              next_cursor: "2",
+              has_more: true,
+            },
+          },
+        },
+      }),
+    };
+
+    registerWebsiteTools(server as never, client as never);
+
+    const response = await handlers
+      .get("robynn_website_audit_orchestrator_status")
+      ?.({
+        run_id: "11111111-1111-4111-8111-111111111111",
+        page_limit: 2,
+        page_cursor: "2",
+        include_sections: ["page_reports"],
+      });
+
+    expect(client.websiteAuditOrchestratorStatus).toHaveBeenCalledWith({
+      run_id: "11111111-1111-4111-8111-111111111111",
+      page_limit: 2,
+      page_cursor: "2",
+      include_sections: ["page_reports"],
+    });
+    expect(response?.structuredContent.pagination).toBeDefined();
+    expect(response?.content[0].text).toContain(
+      "Large arrays may be paginated"
+    );
+  });
 });
