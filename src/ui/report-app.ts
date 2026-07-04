@@ -11,7 +11,8 @@ export type ReportType =
   | "brandBookStatus"
   | "brandBookStrategy"
   | "websiteAudit"
-  | "websiteStrategy";
+  | "websiteStrategy"
+  | "weeklyVisibility";
 
 export const REPORT_RESOURCE_URIS: Record<ReportType, string> = {
   geo: "ui://reports/geo.html",
@@ -21,6 +22,7 @@ export const REPORT_RESOURCE_URIS: Record<ReportType, string> = {
   brandBookStrategy: "ui://reports/brand-book-strategy.html",
   websiteAudit: "ui://reports/website-audit.html",
   websiteStrategy: "ui://reports/website-strategy.html",
+  weeklyVisibility: "ui://reports/weekly-visibility.html",
 };
 
 interface ReportAppDefinition {
@@ -65,6 +67,11 @@ const REPORT_DEFINITIONS: ReportAppDefinition[] = [
     title: "Robynn Website Strategy",
     description: "Interactive website improvement strategy",
   },
+  {
+    reportType: "weeklyVisibility",
+    title: "Robynn Weekly SEO/GEO Report",
+    description: "Interactive weekly SEO and GEO visibility report",
+  },
 ];
 
 export function getPublicBaseUrl(rawUrl?: string): string {
@@ -73,6 +80,28 @@ export function getPublicBaseUrl(rawUrl?: string): string {
 
 export function getReportAssetUrl(publicBaseUrl: string): string {
   return `${getPublicBaseUrl(publicBaseUrl)}/app-assets/report-app.js`;
+}
+
+function getReportToolName(reportType: ReportType): string {
+  switch (reportType) {
+    case "geo":
+      return "robynn_geo_analysis";
+    case "seo":
+      return "robynn_seo_opportunities";
+    case "battlecard":
+      return "robynn_competitive_battlecard";
+    case "brandBookStatus":
+      return "robynn_brand_book_status";
+    case "brandBookStrategy":
+      return "robynn_brand_book_strategy";
+    case "websiteAudit":
+      return "robynn_website_audit";
+    case "weeklyVisibility":
+      return "robynn_weekly_visibility_report";
+    case "websiteStrategy":
+    default:
+      return "robynn_website_strategy";
+  }
 }
 
 function escapeJsonForHtml(value: unknown): string {
@@ -464,20 +493,7 @@ export function buildReportAppHtml(params: {
     <script id="__robynn-report-config" type="application/json">${escapeJsonForHtml({
       reportType,
       title: definition?.title ?? "Robynn Report",
-      toolName:
-        reportType === "geo"
-          ? "robynn_geo_analysis"
-          : reportType === "seo"
-            ? "robynn_seo_opportunities"
-            : reportType === "battlecard"
-              ? "robynn_competitive_battlecard"
-              : reportType === "brandBookStatus"
-                ? "robynn_brand_book_status"
-                : reportType === "brandBookStrategy"
-                  ? "robynn_brand_book_strategy"
-                  : reportType === "websiteAudit"
-                    ? "robynn_website_audit"
-                    : "robynn_website_strategy",
+      toolName: getReportToolName(reportType),
     })}</script>
     <script type="module" src="${assetUrl}"></script>
   </body>

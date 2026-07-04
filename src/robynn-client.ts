@@ -37,6 +37,8 @@ import type {
   WebsiteStrategyResult,
   ContentPlanRequest,
   ContentPlanResult,
+  WeeklyVisibilityReportRequest,
+  WeeklyVisibilityReportResult,
   GeoAnalysisRequest,
   GeoAnalysisResult,
   CompetitiveBattlecardRequest,
@@ -489,6 +491,16 @@ export class RobynnClient {
     payload: ContentPlanRequest
   ): Promise<RobynnApiResponse<ContentPlanResult>> {
     return this.fetch("/api/cli/mcp/content-plan", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Build a weekly SEO/GEO visibility report for a connected website */
+  async weeklyVisibilityReport(
+    payload: WeeklyVisibilityReportRequest
+  ): Promise<RobynnApiResponse<WeeklyVisibilityReportResult>> {
+    return this.fetch("/api/cli/mcp/weekly-visibility-report", {
       method: "POST",
       body: JSON.stringify(payload),
     }, POLL_TIMEOUT_MS);

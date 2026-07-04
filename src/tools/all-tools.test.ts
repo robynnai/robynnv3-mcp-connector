@@ -14,6 +14,7 @@ import { registerCampaignTools } from "./campaign";
 import { registerCmoAgentTools } from "./cmo-agent";
 import { registerWebsiteTools } from "./website";
 import { registerContentPlanTools } from "./content-plan";
+import { registerWeeklyVisibilityTools } from "./weekly-visibility";
 import { registerConnectorTools } from "./connectors";
 import { registerCapabilityTools } from "./capabilities";
 import { registerBrandOperationTools } from "./brand-operations";
@@ -407,6 +408,51 @@ function createFullMockClient() {
         existing_content_decisions: [],
       },
     }),
+    weeklyVisibilityReport: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        summary: "Weekly visibility improved.",
+        status: "success",
+        generated_at: "2026-07-04T00:00:00.000Z",
+        website: {
+          id: "11111111-1111-4111-8111-111111111111",
+          label: "Primary website",
+          base_url: "https://acme.test",
+          hostname: "acme.test",
+        },
+        range: {
+          current_start: "2026-06-28",
+          current_end: "2026-07-04",
+          prior_start: "2026-06-21",
+          prior_end: "2026-06-27",
+        },
+        source_freshness: {},
+        missing_sources: [],
+        seo_kpis: {
+          organic_clicks: 42,
+          organic_impressions: 1000,
+          ctr: 0.042,
+          average_position: 8.5,
+          estimated_traffic: 42,
+          organic_keywords_count: 12,
+        },
+        keyword_table: [],
+        page_table: [],
+        non_ranking_pages: [],
+        striking_distance_keywords: [],
+        geo_kpis: {
+          citation_visibility: 25,
+          ai_overview_share: 10,
+          prompts_checked: 5,
+          brand_mentions: 2,
+          competitor_mentions: 1,
+          model_scores: [],
+        },
+        geo_prompt_table: [],
+        recommendations: [],
+        next_steps: [],
+      },
+    }),
     cmoAgent: vi.fn().mockResolvedValue({
       success: true,
       data: {
@@ -650,6 +696,7 @@ function registerAllTools(
   registerCampaignTools(server, client as never);
   registerWebsiteTools(server, client as never);
   registerContentPlanTools(server, client as never);
+  registerWeeklyVisibilityTools(server, client as never);
   registerCapabilityTools(server, client as never);
   registerBrandOperationTools(server, client as never);
   registerConnectorTools(server, client as never);
@@ -658,11 +705,11 @@ function registerAllTools(
 }
 
 describe("all tools registration", () => {
-  it("registers exactly 39 tools", () => {
+  it("registers exactly 40 tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(39);
+    expect(handlers.size).toBe(40);
   });
 
   it("registers the expected tool names", () => {
@@ -702,6 +749,7 @@ describe("all tools registration", () => {
       "robynn_website_audit_orchestrator_status",
       "robynn_website_strategy",
       "robynn_content_plan",
+      "robynn_weekly_visibility_report",
       "robynn_capabilities",
       "robynn_brand_source_add",
       "robynn_brand_rebuild",
