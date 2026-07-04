@@ -409,6 +409,75 @@ describe("RobynnClient intelligence routes", () => {
     expect(result.success).toBe(true);
   });
 
+  it("posts weekly visibility report requests to the MCP-safe API route", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            summary: "weekly visibility",
+            status: "success",
+            generated_at: "2026-07-04T00:00:00.000Z",
+            website: {
+              id: "11111111-1111-4111-8111-111111111111",
+              label: "Primary website",
+              base_url: "https://acme.test",
+              hostname: "acme.test",
+            },
+            range: {
+              current_start: "2026-06-28",
+              current_end: "2026-07-04",
+              prior_start: "2026-06-21",
+              prior_end: "2026-06-27",
+            },
+            source_freshness: {},
+            missing_sources: [],
+            seo_kpis: {
+              organic_clicks: 10,
+              organic_impressions: 100,
+              ctr: 0.1,
+              average_position: 7,
+              estimated_traffic: 10,
+              organic_keywords_count: 3,
+            },
+            keyword_table: [],
+            page_table: [],
+            non_ranking_pages: [],
+            striking_distance_keywords: [],
+            geo_kpis: {
+              citation_visibility: 30,
+              ai_overview_share: 20,
+              prompts_checked: 5,
+              brand_mentions: 2,
+              competitor_mentions: 1,
+              model_scores: [],
+            },
+            geo_prompt_table: [],
+            recommendations: [],
+            next_steps: [],
+          },
+        }),
+      )
+    );
+
+    const client = new RobynnClient("https://robynn.test", "token-123");
+    const payload = {
+      website_id: "11111111-1111-4111-8111-111111111111",
+      week_start: "2026-06-28",
+      keyword_limit: 50,
+    };
+    const result = await client.weeklyVisibilityReport(payload);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/cli/mcp/weekly-visibility-report",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
   it("posts website optimization audit requests to the MCP-safe API route", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(

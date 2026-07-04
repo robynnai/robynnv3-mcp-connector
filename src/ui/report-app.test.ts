@@ -53,6 +53,7 @@ describe("report-app helpers", () => {
     expect(resources.has(REPORT_RESOURCE_URIS.brandBookStrategy)).toBe(true);
     expect(resources.has(REPORT_RESOURCE_URIS.websiteAudit)).toBe(true);
     expect(resources.has(REPORT_RESOURCE_URIS.websiteStrategy)).toBe(true);
+    expect(resources.has(REPORT_RESOURCE_URIS.weeklyVisibility)).toBe(true);
 
     const geoResource = resources.get(REPORT_RESOURCE_URIS.geo);
     const geoRead = await geoResource?.read();
@@ -71,5 +72,16 @@ describe("report-app helpers", () => {
 
     expect(html).toContain('"reportType":"brandBookStatus"');
     expect(html).toContain("Robynn Brand Book Status");
+  });
+
+  it("builds weekly visibility report HTML with the weekly report tool", () => {
+    const html = buildReportAppHtml({
+      reportType: "weeklyVisibility",
+      publicBaseUrl: "https://mcp.robynn.ai",
+    });
+
+    expect(html).toContain('"reportType":"weeklyVisibility"');
+    expect(html).toContain("Robynn Weekly SEO/GEO Report");
+    expect(html).toContain("robynn_weekly_visibility_report");
   });
 });

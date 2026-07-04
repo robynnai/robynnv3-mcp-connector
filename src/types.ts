@@ -89,6 +89,8 @@ export type CampaignToolName =
 
 export type ContentPlanToolName = "robynn_content_plan";
 
+export type WeeklyVisibilityToolName = "robynn_weekly_visibility_report";
+
 /** Shared status values for MCP intelligence responses */
 export type IntelligenceToolStatus =
   | "pending"
@@ -683,6 +685,127 @@ export interface ContentPlanResult {
   trace_id?: string | null;
   missing?: string[];
   next_step?: string;
+}
+
+export type WeeklyVisibilityStatus = "success" | "partial" | "missing_data";
+
+export interface WeeklyVisibilityReportRequest {
+  website_id: string;
+  week_start?: string;
+  keyword_limit?: number;
+  page_limit?: number;
+  include_recommendations?: boolean;
+}
+
+export interface WeeklyVisibilityWebsite {
+  id: string;
+  label: string;
+  base_url: string;
+  hostname: string;
+}
+
+export interface WeeklyVisibilityRange {
+  current_start: string;
+  current_end: string;
+  prior_start: string;
+  prior_end: string;
+}
+
+export interface WeeklyVisibilityRecommendation {
+  type:
+    | "refresh_page"
+    | "create_content"
+    | "improve_title_meta"
+    | "add_faq_schema"
+    | "strengthen_internal_links"
+    | "create_geo_answer_block"
+    | string;
+  title: string;
+  priority: "high" | "medium" | "low" | string;
+  rationale: string;
+  url?: string;
+  keyword?: string;
+  prompt?: string;
+}
+
+export interface WeeklyVisibilityKeywordRow {
+  keyword: string;
+  url: string;
+  clicks: number;
+  impressions: number;
+  ctr: number | null;
+  average_position: number | null;
+  prior_position: number | null;
+  position_delta: number | null;
+  status: "improved" | "declined" | "new" | "lost" | "flat" | string;
+}
+
+export interface WeeklyVisibilityPageRow {
+  url: string;
+  title: string | null;
+  ga4_pageviews: number;
+  gsc_clicks: number;
+  gsc_impressions: number;
+  ranking_keywords: string[];
+  winners: number;
+  losers: number;
+  content_action: string;
+}
+
+export interface WeeklyVisibilityGeoPromptRow {
+  prompt: string;
+  model: string | null;
+  brand_present: boolean;
+  cited_url: string | null;
+  cited_domain: string | null;
+  competitor_cited: boolean;
+  prior_delta: number | null;
+}
+
+export interface WeeklyVisibilityReportResult {
+  summary: string;
+  status: WeeklyVisibilityStatus;
+  generated_at: string;
+  website: WeeklyVisibilityWebsite;
+  range: WeeklyVisibilityRange;
+  source_freshness: Record<string, unknown>;
+  missing_sources: string[];
+  seo_kpis: {
+    organic_clicks: number;
+    organic_impressions: number;
+    ctr: number | null;
+    average_position: number | null;
+    estimated_traffic: number | null;
+    organic_keywords_count: number | null;
+  };
+  keyword_table: WeeklyVisibilityKeywordRow[];
+  page_table: WeeklyVisibilityPageRow[];
+  non_ranking_pages: Array<{
+    url: string;
+    title: string | null;
+    ga4_pageviews: number;
+    reason: string;
+  }>;
+  striking_distance_keywords: Array<{
+    keyword: string;
+    url: string;
+    impressions: number;
+    ctr: number | null;
+    average_position: number;
+  }>;
+  geo_kpis: {
+    citation_visibility: number | null;
+    ai_overview_share: number | null;
+    prompts_checked: number | null;
+    brand_mentions: number;
+    competitor_mentions: number;
+    model_scores: Array<{ model: string; score: number }>;
+  };
+  geo_prompt_table: WeeklyVisibilityGeoPromptRow[];
+  recommendations: WeeklyVisibilityRecommendation[];
+  recommended_actions?: WeeklyVisibilityRecommendation[];
+  artifacts?: Record<string, unknown>;
+  next_steps: string[];
 }
 
 export interface ConnectedAppReadAction {

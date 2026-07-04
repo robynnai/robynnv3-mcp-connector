@@ -133,6 +133,12 @@ export const REPORT_APP_SCRIPT = String.raw`
     return new Intl.NumberFormat().format(value);
   }
 
+  function formatPercent(value) {
+    if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+    const normalized = Math.abs(value) <= 1 ? value * 100 : value;
+    return new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(normalized) + '%';
+  }
+
   function summaryValue(label, value, tone) {
     return '<div class="summary-card' + (tone ? ' tone-' + tone : '') + '">' +
       '<div class="summary-label">' + escapeHtml(label) + '</div>' +
@@ -287,6 +293,104 @@ export const REPORT_APP_SCRIPT = String.raw`
         '<div class="section-head"><h3>Competitor comparison</h3></div>' +
         comparisonCards +
       '</section>';
+  }
+
+  function weeklyTable(title, columns, rows, emptyMessage) {
+    const body = rows.length
+      ? '<div class="table-shell"><table><thead><tr>' +
+          columns.map((column) => '<th>' + escapeHtml(column.label) + '</th>').join('') +
+          '</tr></thead><tbody>' +
+          rows.map((row) => '<tr>' +
+            columns.map((column) => '<td>' + escapeHtml(column.render(row)) + '</td>').join('') +
+          '</tr>').join('') +
+        '</tbody></table></div>'
+      : '<div class="empty-state">' + escapeHtml(emptyMessage) + '</div>';
+
+    return '<section class="report-section">' +
+      '<div class="section-head"><h3>' + escapeHtml(title) + '</h3></div>' +
+      body +
+    '</section>';
+  }
+
+  function renderWeeklyVisibilityReport(result) {
+    const seo = result && isObject(result.seo_kpis) ? result.seo_kpis : {};
+    const geo = result && isObject(result.geo_kpis) ? result.geo_kpis : {};
+    const keywordRows = normalizeObjectArray(result && result.keyword_table);
+    const pageRows = normalizeObjectArray(result && result.page_table);
+    const nonRankingPages = normalizeObjectArray(result && result.non_ranking_pages);
+    const strikingRows = normalizeObjectArray(result && result.striking_distance_keywords);
+    const promptRows = normalizeObjectArray(result && result.geo_prompt_table);
+    const website = result && isObject(result.website) ? result.website : {};
+    const range = result && isObject(result.range) ? result.range : {};
+
+    const nonRankingBody = nonRankingPages.length
+      ? '<div class="list-stack">' + nonRankingPages.slice(0, 12).map((page) => {
+          return '<article class="list-card">' +
+            '<h4>' + escapeHtml(page.url || 'Untitled page') + '</h4>' +
+            '<div class="meta-row"><span>GA4 pageviews ' + escapeHtml(formatNumber(page.ga4_pageviews)) + '</span></div>' +
+            (page.reason ? '<p>' + escapeHtml(page.reason) + '</p>' : '') +
+          '</article>';
+        }).join('') + '</div>'
+      : '<div class="empty-state">No non-ranking GA4 pages were returned.</div>';
+
+    return '<section class="report-section">' +
+        '<div class="section-head"><h3>SEO KPIs</h3><span class="pill">' + escapeHtml(website.label || website.hostname || 'Connected website') + '</span></div>' +
+        '<div class="summary-grid">' +
+          summaryValue('Organic clicks', formatNumber(seo.organic_clicks), 'success') +
+          summaryValue('Impressions', formatNumber(seo.organic_impressions), 'neutral') +
+          summaryValue('CTR', formatPercent(seo.ctr), 'neutral') +
+          summaryValue('Avg position', formatNumber(seo.average_position), 'neutral') +
+          summaryValue('Est. traffic', formatNumber(seo.estimated_traffic), 'neutral') +
+          summaryValue('Keywords', formatNumber(seo.organic_keywords_count), 'neutral') +
+        '</div>' +
+        '<div class="meta-row"><span>Current week ' + escapeHtml((range.current_start || '—') + ' to ' + (range.current_end || '—')) + '</span><span>Prior week ' + escapeHtml((range.prior_start || '—') + ' to ' + (range.prior_end || '—')) + '</span></div>' +
+      '</section>' +
+      weeklyTable('Keyword performance', [
+        { label: 'Keyword', render: (row) => row.keyword || '—' },
+        { label: 'URL', render: (row) => row.url || '—' },
+        { label: 'Clicks', render: (row) => formatNumber(row.clicks) },
+        { label: 'Impr.', render: (row) => formatNumber(row.impressions) },
+        { label: 'CTR', render: (row) => formatPercent(row.ctr) },
+        { label: 'Pos.', render: (row) => formatNumber(row.average_position) },
+        { label: 'Prior', render: (row) => formatNumber(row.prior_position) },
+        { label: 'Delta', render: (row) => formatNumber(row.position_delta) },
+        { label: 'Status', render: (row) => row.status || '—' },
+      ], keywordRows.slice(0, 50), 'No keyword rows were returned.') +
+      weeklyTable('Page performance', [
+        { label: 'Page', render: (row) => row.url || '—' },
+        { label: 'GA4 views', render: (row) => formatNumber(row.ga4_pageviews) },
+        { label: 'GSC clicks', render: (row) => formatNumber(row.gsc_clicks) },
+        { label: 'GSC impr.', render: (row) => formatNumber(row.gsc_impressions) },
+        { label: 'Keywords', render: (row) => normalizeList(row.ranking_keywords).slice(0, 3).join(', ') || '—' },
+        { label: 'W/L', render: (row) => formatNumber(row.winners) + '/' + formatNumber(row.losers) },
+        { label: 'Action', render: (row) => row.content_action || 'monitor' },
+      ], pageRows.slice(0, 50), 'No page rows were returned.') +
+      '<section class="report-section"><div class="section-head"><h3>Non-ranking pages</h3></div>' + nonRankingBody + '</section>' +
+      weeklyTable('Striking-distance keywords', [
+        { label: 'Keyword', render: (row) => row.keyword || '—' },
+        { label: 'URL', render: (row) => row.url || '—' },
+        { label: 'Impr.', render: (row) => formatNumber(row.impressions) },
+        { label: 'CTR', render: (row) => formatPercent(row.ctr) },
+        { label: 'Position', render: (row) => formatNumber(row.average_position) },
+      ], strikingRows.slice(0, 25), 'No striking-distance keywords were returned.') +
+      '<section class="report-section">' +
+        '<div class="section-head"><h3>GEO KPIs</h3></div>' +
+        '<div class="summary-grid">' +
+          summaryValue('Citation visibility', formatPercent(geo.citation_visibility), 'neutral') +
+          summaryValue('AI overview share', formatPercent(geo.ai_overview_share), 'neutral') +
+          summaryValue('Prompts checked', formatNumber(geo.prompts_checked), 'neutral') +
+          summaryValue('Brand mentions', formatNumber(geo.brand_mentions), 'success') +
+          summaryValue('Competitor mentions', formatNumber(geo.competitor_mentions), 'warning') +
+        '</div>' +
+      '</section>' +
+      weeklyTable('GEO prompt visibility', [
+        { label: 'Prompt', render: (row) => row.prompt || '—' },
+        { label: 'Model', render: (row) => row.model || '—' },
+        { label: 'Brand', render: (row) => row.brand_present ? 'present' : 'missing' },
+        { label: 'Cited URL/domain', render: (row) => row.cited_url || row.cited_domain || '—' },
+        { label: 'Competitor', render: (row) => row.competitor_cited ? 'yes' : 'no' },
+        { label: 'Delta', render: (row) => formatNumber(row.prior_delta) },
+      ], promptRows.slice(0, 50), 'No GEO prompt rows were returned.');
   }
 
   function renderBattlecardReport(result) {
@@ -571,6 +675,17 @@ export const REPORT_APP_SCRIPT = String.raw`
     '</div>';
   }
 
+  function buildWeeklyVisibilityForm(args) {
+    const includeRecommendations = !args || args.include_recommendations !== false;
+    return '<div class="form-grid">' +
+      '<label><span>Connected website ID</span><input name="website_id" value="' + escapeHtml(args && args.website_id ? args.website_id : '') + '" required /></label>' +
+      '<label><span>Week start</span><input name="week_start" placeholder="YYYY-MM-DD" value="' + escapeHtml(args && args.week_start ? args.week_start : '') + '" /></label>' +
+      '<label><span>Keyword rows</span><input name="keyword_limit" type="number" min="1" max="200" value="' + escapeHtml(args && args.keyword_limit ? args.keyword_limit : '50') + '" /></label>' +
+      '<label><span>Page rows</span><input name="page_limit" type="number" min="1" max="200" value="' + escapeHtml(args && args.page_limit ? args.page_limit : '50') + '" /></label>' +
+      '<label class="checkbox-row"><input type="checkbox" name="include_recommendations"' + (includeRecommendations ? ' checked' : '') + ' /><span>Include recommendations</span></label>' +
+    '</div>';
+  }
+
   function renderRerunForm() {
     const args = state.toolArgs || {};
     let body = '';
@@ -586,6 +701,8 @@ export const REPORT_APP_SCRIPT = String.raw`
       body = buildBrandBookStrategyForm(args);
     } else if (config.reportType === 'websiteAudit') {
       body = buildWebsiteAuditForm(args);
+    } else if (config.reportType === 'weeklyVisibility') {
+      body = buildWeeklyVisibilityForm(args);
     } else {
       body = buildWebsiteStrategyForm(args);
     }
@@ -663,6 +780,18 @@ export const REPORT_APP_SCRIPT = String.raw`
       };
     }
 
+    if (config.reportType === 'weeklyVisibility') {
+      const keywordLimit = Number.parseInt(String(formData.get('keyword_limit') || ''), 10);
+      const pageLimit = Number.parseInt(String(formData.get('page_limit') || ''), 10);
+      return {
+        website_id: String(formData.get('website_id') || '').trim(),
+        week_start: String(formData.get('week_start') || '').trim() || undefined,
+        keyword_limit: Number.isFinite(keywordLimit) ? keywordLimit : undefined,
+        page_limit: Number.isFinite(pageLimit) ? pageLimit : undefined,
+        include_recommendations: formData.get('include_recommendations') === 'on',
+      };
+    }
+
     return {
       website_url: String(formData.get('website_url') || '').trim() || undefined,
       primary_goal: String(formData.get('primary_goal') || '').trim() || undefined,
@@ -676,6 +805,11 @@ export const REPORT_APP_SCRIPT = String.raw`
     const status = result && result.status ? String(result.status) : 'pending';
     const artifacts = result && isObject(result.artifacts) ? result.artifacts : {};
     const artifactCount = Object.keys(artifacts).length;
+    const actions = Array.isArray(result && result.recommended_actions)
+      ? result.recommended_actions
+      : Array.isArray(result && result.recommendations)
+        ? result.recommendations
+        : [];
 
     return '<section class="hero-card">' +
       '<div class="hero-meta"><span class="eyebrow">Robynn intelligence report</span><span class="status-badge">' + escapeHtml(status) + '</span></div>' +
@@ -684,7 +818,7 @@ export const REPORT_APP_SCRIPT = String.raw`
       '<div class="summary-grid">' +
         summaryValue('Report type', config.reportType ? String(config.reportType).toUpperCase() : 'Report', 'neutral') +
         summaryValue('Artifacts', formatNumber(artifactCount), 'neutral') +
-        summaryValue('Actions', formatNumber(Array.isArray(result && result.recommended_actions) ? result.recommended_actions.length : 0), 'neutral') +
+        summaryValue('Actions', formatNumber(actions.length), 'neutral') +
       '</div>' +
     '</section>';
   }
@@ -704,6 +838,7 @@ export const REPORT_APP_SCRIPT = String.raw`
     if (config.reportType === 'brandBookStatus') return renderBrandBookStatusReport(state.result);
     if (config.reportType === 'brandBookStrategy') return renderBrandBookStrategyReport(state.result);
     if (config.reportType === 'websiteAudit') return renderWebsiteAuditReport(state.result);
+    if (config.reportType === 'weeklyVisibility') return renderWeeklyVisibilityReport(state.result);
     return renderWebsiteStrategyReport(state.result);
   }
 
@@ -711,7 +846,7 @@ export const REPORT_APP_SCRIPT = String.raw`
     if (!root) return;
     root.innerHTML = topSummary() + renderRerunForm() + reportBody() +
       '<section class="report-section"><div class="section-head"><h3>Recommended actions</h3></div>' +
-      recommendedActions(state.result && state.result.recommended_actions) +
+      recommendedActions(state.result && (state.result.recommended_actions || state.result.recommendations)) +
       '</section>';
 
     bindEvents();
