@@ -43,11 +43,11 @@ fi
 chmod 700 "$ROOT/.beads" 2>/dev/null || true
 git -C "$ROOT" config --local beads.role maintainer || true
 
-if ! bd ready --json >/tmp/robynn-mcp-bd-ready.json 2>/tmp/robynn-mcp-bd-ready.err; then
+if ! bd ready --readonly --json >/tmp/robynn-mcp-bd-ready.json 2>/tmp/robynn-mcp-bd-ready.err; then
   printf 'bd ready failed; bootstrapping from tracked Beads data\n'
   bd bootstrap --yes || status=1
 fi
 
-bd ready --json || status=1
+bd ready --readonly --json || status=1
 
 exit "$status"
