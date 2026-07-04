@@ -26,12 +26,17 @@ import type {
   WebsiteAuditV2Request,
   WebsiteAuditV2Result,
   WebsiteAuditV2StatusRequest,
+  WebsiteOptimizationAuditRequest,
+  WebsiteOptimizationAuditResult,
+  WebsiteOptimizationAuditStatusRequest,
   WebsiteAuditOrchestratorRequest,
   WebsiteAuditOrchestratorStartResult,
   WebsiteAuditOrchestratorStatusRequest,
   WebsiteAuditOrchestratorStatusResult,
   WebsiteStrategyRequest,
   WebsiteStrategyResult,
+  ContentPlanRequest,
+  ContentPlanResult,
   GeoAnalysisRequest,
   GeoAnalysisResult,
   CompetitiveBattlecardRequest,
@@ -426,6 +431,29 @@ export class RobynnClient {
     );
   }
 
+  /** Start a Website Optimization V3 audit MVP run */
+  async websiteOptimizationAudit(
+    payload: WebsiteOptimizationAuditRequest
+  ): Promise<RobynnApiResponse<WebsiteOptimizationAuditResult>> {
+    return this.fetch("/api/cli/mcp/website/optimization-audit", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Poll a Website Optimization V3 audit MVP run */
+  async websiteOptimizationAuditStatus(
+    payload: WebsiteOptimizationAuditStatusRequest
+  ): Promise<RobynnApiResponse<WebsiteOptimizationAuditResult>> {
+    return this.fetch(
+      this.withQuery("/api/cli/mcp/website/optimization-audit/status", {
+        run_id: payload.run_id,
+      }),
+      {},
+      POLL_TIMEOUT_MS
+    );
+  }
+
   /** Start a read-only Website Audit Orchestrator run */
   async websiteAuditOrchestrator(
     payload: WebsiteAuditOrchestratorRequest
@@ -451,6 +479,16 @@ export class RobynnClient {
     payload: WebsiteStrategyRequest
   ): Promise<RobynnApiResponse<WebsiteStrategyResult>> {
     return this.fetch("/api/cli/mcp/website/strategy", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Create a Content Studio plan through the MCP-safe Content Planner V2 route */
+  async contentPlan(
+    payload: ContentPlanRequest
+  ): Promise<RobynnApiResponse<ContentPlanResult>> {
+    return this.fetch("/api/cli/mcp/content-plan", {
       method: "POST",
       body: JSON.stringify(payload),
     }, POLL_TIMEOUT_MS);

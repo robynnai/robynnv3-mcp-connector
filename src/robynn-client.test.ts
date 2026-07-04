@@ -373,6 +373,113 @@ describe("RobynnClient intelligence routes", () => {
     );
     expect(result.success).toBe(true);
   });
+
+  it("posts content planner requests to the MCP-safe API route", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            summary: "content plan",
+            status: "success",
+            planner_version: "v2",
+            project_id: "project-1",
+            content_plan_rows: [],
+            existing_content_decisions: [],
+          },
+        })
+      )
+    );
+
+    const client = new RobynnClient("https://robynn.test", "token-123");
+    const payload = {
+      project_id: "project-1",
+      planning_goal: "Build a 90-day plan",
+      max_rows: 12,
+    };
+    const result = await client.contentPlan(payload);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/cli/mcp/content-plan",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("posts website optimization audit requests to the MCP-safe API route", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            summary: "optimization audit",
+            status: "success",
+            run_id: "opt-run-1",
+            website_url: "https://acme.test",
+            artifacts: {},
+            recommended_actions: [],
+            next_steps: [],
+          },
+        })
+      )
+    );
+
+    const client = new RobynnClient("https://robynn.test", "token-123");
+    const payload = {
+      website_url: "https://acme.test",
+      audit_depth: "top_level" as const,
+      report_mode: "prospecting_abridged" as const,
+      account_name: "Acme",
+      industry: "B2B SaaS",
+      prospecting_goal: "Find conversion gaps",
+    };
+    const result = await client.websiteOptimizationAudit(payload);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/cli/mcp/website/optimization-audit",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("calls the website optimization audit status route with run_id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            summary: "optimization audit pending",
+            status: "pending",
+            run_id: "opt-run-1",
+            artifacts: {},
+            recommended_actions: [],
+            next_steps: [],
+          },
+        })
+      )
+    );
+
+    const client = new RobynnClient("https://robynn.test", "token-123");
+    const result = await client.websiteOptimizationAuditStatus({
+      run_id: "opt-run-1",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/cli/mcp/website/optimization-audit/status?run_id=opt-run-1",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer token-123",
+        }),
+      })
+    );
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("RobynnClient auth refresh", () => {

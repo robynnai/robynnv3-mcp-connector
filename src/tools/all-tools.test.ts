@@ -13,6 +13,7 @@ import { registerBrandBookTools } from "./brand-book";
 import { registerCampaignTools } from "./campaign";
 import { registerCmoAgentTools } from "./cmo-agent";
 import { registerWebsiteTools } from "./website";
+import { registerContentPlanTools } from "./content-plan";
 import { registerConnectorTools } from "./connectors";
 import { registerCapabilityTools } from "./capabilities";
 import { registerBrandOperationTools } from "./brand-operations";
@@ -308,6 +309,40 @@ function createFullMockClient() {
         recommendations: [],
       },
     }),
+    websiteOptimizationAudit: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        summary: "Website optimization audit started",
+        status: "pending",
+        artifacts: {},
+        recommended_actions: [],
+        next_steps: [],
+        run_id: "22222222-2222-4222-8222-222222222222",
+        website_url: "https://acme.test",
+        audit_depth: "top_level",
+        report_mode: "prospecting_abridged",
+        prospecting_brief: {
+          websiteHealthVerdict: {
+            label: "mixed",
+            summary: "The site has visible SEO and conversion opportunities.",
+          },
+        },
+      },
+    }),
+    websiteOptimizationAuditStatus: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        summary: "Website optimization audit still running",
+        status: "pending",
+        artifacts: {},
+        recommended_actions: [],
+        next_steps: [],
+        run_id: "22222222-2222-4222-8222-222222222222",
+        website_url: "https://acme.test",
+        audit_depth: "top_level",
+        report_mode: "prospecting_abridged",
+      },
+    }),
     websiteAuditOrchestrator: vi.fn().mockResolvedValue({
       success: true,
       data: {
@@ -348,6 +383,28 @@ function createFullMockClient() {
         messaging_changes: [],
         seo_geo_changes: [],
         measurement_plan: [],
+      },
+    }),
+    contentPlan: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        summary: "Content plan ready",
+        status: "success",
+        project_id: "project-1",
+        planner_version: "v2",
+        content_plan_rows: [
+          {
+            title: "Refresh pricing page for enterprise proof",
+            target_slug: "/pricing",
+            premise: "Existing research shows enterprise buyers need more proof.",
+            source_references: ["geo:prompt-1"],
+            proof_assets_needed: ["customer quote"],
+            target_geo_prompts: ["best enterprise marketing platform"],
+            distribution_derivatives: ["LinkedIn carousel"],
+            existing_content_decision: "refresh_existing_page",
+          },
+        ],
+        existing_content_decisions: [],
       },
     }),
     cmoAgent: vi.fn().mockResolvedValue({
@@ -592,6 +649,7 @@ function registerAllTools(
   registerCmoAgentTools(server, client as never);
   registerCampaignTools(server, client as never);
   registerWebsiteTools(server, client as never);
+  registerContentPlanTools(server, client as never);
   registerCapabilityTools(server, client as never);
   registerBrandOperationTools(server, client as never);
   registerConnectorTools(server, client as never);
@@ -600,11 +658,11 @@ function registerAllTools(
 }
 
 describe("all tools registration", () => {
-  it("registers exactly 36 tools", () => {
+  it("registers exactly 39 tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(36);
+    expect(handlers.size).toBe(39);
   });
 
   it("registers the expected tool names", () => {
@@ -638,9 +696,12 @@ describe("all tools registration", () => {
       "robynn_website_audit_status",
       "robynn_website_audit_v2",
       "robynn_website_audit_v2_status",
+      "robynn_website_optimization_audit",
+      "robynn_website_optimization_audit_status",
       "robynn_website_audit_orchestrator",
       "robynn_website_audit_orchestrator_status",
       "robynn_website_strategy",
+      "robynn_content_plan",
       "robynn_capabilities",
       "robynn_brand_source_add",
       "robynn_brand_rebuild",
@@ -1064,6 +1125,21 @@ describe("all tools success path", () => {
     expect(res.content[0].text).toBe("Strategy complete");
     expect(res.structuredContent.website_url).toBe("https://acme.test");
   });
+
+  it("robynn_content_plan returns v2 rows as structured content", async () => {
+    setup();
+    const res = await handlers.get("robynn_content_plan")!({
+      project_id: "project-1",
+    });
+    expect(res.content[0].text).toBe("Content plan ready");
+    expect(res.structuredContent.planner_version).toBe("v2");
+    expect(res.structuredContent.content_plan_rows[0].source_references).toContain(
+      "geo:prompt-1",
+    );
+    expect(client.contentPlan).toHaveBeenCalledWith({
+      project_id: "project-1",
+    });
+  });
 });
 
 describe("all tools error path", () => {
@@ -1202,6 +1278,7 @@ function getMinimalArgs(toolName: string): Record<string, unknown> {
       run_id: "11111111-1111-4111-8111-111111111111",
     },
     robynn_website_strategy: {},
+    robynn_content_plan: { project_id: "project-1" },
     robynn_capabilities: {},
     robynn_brand_source_add: {
       source_type: "text",

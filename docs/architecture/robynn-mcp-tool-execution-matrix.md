@@ -52,6 +52,7 @@ Backend routes and agents only return data. The Worker turns that data into:
 | `robynn_publish_brand_book_html` | Brand book | `registerAppTool` | `POST /api/cli/mcp/brand-book/publish-html` | Direct `robynnv3` export aggregation + HTML generation | No | No |
 | `robynn_website_audit` | Website intelligence | `registerAppTool` | `POST /api/cli/mcp/website/audit` | `robynnv3` adapter calls LangGraph `website_report_v1`, then normalizes the report into MCP-safe sections | Yes | Yes |
 | `robynn_website_strategy` | Website intelligence | `registerAppTool` | `POST /api/cli/mcp/website/strategy` | `robynnv3` adapter calls LangGraph `website_report_v1`, then normalizes the report into a strategy view | Yes | Yes |
+| `robynn_content_plan` | Content planning | `registerAppTool` | `POST /api/cli/mcp/content-plan` | `robynnv3` hydrates completed Content Studio research, existing site inventory, and calendar rows, then calls LangGraph `content_planner_v2` when `CONTENT_STUDIO_CONTENT_PLANNER_VERSION=v2` | Yes, via explicit `content_planner_v2` StateGraph | No |
 
 ## Tool Families
 
@@ -106,8 +107,11 @@ These use purpose-built agent paths rather than the general CMO thread runner:
 - `robynn_competitive_battlecard` -> `competitor_intelligence_v1`
 - `robynn_website_audit` -> `website_report_v1`
 - `robynn_website_strategy` -> `website_report_v1`
+- `robynn_content_plan` -> `content_planner_v2`
 
 These are the best tools to test when you want to validate specialized LangGraph behavior instead of the general CMO flow.
+
+`robynn_content_plan` is synthesis-only. It consumes completed SEO, GEO, deep research, Brand Context, existing site inventory, and existing calendar rows. It does not run fresh keyword research, web search, scraping, or news search. If the caller only provides a topic or brand label without a `project_id`, `research_artifact_id`, or `research_packet`, it returns `status: "missing_context"` with the next step instead of inventing a plan.
 
 ## Source Pointers
 
@@ -126,6 +130,7 @@ These are the best tools to test when you want to validate specialized LangGraph
 - [src/tools/battlecard.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/src/tools/battlecard.ts)
 - [src/tools/brand-book.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/src/tools/brand-book.ts)
 - [src/tools/website.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/src/tools/website.ts)
+- [src/tools/content-plan.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/src/tools/content-plan.ts)
 
 ### `robynnv3` MCP-safe adapters and routes
 
@@ -141,6 +146,7 @@ These are the best tools to test when you want to validate specialized LangGraph
 - [src/routes/api/cli/mcp/brand-book/publish-html/+server.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynnv3/src/routes/api/cli/mcp/brand-book/publish-html/+server.ts)
 - [src/routes/api/cli/mcp/website/audit/+server.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynnv3/src/routes/api/cli/mcp/website/audit/+server.ts)
 - [src/routes/api/cli/mcp/website/strategy/+server.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynnv3/src/routes/api/cli/mcp/website/strategy/+server.ts)
+- [src/routes/api/cli/mcp/content-plan/+server.ts](/Users/madhukarkumar/Developer/robynnv3-standalone/robynnv3/src/routes/api/cli/mcp/content-plan/+server.ts)
 
 ### `robynnv3_agents` assistant registry
 
