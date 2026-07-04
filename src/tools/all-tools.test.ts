@@ -308,6 +308,32 @@ function createFullMockClient() {
         recommendations: [],
       },
     }),
+    websiteAuditOrchestrator: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        run_id: "11111111-1111-4111-8111-111111111111",
+        scan_id: "11111111-1111-4111-8111-111111111111",
+        status: "pending",
+        version: "orchestrator_v1",
+        audit_depth: "top_level",
+        report_mode: "full",
+        summary: "Website audit orchestrator started",
+        next_steps: [],
+      },
+    }),
+    websiteAuditOrchestratorStatus: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        run_id: "11111111-1111-4111-8111-111111111111",
+        scan_id: "11111111-1111-4111-8111-111111111111",
+        status: "completed",
+        version: "orchestrator_v1",
+        audit_depth: "top_level",
+        report_mode: "full",
+        summary: "Website audit orchestrator ready",
+        pagination: {},
+      },
+    }),
     websiteStrategy: vi.fn().mockResolvedValue({
       success: true,
       data: {
@@ -574,11 +600,11 @@ function registerAllTools(
 }
 
 describe("all tools registration", () => {
-  it("registers exactly 33 tools", () => {
+  it("registers exactly 36 tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(34);
+    expect(handlers.size).toBe(36);
   });
 
   it("registers the expected tool names", () => {
@@ -612,6 +638,8 @@ describe("all tools registration", () => {
       "robynn_website_audit_status",
       "robynn_website_audit_v2",
       "robynn_website_audit_v2_status",
+      "robynn_website_audit_orchestrator",
+      "robynn_website_audit_orchestrator_status",
       "robynn_website_strategy",
       "robynn_capabilities",
       "robynn_brand_source_add",
@@ -1165,6 +1193,13 @@ function getMinimalArgs(toolName: string): Record<string, unknown> {
     robynn_website_audit_v2: {},
     robynn_website_audit_v2_status: {
       scan_id: "11111111-1111-4111-8111-111111111111",
+    },
+    robynn_website_audit_orchestrator: {
+      website_url: "https://example.com",
+      audit_depth: "top_level",
+    },
+    robynn_website_audit_orchestrator_status: {
+      run_id: "11111111-1111-4111-8111-111111111111",
     },
     robynn_website_strategy: {},
     robynn_capabilities: {},

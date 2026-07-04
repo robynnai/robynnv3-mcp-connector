@@ -51,6 +51,35 @@ const websiteAuditV2GoalSchema = z
   .optional()
   .describe("Optional goal to bind the audit to");
 
+const websiteAuditOrchestratorSectionSchema = z.enum([
+  "website_report",
+  "page_reports",
+  "accepted_recommendations",
+  "rejected_recommendations",
+  "url_action_queue",
+  "source_coverage",
+  "worker_trace",
+]);
+
+function appendOrchestratorSummary(data: Record<string, unknown>) {
+  const lines = [
+    typeof data.summary === "string"
+      ? data.summary
+      : "Website audit orchestrator status returned.",
+  ];
+  if (typeof data.run_id === "string" && data.run_id.trim()) {
+    lines.push(`Run ID: ${data.run_id}`);
+  }
+  if (data.status === "pending" || data.status === "needs_confirmation") {
+    lines.push("Poll with robynn_website_audit_orchestrator_status using run_id.");
+  }
+  const pagination = data.pagination as Record<string, unknown> | undefined;
+  if (pagination) {
+    lines.push("Large arrays may be paginated; use returned cursors to fetch more.");
+  }
+  return lines.join("\n");
+}
+
 export function registerWebsiteTools(server: McpServer, client: RobynnClient) {
   registerAppTool(
     server,
@@ -276,6 +305,167 @@ export function registerWebsiteTools(server: McpServer, client: RobynnClient) {
       } catch (err) {
         return toErrorResult(
           `Error polling website audit v2: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "robynn_website_audit_orchestrator",
+    {
+      description:
+        "Start a read-only multi-agent website audit orchestrator run that returns full-site and page-level recommendations as structured JSON.",
+      inputSchema: {
+        website_url: z
+          .string()
+          .optional()
+          .describe("Website URL to audit; required when site_id is omitted"),
+        site_id: z
+          .string()
+          .optional()
+          .describe("Optional Robynn Website Studio site ID"),
+        audit_depth: z
+          .enum(["top_level", "top_plus_1", "full"])
+          .describe("Required scan depth. full requires estimate confirmation."),
+        report_mode: z
+          .enum(["full", "prospecting_abridged"])
+          .optional()
+          .describe("Report shape; defaults to full"),
+        audit_goal: z
+          .enum([
+            "increase_conversions",
+            "improve_seo",
+            "improve_geo",
+            "find_broken_experience",
+            "sales_brief",
+          ])
+          .optional()
+          .describe("Primary audit goal"),
+        manual_pages: z
+          .array(z.string())
+          .optional()
+          .describe("Optional explicit pages or paths to include"),
+        account_name: z.string().optional().describe("Optional account name"),
+        industry: z.string().optional().describe("Optional industry context"),
+        source_preferences: z
+          .object({
+            firecrawl: z.boolean().optional(),
+            dataforseo: z.boolean().optional(),
+            semrush: z.boolean().optional(),
+            ga4: z.boolean().optional(),
+            browserRuntime: z.boolean().optional(),
+            model_synthesis: z.boolean().optional(),
+            model_recommendations: z.boolean().optional(),
+          })
+          .optional()
+          .describe("Optional source toggles"),
+        estimate_only: z
+          .boolean()
+          .optional()
+          .describe("Return estimate without starting the audit"),
+        confirmed_estimate_id: z
+          .string()
+          .optional()
+          .describe("Estimate ID required for full scans"),
+        allow_over_100_pages: z
+          .boolean()
+          .optional()
+          .describe("Required with matching estimate for full scans above 100 pages"),
+        max_pages: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Optional page cap"),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        ui: {
+          resourceUri: REPORT_RESOURCE_URIS.websiteAudit,
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      try {
+        const result = await client.websiteAuditOrchestrator(args);
+
+        if (!result.success || !result.data) {
+          return toErrorResult(result.error || "Website audit orchestrator failed");
+        }
+
+        const data = result.data as unknown as Record<string, unknown>;
+        return toSuccessResult(data, appendOrchestratorSummary(data));
+      } catch (err) {
+        return toErrorResult(
+          `Error running website audit orchestrator: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
+      }
+    },
+  );
+
+  registerAppTool(
+    server,
+    "robynn_website_audit_orchestrator_status",
+    {
+      description:
+        "Poll a Website Audit Orchestrator run and return structured JSON with paginated site/page recommendations.",
+      inputSchema: {
+        run_id: z.string().describe("Run ID returned by robynn_website_audit_orchestrator"),
+        page_limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe("Page size for paginated arrays; max 100"),
+        page_cursor: z.string().optional().describe("Cursor for page_reports"),
+        recommendation_cursor: z
+          .string()
+          .optional()
+          .describe("Cursor for accepted_recommendations"),
+        rejected_recommendation_cursor: z
+          .string()
+          .optional()
+          .describe("Cursor for rejected_recommendations"),
+        action_cursor: z.string().optional().describe("Cursor for url_action_queue"),
+        include_sections: z
+          .array(websiteAuditOrchestratorSectionSchema)
+          .optional()
+          .describe("Optional status sections to include"),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        ui: {
+          resourceUri: REPORT_RESOURCE_URIS.websiteAudit,
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      try {
+        const result = await client.websiteAuditOrchestratorStatus(args);
+
+        if (!result.success || !result.data) {
+          return toErrorResult(
+            result.error || "Website audit orchestrator status failed",
+          );
+        }
+
+        const data = result.data as unknown as Record<string, unknown>;
+        return toSuccessResult(data, appendOrchestratorSummary(data));
+      } catch (err) {
+        return toErrorResult(
+          `Error polling website audit orchestrator: ${err instanceof Error ? err.message : "Unknown error"}`,
         );
       }
     },

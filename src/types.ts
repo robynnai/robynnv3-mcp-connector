@@ -75,6 +75,8 @@ export type GuidedWorkflowToolName =
   | "robynn_website_audit_status"
   | "robynn_website_audit_v2"
   | "robynn_website_audit_v2_status"
+  | "robynn_website_audit_orchestrator"
+  | "robynn_website_audit_orchestrator_status"
   | "robynn_website_strategy";
 
 export type CmoAgentToolName = "robynn_cmo_agent";
@@ -485,6 +487,86 @@ export interface WebsiteAuditV2Result extends IntelligenceToolResultBase {
   goal_contract?: Record<string, unknown>;
   healing_plan?: Record<string, unknown>;
   recommendations?: Record<string, unknown>[];
+}
+
+export interface WebsiteAuditOrchestratorRequest {
+  website_url?: string;
+  site_id?: string;
+  audit_depth: "top_level" | "top_plus_1" | "full";
+  report_mode?: "full" | "prospecting_abridged";
+  audit_goal?:
+    | "increase_conversions"
+    | "improve_seo"
+    | "improve_geo"
+    | "find_broken_experience"
+    | "sales_brief";
+  manual_pages?: string[];
+  account_name?: string;
+  industry?: string;
+  source_preferences?: {
+    firecrawl?: boolean;
+    dataforseo?: boolean;
+    semrush?: boolean;
+    ga4?: boolean;
+    browserRuntime?: boolean;
+    model_synthesis?: boolean;
+    model_recommendations?: boolean;
+  };
+  estimate_only?: boolean;
+  confirmed_estimate_id?: string;
+  allow_over_100_pages?: boolean;
+  max_pages?: number;
+}
+
+export interface WebsiteAuditOrchestratorStatusRequest {
+  run_id: string;
+  page_limit?: number;
+  page_cursor?: string;
+  recommendation_cursor?: string;
+  rejected_recommendation_cursor?: string;
+  action_cursor?: string;
+  include_sections?: Array<
+    | "website_report"
+    | "page_reports"
+    | "accepted_recommendations"
+    | "rejected_recommendations"
+    | "url_action_queue"
+    | "source_coverage"
+    | "worker_trace"
+  >;
+}
+
+export interface WebsiteAuditOrchestratorStartResult {
+  run_id: string | null;
+  scan_id: string | null;
+  status: "pending" | "needs_confirmation";
+  version: "orchestrator_v1";
+  audit_depth: "top_level" | "top_plus_1" | "full";
+  report_mode: "full" | "prospecting_abridged";
+  estimate?: Record<string, unknown>;
+  large_scan_guard?: Record<string, unknown>;
+  summary: string;
+  next_steps: string[];
+}
+
+export interface WebsiteAuditOrchestratorStatusResult {
+  run_id: string;
+  scan_id: string;
+  status: string;
+  version: "orchestrator_v1";
+  audit_depth: "top_level" | "top_plus_1" | "full";
+  report_mode: "full" | "prospecting_abridged";
+  website_url?: string;
+  summary?: string | Record<string, unknown>;
+  website_report?: Record<string, unknown>;
+  page_reports?: Record<string, unknown>[];
+  accepted_recommendations?: Record<string, unknown>[];
+  rejected_recommendations?: Record<string, unknown>[];
+  url_action_queue?: Record<string, unknown>[];
+  source_coverage?: Record<string, unknown>;
+  worker_trace?: Record<string, unknown>[];
+  pagination?: Record<string, unknown>;
+  next_steps?: string[];
 }
 
 export interface WebsiteStrategyRequest {

@@ -26,6 +26,10 @@ import type {
   WebsiteAuditV2Request,
   WebsiteAuditV2Result,
   WebsiteAuditV2StatusRequest,
+  WebsiteAuditOrchestratorRequest,
+  WebsiteAuditOrchestratorStartResult,
+  WebsiteAuditOrchestratorStatusRequest,
+  WebsiteAuditOrchestratorStatusResult,
   WebsiteStrategyRequest,
   WebsiteStrategyResult,
   GeoAnalysisRequest,
@@ -420,6 +424,26 @@ export class RobynnClient {
       {},
       POLL_TIMEOUT_MS
     );
+  }
+
+  /** Start a read-only Website Audit Orchestrator run */
+  async websiteAuditOrchestrator(
+    payload: WebsiteAuditOrchestratorRequest
+  ): Promise<RobynnApiResponse<WebsiteAuditOrchestratorStartResult>> {
+    return this.fetch("/api/cli/mcp/website/audit-orchestrator", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Poll a Website Audit Orchestrator run */
+  async websiteAuditOrchestratorStatus(
+    payload: WebsiteAuditOrchestratorStatusRequest
+  ): Promise<RobynnApiResponse<WebsiteAuditOrchestratorStatusResult>> {
+    return this.fetch("/api/cli/mcp/website/audit-orchestrator/status", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
   }
 
   /** Translate website audit findings into a prioritized website strategy */
