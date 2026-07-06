@@ -432,6 +432,7 @@ describe("RobynnClient intelligence routes", () => {
             },
             source_freshness: {},
             missing_sources: [],
+            source_warnings: [],
             seo_kpis: {
               organic_clicks: 10,
               organic_impressions: 100,

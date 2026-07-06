@@ -322,6 +322,14 @@ export const REPORT_APP_SCRIPT = String.raw`
     const promptRows = normalizeObjectArray(result && result.geo_prompt_table);
     const website = result && isObject(result.website) ? result.website : {};
     const range = result && isObject(result.range) ? result.range : {};
+    const sourceWarnings = normalizeList(result && result.source_warnings);
+
+    const sourceWarningBody = sourceWarnings.length
+      ? '<section class="report-section">' +
+          '<div class="section-head"><h3>Source warnings</h3></div>' +
+          '<div class="empty-state">Some optional evidence is unavailable: ' + escapeHtml(sourceWarnings.join(', ')) + '</div>' +
+        '</section>'
+      : '';
 
     const nonRankingBody = nonRankingPages.length
       ? '<div class="list-stack">' + nonRankingPages.slice(0, 12).map((page) => {
@@ -345,6 +353,7 @@ export const REPORT_APP_SCRIPT = String.raw`
         '</div>' +
         '<div class="meta-row"><span>Current week ' + escapeHtml((range.current_start || '—') + ' to ' + (range.current_end || '—')) + '</span><span>Prior week ' + escapeHtml((range.prior_start || '—') + ' to ' + (range.prior_end || '—')) + '</span></div>' +
       '</section>' +
+      sourceWarningBody +
       weeklyTable('Keyword performance', [
         { label: 'Keyword', render: (row) => row.keyword || '—' },
         { label: 'URL', render: (row) => row.url || '—' },

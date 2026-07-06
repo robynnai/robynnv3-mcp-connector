@@ -29,6 +29,9 @@ function normalizeReport(
   return {
     ...data,
     artifacts: isRecord(data.artifacts) ? data.artifacts : {},
+    source_warnings: Array.isArray(data.source_warnings)
+      ? data.source_warnings
+      : [],
     recommended_actions: recommendations,
   };
 }
@@ -54,6 +57,10 @@ function weeklyVisibilitySummary(data: WeeklyVisibilityReportResult) {
     lines.push(`Missing sources: ${data.missing_sources.join(", ")}`);
   }
 
+  if (data.source_warnings?.length) {
+    lines.push(`Source warnings: ${data.source_warnings.join(", ")}`);
+  }
+
   if (data.next_steps.length) {
     lines.push(`Next steps: ${data.next_steps.join(" ")}`);
   }
@@ -70,7 +77,7 @@ export function registerWeeklyVisibilityTools(
     "robynn_weekly_visibility_report",
     {
       description:
-        "Build a weekly SEO and GEO visibility report for one connected Robynn website. Requires a Robynn organization website id with Google Search Console and GA4 data available through Brand Monitor. Returns SEO KPIs, keyword/page tables, non-ranking pages, striking-distance keywords, GEO prompt visibility, and recommendations.",
+        "Build a weekly SEO and GEO visibility report for one connected Robynn website. GA4 is used for page traffic, while Google Search Console is optional and returned as a source warning when unavailable. Returns SEO KPIs, keyword/page tables, non-ranking pages, striking-distance keywords, GEO prompt visibility, recommendations, missing sources, and source warnings.",
       inputSchema: {
         website_id: z
           .string()
