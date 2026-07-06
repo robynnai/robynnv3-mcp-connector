@@ -428,6 +428,7 @@ function createFullMockClient() {
         },
         source_freshness: {},
         missing_sources: [],
+        source_warnings: [],
         seo_kpis: {
           organic_clicks: 42,
           organic_impressions: 1000,
