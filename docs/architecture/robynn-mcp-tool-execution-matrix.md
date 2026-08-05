@@ -36,10 +36,10 @@ Backend routes and agents only return data. The Worker turns that data into:
 | `robynn_status` | Status | `server.tool` | `GET /api/cli/context/summary` | Direct `robynnv3` status API | No | No |
 | `robynn_usage` | Status | `server.tool` | `GET /api/cli/usage` | Direct `robynnv3` usage API | No | No |
 | `robynn_conversations` | Thread management | `server.tool` | `GET/POST /api/agents/cmo/threads` | `robynnv3` thread persistence around the CMO workflow | No agent run for `list` or `create` | No |
-| `robynn_create_content` | CMO execution | `server.tool` | `POST /api/agents/cmo/threads`, `POST /api/agents/cmo/threads/{id}/runs`, `GET /api/agents/cmo/runs/{id}` | `robynnv3` instant-agent thread/run pipeline | Yes, via the configured CMO assistant. Current default is `env.INSTANT_AGENT_ASSISTANT_ID || "cmo_v2"` | No |
-| `robynn_research` | CMO execution | `server.tool` | `POST /api/agents/cmo/threads`, `POST /api/agents/cmo/threads/{id}/runs`, `GET /api/agents/cmo/runs/{id}` | `robynnv3` instant-agent thread/run pipeline | Yes, via the configured CMO assistant. Current default is `env.INSTANT_AGENT_ASSISTANT_ID || "cmo_v2"` | No |
-| `robynn_assist` | CMO execution | `server.tool` | `POST /api/agents/cmo/threads`, `POST /api/agents/cmo/threads/{id}/runs`, `GET /api/agents/cmo/runs/{id}` | `robynnv3` instant-agent thread/run pipeline with caller-provided routing hints | Yes, via explicit `assistant_id`, `route_hint`, `requested_capability`, and optional history/memory hints | No |
-| `robynn_cmo_agent` | CMO execution | `server.tool` | `POST /api/cli/mcp/cmo/run` | MCP-safe CMO run route in `robynnv3` | No | No |
+| `robynn_create_content` | CMO execution | `server.tool` | `POST /api/agents/cmo/threads`, `POST /api/agents/cmo/threads/{id}/runs`, `GET /api/agents/cmo/runs/{id}` | `robynnv3` Instant Agent thread/run pipeline | Yes. Omit `assistant_id` to use Instant Agent default (`cmo_v3`). Optional override on tools that accept it: `cmo_v2` \| `cmo_v3` \| `auto` | No |
+| `robynn_research` | CMO execution | `server.tool` | `POST /api/agents/cmo/threads`, `POST /api/agents/cmo/threads/{id}/runs`, `GET /api/agents/cmo/runs/{id}` | `robynnv3` Instant Agent thread/run pipeline | Yes. Omit `assistant_id` to use Instant Agent default (`cmo_v3`). Optional override on tools that accept it: `cmo_v2` \| `cmo_v3` \| `auto` | No |
+| `robynn_assist` | CMO execution | `server.tool` | `POST /api/agents/cmo/threads`, `POST /api/agents/cmo/threads/{id}/runs`, `GET /api/agents/cmo/runs/{id}` | Instant Agent thread/run with optional routing hints; may return AGUI `response_blocks` | Yes. Omit `assistant_id` for `cmo_v3`, or pass `cmo_v2` \| `cmo_v3` \| `auto`, plus `route_hint` / `requested_capability` / history hints | No |
+| `robynn_cmo_agent` | CMO execution | `registerAppTool` | `POST /api/cli/mcp/cmo/run` | MCP-safe CMO / Instant Agent run route; may return AGUI `response_blocks` | Yes via Instant Agent. Omit `assistant_id` for default `cmo_v3`; optional `cmo_v2` \| `cmo_v3` \| `auto` | No |
 | `robynn_campaign_creator` | Campaign strategy | `server.tool` | `POST /api/cli/mcp/marketing-campaign` | MCP-safe marketing campaign route in `robynnv3` | Yes, via the marketing-campaign LangGraph runner | No |
 | `robynn_campaign_status` | Campaign strategy | `server.tool` | `GET /api/cli/mcp/marketing-campaign/status` | Campaign status route in `robynnv3` with idempotent artifact readback | Yes, via the marketing-campaign LangGraph runner | No |
 | `robynn_geo_analysis` | Intelligence | `registerAppTool` | `POST /api/cli/mcp/geo-analysis` -> `/api/agents/geo/execute` | GEO proxy in `robynnv3`, then LangGraph `geo_researcher` by default | Yes | Yes |
@@ -96,7 +96,9 @@ They do not call a specialized MCP-safe report route. Instead they:
 - start a run
 - poll the run until completion
 
-The catch-all `robynn_assist` tool forwards caller hints directly into the existing thread/run path, while the legacy content and research tools continue using the CMO assistant selected by `robynnv3`.
+Omit `assistant_id` to use the Instant Agent default (`cmo_v3`). Tools that accept the field support optional override `cmo_v2` \| `cmo_v3` \| `auto`. CMO tool results may include AGUI `response_blocks` in `structuredContent` (with `has_decision_cards` / `clarify_pending` when present); poll via `robynn_run_status` for pending runs.
+
+The catch-all `robynn_assist` tool forwards caller hints directly into the Instant Agent thread/run path, while content and research tools use the same backend default when no override is supplied.
 
 ### 3. Specialized intelligence agents
 
