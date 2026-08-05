@@ -1,5 +1,10 @@
+import { renderCmoAguiBlocks } from "./cmo-agui-render";
+import { APP_VERSION } from "../version";
+
 export const REPORT_APP_SCRIPT = String.raw`
 (() => {
+  const renderCmoAguiBlocks = ${renderCmoAguiBlocks.toString()};
+
   const configNode = document.getElementById('__robynn-report-config');
   const root = document.getElementById('robynn-report-root');
   const config = configNode ? JSON.parse(configNode.textContent || '{}') : {};
@@ -686,6 +691,26 @@ export const REPORT_APP_SCRIPT = String.raw`
     '</div>';
   }
 
+  function buildCmoAguiForm(args) {
+    return '<div class="form-grid">' +
+      '<label class="full"><span>Message</span><textarea name="message" required>' + escapeHtml(args && args.message ? args.message : '') + '</textarea></label>' +
+      '<label><span>Thread ID</span><input name="thread_id" value="' + escapeHtml(args && args.thread_id ? args.thread_id : '') + '" /></label>' +
+    '</div>';
+  }
+
+  function renderCmoAguiReport(result) {
+    const blocks = Array.isArray(result && result.response_blocks) ? result.response_blocks : [];
+    const output = result && result.output ? String(result.output) : '';
+    const rendered = renderCmoAguiBlocks(blocks);
+    const outputSection = output
+      ? '<section class="report-section"><div class="section-head"><h3>Response</h3></div><p>' + escapeHtml(output) + '</p></section>'
+      : '';
+    const blocksSection = blocks.length
+      ? '<section class="report-section"><div class="section-head"><h3>Structured blocks</h3></div>' + rendered.html + '</section>'
+      : '<section class="report-section"><div class="empty-state">No response blocks were returned for this run.</div></section>';
+    return outputSection + blocksSection;
+  }
+
   function renderRerunForm() {
     const args = state.toolArgs || {};
     let body = '';
@@ -703,6 +728,8 @@ export const REPORT_APP_SCRIPT = String.raw`
       body = buildWebsiteAuditForm(args);
     } else if (config.reportType === 'weeklyVisibility') {
       body = buildWeeklyVisibilityForm(args);
+    } else if (config.reportType === 'cmoAgui') {
+      body = buildCmoAguiForm(args);
     } else {
       body = buildWebsiteStrategyForm(args);
     }
@@ -792,6 +819,13 @@ export const REPORT_APP_SCRIPT = String.raw`
       };
     }
 
+    if (config.reportType === 'cmoAgui') {
+      return {
+        message: String(formData.get('message') || '').trim(),
+        thread_id: String(formData.get('thread_id') || '').trim() || undefined,
+      };
+    }
+
     return {
       website_url: String(formData.get('website_url') || '').trim() || undefined,
       primary_goal: String(formData.get('primary_goal') || '').trim() || undefined,
@@ -810,11 +844,17 @@ export const REPORT_APP_SCRIPT = String.raw`
       : Array.isArray(result && result.recommendations)
         ? result.recommendations
         : [];
+    const summaryText = result && (result.summary || result.output)
+      ? String(result.summary || result.output)
+      : 'Waiting for report results…';
+    const eyebrow = config.reportType === 'cmoAgui'
+      ? 'Robynn CMO result'
+      : 'Robynn intelligence report';
 
     return '<section class="hero-card">' +
-      '<div class="hero-meta"><span class="eyebrow">Robynn intelligence report</span><span class="status-badge">' + escapeHtml(status) + '</span></div>' +
+      '<div class="hero-meta"><span class="eyebrow">' + escapeHtml(eyebrow) + '</span><span class="status-badge">' + escapeHtml(status) + '</span></div>' +
       '<h1>' + escapeHtml(config.title || 'Robynn report') + '</h1>' +
-      '<p class="hero-summary">' + escapeHtml(result && result.summary ? result.summary : 'Waiting for report results…') + '</p>' +
+      '<p class="hero-summary">' + escapeHtml(summaryText) + '</p>' +
       '<div class="summary-grid">' +
         summaryValue('Report type', config.reportType ? String(config.reportType).toUpperCase() : 'Report', 'neutral') +
         summaryValue('Artifacts', formatNumber(artifactCount), 'neutral') +
@@ -839,6 +879,7 @@ export const REPORT_APP_SCRIPT = String.raw`
     if (config.reportType === 'brandBookStrategy') return renderBrandBookStrategyReport(state.result);
     if (config.reportType === 'websiteAudit') return renderWebsiteAuditReport(state.result);
     if (config.reportType === 'weeklyVisibility') return renderWeeklyVisibilityReport(state.result);
+    if (config.reportType === 'cmoAgui') return renderCmoAguiReport(state.result);
     return renderWebsiteStrategyReport(state.result);
   }
 
@@ -1004,4 +1045,3 @@ export const REPORT_APP_SCRIPT = String.raw`
   connect();
 })();
 `;
-import { APP_VERSION } from "../version";
