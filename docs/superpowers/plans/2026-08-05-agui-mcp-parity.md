@@ -20,6 +20,7 @@
 - Ship as four independently mergeable PRs (Tasks 1–2 = PR1 robynnv3; Tasks 3–5 = PR2 MCP; Tasks 6–7 = PR3 MCP; Tasks 8–10 = PR4 cross-repo).
 - No live streaming / `artifact_draft_delta` in this plan.
 - Phase B renders only: `table`, `chart`, `metric_card`, `priority_list`, `progress_pipeline`, `status_checklist`, `decision_card` (read-only until Phase C).
+- Every PR must pass the matching gate in **Testing Plan** before merge; Task 10 requires the full automated + manual smoke checklist.
 
 ## File Structure
 
