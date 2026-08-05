@@ -12,6 +12,7 @@ import { registerSeoTools } from "./seo";
 import { registerBrandBookTools } from "./brand-book";
 import { registerCampaignTools } from "./campaign";
 import { registerCmoAgentTools } from "./cmo-agent";
+import { registerCmoDecideTools } from "./cmo-decide";
 import { registerWebsiteTools } from "./website";
 import { registerContentPlanTools } from "./content-plan";
 import { registerWeeklyVisibilityTools } from "./weekly-visibility";
@@ -467,6 +468,20 @@ function createFullMockClient() {
         next_steps: [],
       },
     }),
+    cmoDecide: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        summary: "Decision recorded.",
+        status: "success",
+        output: "Continuing with selected option.",
+        thread_id: "thread-1",
+        run_id: "run-2",
+        tokens_used: 12,
+        artifacts: {},
+        recommended_actions: [],
+        next_steps: [],
+      },
+    }),
     campaignCreator: vi.fn().mockResolvedValue({
       success: true,
       data: {
@@ -693,6 +708,7 @@ function registerAllTools(
   registerSeoTools(server, client as never);
   registerBrandBookTools(server, client as never);
   registerCmoAgentTools(server, client as never);
+  registerCmoDecideTools(server, client as never);
   registerCampaignTools(server, client as never);
   registerWebsiteTools(server, client as never);
   registerContentPlanTools(server, client as never);
@@ -705,11 +721,11 @@ function registerAllTools(
 }
 
 describe("all tools registration", () => {
-  it("registers exactly 40 tools", () => {
+  it("registers exactly 41 tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(40);
+    expect(handlers.size).toBe(41);
   });
 
   it("registers the expected tool names", () => {
@@ -737,6 +753,7 @@ describe("all tools registration", () => {
       "robynn_trigger_brand_reflections",
       "robynn_publish_brand_book_html",
       "robynn_cmo_agent",
+      "robynn_cmo_decide",
       "robynn_campaign_creator",
       "robynn_campaign_status",
       "robynn_website_audit",

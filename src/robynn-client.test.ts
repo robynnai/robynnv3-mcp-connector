@@ -184,6 +184,51 @@ describe("RobynnClient intelligence routes", () => {
     expect(result.success).toBe(true);
   });
 
+  it("posts CMO decide requests to the MCP-safe API route", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            summary: "Decision recorded.",
+            status: "success",
+            output: "Continuing with selected option.",
+            thread_id: "thread-123",
+            run_id: "run-456",
+            tokens_used: 12,
+            artifacts: {},
+            recommended_actions: [],
+            next_steps: [],
+          },
+        }),
+      ),
+    );
+
+    const client = new RobynnClient("https://robynn.test", "token-123");
+    const result = await client.cmoDecide({
+      thread_id: "thread-123",
+      run_id: "run-123",
+      decision_id: "d1",
+      option_id: "linkedin",
+      note: "Prefer B2B",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://robynn.test/api/cli/mcp/cmo/decide",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          thread_id: "thread-123",
+          run_id: "run-123",
+          decision_id: "d1",
+          option_id: "linkedin",
+          note: "Prefer B2B",
+        }),
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
   it("posts marketing campaign creator requests to the MCP-safe API route", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
