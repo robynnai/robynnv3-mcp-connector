@@ -54,6 +54,7 @@ describe("report-app helpers", () => {
     expect(resources.has(REPORT_RESOURCE_URIS.websiteAudit)).toBe(true);
     expect(resources.has(REPORT_RESOURCE_URIS.websiteStrategy)).toBe(true);
     expect(resources.has(REPORT_RESOURCE_URIS.weeklyVisibility)).toBe(true);
+    expect(resources.has(REPORT_RESOURCE_URIS.cmoAgui)).toBe(true);
 
     const geoResource = resources.get(REPORT_RESOURCE_URIS.geo);
     const geoRead = await geoResource?.read();
@@ -83,5 +84,16 @@ describe("report-app helpers", () => {
     expect(html).toContain('"reportType":"weeklyVisibility"');
     expect(html).toContain("Robynn Weekly SEO/GEO Report");
     expect(html).toContain("robynn_weekly_visibility_report");
+  });
+
+  it("builds CMO AGUI report HTML with the CMO agent tool", () => {
+    const html = buildReportAppHtml({
+      reportType: "cmoAgui",
+      publicBaseUrl: "https://mcp.robynn.ai",
+    });
+
+    expect(html).toContain('"reportType":"cmoAgui"');
+    expect(html).toContain("Robynn CMO Result");
+    expect(html).toContain("robynn_cmo_agent");
   });
 });

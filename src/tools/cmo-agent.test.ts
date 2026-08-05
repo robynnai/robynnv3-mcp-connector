@@ -1,17 +1,18 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 
 import { registerCmoAgentTools } from "./cmo-agent";
+import { REPORT_RESOURCE_URIS } from "../ui/report-app";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Handler = (args: any) => Promise<any>;
 
 function createServerHarness() {
   const handlers = new Map<string, Handler>();
-  const toolConfigs = new Map<string, { description?: string }>();
+  const toolConfigs = new Map<string, Record<string, unknown>>();
 
   const registerTool = vi.fn((name: string, config: unknown, handler: Handler) => {
     handlers.set(name, handler);
-    toolConfigs.set(name, config as { description?: string });
+    toolConfigs.set(name, config as Record<string, unknown>);
   });
 
   const server = { registerTool } as never;
@@ -211,9 +212,20 @@ describe("robynn_cmo_agent", () => {
     const { server, toolConfigs } = createServerHarness();
     registerCmoAgentTools(server, { cmoAgent: vi.fn() } as never);
 
-    const description = toolConfigs.get("robynn_cmo_agent")?.description || "";
+    const description = String(toolConfigs.get("robynn_cmo_agent")?.description || "");
     expect(description.toLowerCase()).toContain("cmo v3");
     expect(description).toContain("route_hint");
     expect(description).toContain("decision_card");
+  });
+
+  it("links the CMO AGUI MCP Apps report resource", () => {
+    const { server, toolConfigs } = createServerHarness();
+    registerCmoAgentTools(server, { cmoAgent: vi.fn() } as never);
+
+    const meta = toolConfigs.get("robynn_cmo_agent")?._meta as
+      | { ui?: { resourceUri?: string; visibility?: string[] } }
+      | undefined;
+    expect(meta?.ui?.resourceUri).toBe(REPORT_RESOURCE_URIS.cmoAgui);
+    expect(meta?.ui?.visibility).toEqual(["model", "app"]);
   });
 });

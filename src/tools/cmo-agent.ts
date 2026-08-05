@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import type { ResponseBlock } from "../types";
 import type { RobynnClient } from "../robynn-client";
+import { REPORT_RESOURCE_URIS } from "../ui/report-app";
 import { buildCmoAguiTextFallback } from "./cmo-text";
 import { toErrorResult, toSuccessResult } from "./util";
 
@@ -58,7 +59,8 @@ export function registerCmoAgentTools(server: McpServer, client: RobynnClient) {
       },
       _meta: {
         ui: {
-          visibility: ["model"],
+          resourceUri: REPORT_RESOURCE_URIS.cmoAgui,
+          visibility: ["model", "app"],
         },
       },
     },

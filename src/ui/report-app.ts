@@ -12,7 +12,8 @@ export type ReportType =
   | "brandBookStrategy"
   | "websiteAudit"
   | "websiteStrategy"
-  | "weeklyVisibility";
+  | "weeklyVisibility"
+  | "cmoAgui";
 
 export const REPORT_RESOURCE_URIS: Record<ReportType, string> = {
   geo: "ui://reports/geo.html",
@@ -23,6 +24,7 @@ export const REPORT_RESOURCE_URIS: Record<ReportType, string> = {
   websiteAudit: "ui://reports/website-audit.html",
   websiteStrategy: "ui://reports/website-strategy.html",
   weeklyVisibility: "ui://reports/weekly-visibility.html",
+  cmoAgui: "ui://reports/cmo-agui.html",
 };
 
 interface ReportAppDefinition {
@@ -72,6 +74,11 @@ const REPORT_DEFINITIONS: ReportAppDefinition[] = [
     title: "Robynn Weekly SEO/GEO Report",
     description: "Interactive weekly SEO and GEO visibility report",
   },
+  {
+    reportType: "cmoAgui",
+    title: "Robynn CMO Result",
+    description: "AGUI response blocks for CMO runs",
+  },
 ];
 
 export function getPublicBaseUrl(rawUrl?: string): string {
@@ -98,6 +105,8 @@ function getReportToolName(reportType: ReportType): string {
       return "robynn_website_audit";
     case "weeklyVisibility":
       return "robynn_weekly_visibility_report";
+    case "cmoAgui":
+      return "robynn_cmo_agent";
     case "websiteStrategy":
     default:
       return "robynn_website_strategy";
