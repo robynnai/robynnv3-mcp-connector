@@ -7,13 +7,15 @@ type Handler = (args: any) => Promise<any>;
 
 function createServerHarness() {
   const handlers = new Map<string, Handler>();
+  const toolConfigs = new Map<string, { description?: string }>();
 
-  const registerTool = vi.fn((name: string, _config: unknown, handler: Handler) => {
+  const registerTool = vi.fn((name: string, config: unknown, handler: Handler) => {
     handlers.set(name, handler);
+    toolConfigs.set(name, config as { description?: string });
   });
 
   const server = { registerTool } as never;
-  return { server, handlers };
+  return { server, handlers, toolConfigs };
 }
 
 describe("robynn_cmo_agent", () => {
@@ -116,5 +118,102 @@ describe("robynn_cmo_agent", () => {
 
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toContain("boom");
+  });
+
+  it("passes response_blocks through structuredContent and mentions decision questions", async () => {
+    const { server, handlers } = createServerHarness();
+    const decisionBlock = {
+      id: "d1",
+      type: "decision_card",
+      decisionId: "d1",
+      question: "Which channel first?",
+      options: [
+        { id: "linkedin", label: "LinkedIn" },
+        { id: "email", label: "Email" },
+      ],
+    };
+    const client = {
+      cmoAgent: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          summary: "Need a quick choice.",
+          status: "success",
+          output: "Need a quick choice.",
+          thread_id: "thread-1",
+          run_id: "run-1",
+          tokens_used: 12,
+          artifacts: {},
+          recommended_actions: [],
+          next_steps: [],
+          response_blocks: [decisionBlock],
+          has_decision_cards: true,
+          clarify_pending: true,
+        },
+      }),
+    };
+
+    registerCmoAgentTools(server, client as never);
+
+    const res = await handlers.get("robynn_cmo_agent")!({
+      message: "Plan a campaign",
+    });
+
+    expect(res.structuredContent.response_blocks).toEqual([decisionBlock]);
+    expect(res.structuredContent.has_decision_cards).toBe(true);
+    expect(res.structuredContent.clarify_pending).toBe(true);
+    expect(res.content[0].text).toContain("Which channel first?");
+    expect(res.content[0].text).toContain("LinkedIn");
+    expect(res.content[0].text).toContain("decision_card");
+  });
+
+  it("keeps pending poll guidance and attaches live response_blocks", async () => {
+    const { server, handlers } = createServerHarness();
+    const progressBlock = {
+      id: "p1",
+      type: "progress_pipeline",
+      title: "Researching channels",
+    };
+    const client = {
+      cmoAgent: vi.fn().mockResolvedValue({
+        success: true,
+        data: {
+          summary: "CMO run is still running.",
+          status: "pending",
+          thread_id: "thread-1",
+          run_id: "run-1",
+          poll_after_seconds: 5,
+          artifacts: {},
+          recommended_actions: [],
+          next_steps: ["Call robynn_run_status with this run_id."],
+          response_blocks: [progressBlock],
+          has_decision_cards: false,
+          clarify_pending: false,
+        },
+      }),
+    };
+
+    registerCmoAgentTools(server, client as never);
+
+    const res = await handlers.get("robynn_cmo_agent")!({
+      message: "Create a launch plan",
+    });
+
+    expect(res.structuredContent.status).toBe("pending");
+    expect(res.structuredContent.response_blocks).toEqual([progressBlock]);
+    expect(res.structuredContent.has_decision_cards).toBe(false);
+    expect(res.structuredContent.clarify_pending).toBe(false);
+    expect(res.content[0].text).toContain("still running");
+    expect(res.content[0].text).toContain("robynn_run_status");
+    expect(res.content[0].text).toContain("progress_pipeline");
+  });
+
+  it("documents CMO v3, route_hint, and decision_card clarify in the tool description", () => {
+    const { server, toolConfigs } = createServerHarness();
+    registerCmoAgentTools(server, { cmoAgent: vi.fn() } as never);
+
+    const description = toolConfigs.get("robynn_cmo_agent")?.description || "";
+    expect(description.toLowerCase()).toContain("cmo v3");
+    expect(description).toContain("route_hint");
+    expect(description).toContain("decision_card");
   });
 });
