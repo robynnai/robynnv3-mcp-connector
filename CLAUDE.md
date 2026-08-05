@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Remote MCP server deployed on Cloudflare Workers at `mcp.robynn.ai`. Exposes 40+ brand-aware marketing tools to Claude via the Connectors Directory, including MCP Apps UI for intelligence reports. Uses OAuth 2.0 for authentication, with the actual user data stored on `robynn.ai` (SvelteKit frontend).
 
-CMO / Instant Agent tools default to `cmo_v3` when `assistant_id` is omitted; optional override is `cmo_v2` \| `cmo_v3` \| `auto`. Tools such as `robynn_cmo_agent`, `robynn_assist`, and `robynn_run_status` may return AGUI `response_blocks` (plus `has_decision_cards` / `clarify_pending`) in `structuredContent`.
+CMO / Instant Agent tools default to `cmo_v3` when `assistant_id` is omitted; optional override is `cmo_v2` \| `cmo_v3` \| `auto`. Tools such as `robynn_cmo_agent`, `robynn_assist`, and `robynn_run_status` may return AGUI `response_blocks` (plus `has_decision_cards` / `clarify_pending`) in `structuredContent`. Use `robynn_cmo_decide` to continue clarify turns after a `decision_card` selection; loop: `robynn_cmo_agent` → (optional) `robynn_run_status` → `robynn_cmo_decide`.
 
 ## Beads PR Workflow
 
@@ -171,6 +171,7 @@ Omit `assistant_id` to use Instant Agent default (`cmo_v3`). Optional override: 
 | `robynn_assist` | `message`, `assistant_id?`, routing hints, `thread_id?` | Instant Agent thread/run; may return `response_blocks` |
 | `robynn_cmo_agent` | `message`, `assistant_id?`, `route_hint?`, `thread_id?`, … | `POST /api/cli/mcp/cmo/run`; may return `response_blocks` |
 | `robynn_run_status` | `run_id` | Poll CMO/Instant Agent run (passes through `response_blocks`) |
+| `robynn_cmo_decide` | `thread_id`, `run_id`, `decision_id`, `option_id`, `note?` | `POST /api/cli/mcp/cmo/decide` — continue clarify loop after `decision_card` |
 | `robynn_conversations` | `action` (list/create), `title?` | Lists or creates CMO threads |
 
 ### Intelligence / Website / Brand Book (App tools)
@@ -193,6 +194,7 @@ GEO, SEO, battlecard, brand-book, website audit/strategy, content plan, weekly v
 | `src/tools/assist.ts` | `robynn_assist` (AGUI `response_blocks` passthrough) |
 | `src/tools/cmo-agent.ts` | `robynn_cmo_agent` (Instant Agent / CMO v3; AGUI fields) |
 | `src/tools/runs.ts` | `robynn_run_status` (AGUI `response_blocks` passthrough) |
+| `src/tools/cmo-decide.ts` | `robynn_cmo_decide` (clarify loop after `decision_card` selection) |
 | `src/tools/conversations.ts` | `robynn_conversations` |
 | `src/tools/geo.ts` | `robynn_geo_analysis` (app tool) |
 | `src/tools/battlecard.ts` | `robynn_competitive_battlecard` (app tool) |
