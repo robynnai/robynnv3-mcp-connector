@@ -1021,16 +1021,9 @@ Add matrix row:
 
 Document the loop: `robynn_cmo_agent` → (optional) `robynn_run_status` → `robynn_cmo_decide`.
 
-- [ ] **Step 2: Final verification**
+- [ ] **Step 2: Run the full Testing Plan below (Phases A–C + closeout)**
 
-```bash
-# robynnv3
-pnpm exec vitest run src/lib/server/mcp/cmo-agui.test.ts src/lib/server/mcp/cmo-agent-runner.test.ts src/lib/server/mcp/cmo-decide-runner.test.ts
-
-# mcp connector
-pnpm vitest run src/tools/cmo-text.test.ts src/tools/cmo-agent.test.ts src/tools/cmo-decide.test.ts src/ui/report-app.test.ts
-pnpm typecheck
-```
+Complete every checkbox in **Testing Plan → Automated gates** and **Manual smoke**. Do not open/merge PR4 until those gates pass.
 
 - [ ] **Step 3: Commit + open PR4**
 
@@ -1040,6 +1033,213 @@ git push -u origin <phase-c-branches>
 ```
 
 Land robynnv3 decide API before or with MCP tool PR.
+
+---
+
+## Testing Plan
+
+Use this section as the merge gate for each PR. Per-task TDD steps above write the tests; this section is what you re-run before declaring a phase done.
+
+### Test matrix (what must exist)
+
+| Phase | Repo | Test file(s) | Must prove |
+| --- | --- | --- | --- |
+| A | `robynnv3` | `src/lib/server/mcp/cmo-agui.test.ts` | finalized > live; empty metadata; clarify flags |
+| A | `robynnv3` | `src/lib/server/mcp/contracts.test.ts` | `response_blocks` / flags parse + default |
+| A | `robynnv3` | `src/lib/server/mcp/cmo-agent-runner.test.ts` | success/pending/failed AGUI attachment |
+| A | `robynnv3` | `src/routes/api/agents/cmo/runs/[runId]/server.test.ts` | poll JSON includes AGUI fields |
+| A | `robynnv3` | `src/routes/api/cli/mcp/cmo/run/server.test.ts` | route still returns success envelope with new fields |
+| A | MCP | `src/tools/cmo-text.test.ts` | decision text fallback + no-block fallback |
+| A | MCP | `src/tools/cmo-agent.test.ts` | `structuredContent.response_blocks` + clarify text |
+| A | MCP | `src/tools/runs.test.ts` | completed poll passthrough of AGUI fields |
+| A | MCP | `src/tools/assist.test.ts` (if touched) | blocks forwarded when present |
+| B | MCP | `src/ui/report-app.test.ts` | `cmoAgui` resource registered |
+| B | MCP | `src/ui/cmo-agui-render.test.ts` | **each** Phase B block type + unknown skip |
+| C | `robynnv3` | `src/lib/server/mcp/cmo-decide-runner.test.ts` | happy path + bad decision/option + auth/not-found |
+| C | `robynnv3` | `src/routes/api/cli/mcp/cmo/decide/server.test.ts` | HTTP envelope + validation errors |
+| C | `robynnv3` | `src/lib/server/mcp/capability-catalog.test.ts` | decide tool listed/noted |
+| C | MCP | `src/tools/cmo-decide.test.ts` | tool success/error + structuredContent |
+| C | MCP | `src/robynn-client.test.ts` | `POST /api/cli/mcp/cmo/decide` body |
+| C | MCP | `src/tools/all-tools.test.ts` | `robynn_cmo_decide` registered; count updated |
+
+### Automated gates (run before each PR)
+
+#### PR1 gate — robynnv3 Phase A
+
+- [ ] **Run**
+```bash
+cd /agent/repos/robynnv3
+pnpm exec vitest run \
+  src/lib/server/mcp/cmo-agui.test.ts \
+  src/lib/server/mcp/contracts.test.ts \
+  src/lib/server/mcp/cmo-agent-runner.test.ts \
+  src/routes/api/agents/cmo/runs/\[runId\]/server.test.ts \
+  src/routes/api/cli/mcp/cmo/run/server.test.ts
+```
+- [ ] **Expected:** all PASS
+- [ ] **Assert in failing fixtures (manual code review of test output):**
+  - success path includes `response_blocks.length >= 1` when metadata has finalized blocks
+  - failed path forces `response_blocks: []`, `has_decision_cards: false`, `clarify_pending: false`
+  - pending path may include live blocks without dropping `poll_after_seconds`
+
+#### PR2 gate — MCP Phase A
+
+- [ ] **Run**
+```bash
+cd /agent/repos/robynnv3-mcp-connector
+pnpm vitest run \
+  src/tools/cmo-text.test.ts \
+  src/tools/cmo-agent.test.ts \
+  src/tools/runs.test.ts \
+  src/tools/assist.test.ts \
+  src/tools/all-tools.test.ts
+pnpm typecheck
+```
+- [ ] **Expected:** all PASS; `tsc --noEmit` clean for changed files
+- [ ] **Assert:** tool text for clarify fixtures contains the decision question and `Options:`
+
+#### PR3 gate — MCP Phase B
+
+- [ ] **Run**
+```bash
+cd /agent/repos/robynnv3-mcp-connector
+pnpm vitest run \
+  src/ui/report-app.test.ts \
+  src/ui/cmo-agui-render.test.ts \
+  src/tools/cmo-agent.test.ts
+pnpm typecheck
+```
+- [ ] **Expected:** all PASS
+- [ ] **Assert `cmo-agui-render` covers all seven Phase B types** (`table`, `chart`, `metric_card`, `priority_list`, `progress_pipeline`, `status_checklist`, `decision_card`) **plus** unknown-type skip footer
+
+#### PR4 gate — Phase C end-to-end unit surface
+
+- [ ] **Run robynnv3**
+```bash
+cd /agent/repos/robynnv3
+pnpm exec vitest run \
+  src/lib/server/mcp/cmo-decide-runner.test.ts \
+  src/routes/api/cli/mcp/cmo/decide/server.test.ts \
+  src/lib/server/mcp/capability-catalog.test.ts \
+  src/lib/server/mcp/cmo-agent-runner.test.ts
+```
+- [ ] **Run MCP**
+```bash
+cd /agent/repos/robynnv3-mcp-connector
+pnpm vitest run \
+  src/tools/cmo-decide.test.ts \
+  src/robynn-client.test.ts \
+  src/tools/cmo-agent.test.ts \
+  src/tools/cmo-text.test.ts \
+  src/ui/cmo-agui-render.test.ts \
+  src/tools/all-tools.test.ts
+pnpm typecheck
+```
+- [ ] **Expected:** all PASS
+
+### Required unit cases (copy into tests if missing)
+
+#### `buildCmoAguiFields` / runner
+1. Prefers `finalized_response_blocks` over `live_response_blocks`
+2. Drops invalid block objects without throwing
+3. `has_decision_cards=true` iff a `decision_card` survives parsing
+4. `clarify_pending=true` only when decision cards exist **and** output is empty/clarify-like
+5. Failed runs zero out AGUI fields even if metadata still has blocks
+
+#### MCP text + tools
+1. No blocks → text equals `output` (or default summary)
+2. Clarify + decision card → text includes question, option labels, and block-type counts
+3. Pending + live blocks → keeps poll/`run_id` guidance **and** includes AGUI fields in `structuredContent`
+4. `robynn_run_status` completed payload mirrors AGUI fields from API
+
+#### Renderers
+1. Each Phase B type produces non-empty escaped HTML for a minimal valid fixture
+2. `tone_picker` (or other unknown) increments `skippedTypes` and appears in footer
+3. Malicious strings in labels are HTML-escaped (`<script>` not executable)
+
+#### Decide
+1. Valid `decision_id`/`option_id` starts a new run on the same `thread_id`
+2. Continuation message uses `buildCheckpointReply` semantics (`Proceed with this checkpoint.`)
+3. Unknown decision/option returns tool/API error (not a new CMO run)
+4. Cross-org / missing run returns not-found style error
+
+### Manual smoke (staging or local with real auth)
+
+Run only after the matching automated gate is green. Use a test org API key / MCP OAuth token. Replace placeholders.
+
+#### Smoke A — structured passthrough
+
+- [ ] **Start a clarify-style CMO run**
+```bash
+curl -sS -X POST "$ROBYNN_API/api/cli/mcp/cmo/run" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Plan a multi-channel launch campaign for us","assistant_id":"cmo_v3","route_hint":"auto"}' \
+  | tee /tmp/agui-mcp-a-run.json
+```
+- [ ] **If `status` is `pending`**, poll until complete:
+```bash
+RUN_ID=$(jq -r '.data.run_id' /tmp/agui-mcp-a-run.json)
+curl -sS "$ROBYNN_API/api/agents/cmo/runs/$RUN_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  | tee /tmp/agui-mcp-a-poll.json
+```
+- [ ] **Pass criteria**
+  - JSON includes `response_blocks` array (may be empty on some prompts; for a bare “plan a campaign” ask, prefer a fixture/org that produces clarify cards)
+  - When cards exist: `has_decision_cards=true` and at least one block has `"type":"decision_card"`
+  - `output` remains a string (legacy text not removed)
+
+#### Smoke B — MCP Apps report (hosted worker / local wrangler)
+
+- [ ] Start worker: `cd /agent/repos/robynnv3-mcp-connector && npx wrangler dev`
+- [ ] Call `robynn_cmo_agent` from an MCP client (or connector test harness) with a result that includes Phase B blocks
+- [ ] Open the `ui://reports/cmo-agui.html` / linked report resource
+- [ ] **Pass criteria**
+  - Table/metric/decision sections visible for present block types
+  - Unknown types do not crash the report
+  - Decision card shows question + options (read-only is OK before Phase C)
+
+#### Smoke C — decide loop
+
+- [ ] From Smoke A result, pick `decision_id` + `option_id`:
+```bash
+THREAD_ID=$(jq -r '.data.thread_id' /tmp/agui-mcp-a-poll.json)
+RUN_ID=$(jq -r '.data.id // .data.run_id' /tmp/agui-mcp-a-poll.json)
+DECISION_ID=$(jq -r '.data.response_blocks[] | select(.type=="decision_card") | .decisionId' /tmp/agui-mcp-a-poll.json | head -1)
+OPTION_ID=$(jq -r --arg d "$DECISION_ID" '.data.response_blocks[] | select(.decisionId==$d) | .options[0].id' /tmp/agui-mcp-a-poll.json)
+
+curl -sS -X POST "$ROBYNN_API/api/cli/mcp/cmo/decide" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"thread_id\":\"$THREAD_ID\",\"run_id\":\"$RUN_ID\",\"decision_id\":\"$DECISION_ID\",\"option_id\":\"$OPTION_ID\"}" \
+  | tee /tmp/agui-mcp-c-decide.json
+```
+- [ ] **Pass criteria**
+  - Response `status` is `success` or `pending` (not validation error)
+  - New `run_id` differs from the clarify run
+  - Same `thread_id` is preserved
+- [ ] **Negative check**
+```bash
+curl -sS -X POST "$ROBYNN_API/api/cli/mcp/cmo/decide" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"thread_id\":\"$THREAD_ID\",\"run_id\":\"$RUN_ID\",\"decision_id\":\"$DECISION_ID\",\"option_id\":\"not-a-real-option\"}"
+```
+  - Expect error payload / non-success; must **not** start a silent success run
+
+### Regression checklist
+
+- [ ] Existing guided tools still register (`pnpm vitest run src/tools/all-tools.test.ts`)
+- [ ] `robynn_cmo_agent` without blocks still returns readable `output` text
+- [ ] Docs no longer claim content/research default to `cmo_v2`
+- [ ] No new dependency on live SSE / `artifact_draft_delta` in MCP path
+
+### Evidence to attach on PRs
+
+For each implementation PR description, paste:
+1. The automated gate command + final PASS line counts
+2. For Phase A/C API PRs: redacted curl JSON snippets showing `response_blocks` / decide success
+3. For Phase B: note which block fixtures the renderer tests cover
 
 ---
 
