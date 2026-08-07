@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Remote MCP server deployed on Cloudflare Workers at `mcp.robynn.ai`. Exposes 17 brand-aware marketing tools to Claude via the Connectors Directory, including MCP Apps UI for intelligence reports. Uses OAuth 2.0 for authentication, with the actual user data stored on `robynn.ai` (SvelteKit frontend).
+Remote MCP server deployed on Cloudflare Workers at `mcp.robynn.ai`. Exposes 40+ brand-aware marketing tools to Claude via the Connectors Directory, including MCP Apps UI for intelligence reports. Uses OAuth 2.0 for authentication, with the actual user data stored on `robynn.ai` (SvelteKit frontend).
+
+CMO / Instant Agent tools default to `cmo_v3` when `assistant_id` is omitted; optional override is `cmo_v2` \| `cmo_v3` \| `auto`. Tools such as `robynn_cmo_agent`, `robynn_assist`, and `robynn_run_status` may return AGUI `response_blocks` (plus `has_decision_cards` / `clarify_pending`) in `structuredContent`. Use `robynn_cmo_decide` to continue clarify turns after a `decision_card` selection; loop: `robynn_cmo_agent` → (optional) `robynn_run_status` → `robynn_cmo_decide`.
 
 ## Beads PR Workflow
 
@@ -147,47 +149,34 @@ registerAppTool(server, {
 
 ## Tools Reference
 
-### Read-Only Tools (4)
+Inventory is 40+ tools (brand context, CMO/Instant Agent, campaigns, intelligence reports, brand book, website, connectors, vault, Hermes bridge, etc.). See `README.md` and `docs/architecture/robynn-mcp-tool-execution-matrix.md` for the full matrix. Highlights:
+
+### Read-Only / Status
 
 | Tool | Params | Calls |
 |------|--------|-------|
 | `robynn_brand_context` | `scope`: summary, voice, positioning, competitors, audience, products, rules, full | `GET /api/cli/context/{scope}` |
-| `robynn_brand_rules` | (none) | `GET /api/cli/context/rules` |
+| `robynn_brand_context_search` | `query`, filters | `POST /api/cli/mcp/brand-context/search` |
 | `robynn_status` | (none) | `GET /api/cli/context/summary` |
 | `robynn_usage` | (none) | `GET /api/cli/usage` |
 
-### CMO / Write Tools (3)
+### CMO / Instant Agent
+
+Omit `assistant_id` to use Instant Agent default (`cmo_v3`). Optional override: `cmo_v2` \| `cmo_v3` \| `auto`. Results may include AGUI fields: `response_blocks`, `has_decision_cards`, `clarify_pending`.
 
 | Tool | Params | Calls |
 |------|--------|-------|
-| `robynn_create_content` | `type`, `topic`, `instructions?`, `thread_id?` | Creates thread → starts run → polls to completion |
-| `robynn_research` | `query`, `type?`, `thread_id?` | Creates thread → starts run → polls to completion |
+| `robynn_create_content` | `type`, `topic`, `instructions?`, `thread_id?` | Creates thread → starts run → short poll / pending |
+| `robynn_research` | `query`, `type?`, `thread_id?` | Creates thread → starts run → short poll / pending |
+| `robynn_assist` | `message`, `assistant_id?`, routing hints, `thread_id?` | Instant Agent thread/run; may return `response_blocks` |
+| `robynn_cmo_agent` | `message`, `assistant_id?`, `route_hint?`, `thread_id?`, … | `POST /api/cli/mcp/cmo/run`; may return `response_blocks` |
+| `robynn_run_status` | `run_id` | Poll CMO/Instant Agent run (passes through `response_blocks`) |
+| `robynn_cmo_decide` | `thread_id`, `run_id`, `decision_id`, `option_id`, `note?` | `POST /api/cli/mcp/cmo/decide` — continue clarify loop after `decision_card` |
 | `robynn_conversations` | `action` (list/create), `title?` | Lists or creates CMO threads |
 
-### Intelligence Tools (3) — App tools with report UI
+### Intelligence / Website / Brand Book (App tools)
 
-| Tool | Params | Calls |
-|------|--------|-------|
-| `robynn_geo_analysis` | `company_name`, `category?`, `questions?`, `competitors?`, `analysis_depth?` | `POST /api/cli/mcp/geo-analysis` |
-| `robynn_competitive_battlecard` | `competitor_name`, `company_name?`, `focus_areas?`, `include_objections?` | `POST /api/cli/mcp/competitive-battlecard` |
-| `robynn_seo_opportunities` | `company_name`, `company_url?`, `competitors?`, `keywords?`, `market_context?` | `POST /api/cli/mcp/seo-opportunities` |
-
-### Brand Book Tools (5) — Guided-workflow app tools
-
-| Tool | Params | Calls |
-|------|--------|-------|
-| `robynn_brand_book_status` | `include_recent_reflections?` | `GET /api/cli/mcp/brand-book/status` |
-| `robynn_brand_book_gap_analysis` | `focus_areas?`, `include_competitive_context?`, `include_examples?` | `POST /api/cli/mcp/brand-book/gap-analysis` |
-| `robynn_brand_book_strategy` | `goals?`, `focus_areas?`, `include_intelligence_signals?` | `POST /api/cli/mcp/brand-book/strategy` |
-| `robynn_brand_reflections` | `status_filter?`, `limit?` | `GET /api/cli/mcp/brand-book/reflections` |
-| `robynn_publish_brand_book_html` | `theme?`, `include_private_sections?` | `POST /api/cli/mcp/brand-book/publish-html` |
-
-### Website Tools (2) — Guided-workflow app tools
-
-| Tool | Params | Calls |
-|------|--------|-------|
-| `robynn_website_audit` | `website_url?`, `goals?`, `competitors?`, `analysis_depth?` | `POST /api/cli/mcp/website/audit` |
-| `robynn_website_strategy` | `website_url?`, `primary_goal?`, `constraints?`, `priority_pages?` | `POST /api/cli/mcp/website/strategy` |
+GEO, SEO, battlecard, brand-book, website audit/strategy, content plan, weekly visibility, and campaign tools register via `registerAppTool` with MCP Apps report resources where applicable. Full list: `src/tools/*` and the execution matrix.
 
 ## File Reference
 
@@ -198,16 +187,21 @@ registerAppTool(server, {
 | `src/robynn-client.ts` | HTTP client for robynn.ai API with timeout/polling |
 | `src/internal-mcp-auth.ts` | HMAC signing for trusted MCP→robynn.ai token exchanges |
 | `src/types.ts` | `Env`, `Props`, all request/result types for intelligence + guided-workflow tools |
-| `src/tools/context.ts` | `robynn_brand_context` + `robynn_brand_rules` |
+| `src/tools/context.ts` | `robynn_brand_context` + `robynn_brand_context_search` |
 | `src/tools/status.ts` | `robynn_status` + `robynn_usage` |
 | `src/tools/content.ts` | `robynn_create_content` |
 | `src/tools/research.ts` | `robynn_research` |
+| `src/tools/assist.ts` | `robynn_assist` (AGUI `response_blocks` passthrough) |
+| `src/tools/cmo-agent.ts` | `robynn_cmo_agent` (Instant Agent / CMO v3; AGUI fields) |
+| `src/tools/runs.ts` | `robynn_run_status` (AGUI `response_blocks` passthrough) |
+| `src/tools/cmo-decide.ts` | `robynn_cmo_decide` (clarify loop after `decision_card` selection) |
 | `src/tools/conversations.ts` | `robynn_conversations` |
 | `src/tools/geo.ts` | `robynn_geo_analysis` (app tool) |
 | `src/tools/battlecard.ts` | `robynn_competitive_battlecard` (app tool) |
 | `src/tools/seo.ts` | `robynn_seo_opportunities` (app tool) |
-| `src/tools/brand-book.ts` | 5 brand book tools (app tools) |
-| `src/tools/website.ts` | `robynn_website_audit` + `robynn_website_strategy` (app tools) |
+| `src/tools/brand-book.ts` | Brand book tools (app tools) |
+| `src/tools/website.ts` | Website audit/strategy tools (app tools) |
+| `src/tools/cmo-text.ts` | Text fallback summarizer for AGUI `response_blocks` |
 | `src/ui/report-app.ts` | Registers MCP App report resources (`ui://reports/*.html`) + `REPORT_RESOURCE_URIS` |
 | `src/ui/report-app-script.ts` | Shared browser runtime for the interactive report apps |
 | `wrangler.toml` | Worker config, KV + DO bindings, env vars |
@@ -224,7 +218,7 @@ registerAppTool(server, {
 | `CONNECTOR_STATE_SECRET` | Env var | Secret for HMAC-signed OAuth state |
 | `MCP_INTERNAL_AUTH_SECRET` | Env var (optional) | Secret for signing trusted token exchanges with robynn.ai |
 | `MCP_SERVER_NAME` | Env var | `Robynn` |
-| `MCP_SERVER_VERSION` | Env var | `0.1.0` |
+| `MCP_SERVER_VERSION` | Env var | `0.1.5` (wrangler.toml; package/`APP_VERSION` may differ) |
 
 ## Dependencies on robynnv3
 

@@ -963,6 +963,13 @@ export interface Thread {
   message_count?: number;
 }
 
+export type ResponseBlock = {
+  id: string;
+  type: string;
+  title?: string;
+  [key: string]: unknown;
+};
+
 /** CMO run result */
 export interface RunResult {
   id: string;
@@ -970,6 +977,9 @@ export interface RunResult {
   output?: string;
   thread_id?: string;
   tokens_used?: number;
+  response_blocks?: ResponseBlock[];
+  has_decision_cards?: boolean;
+  clarify_pending?: boolean;
 }
 
 export type CmoAssistantId = "cmo_v2" | "cmo_v3" | "auto";
@@ -1006,6 +1016,17 @@ export interface CmoAgentResult extends IntelligenceToolResultBase {
   run_id: string;
   tokens_used?: number | null;
   poll_after_seconds?: number;
+  response_blocks?: ResponseBlock[];
+  has_decision_cards?: boolean;
+  clarify_pending?: boolean;
+}
+
+export interface CmoDecideRequest {
+  thread_id: string;
+  run_id: string;
+  decision_id: string;
+  option_id: string;
+  note?: string;
 }
 
 export interface MarketingCampaignCreatorRequest {

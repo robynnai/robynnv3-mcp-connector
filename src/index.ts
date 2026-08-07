@@ -17,6 +17,7 @@ import { registerSeoTools } from "./tools/seo";
 import { registerBrandBookTools } from "./tools/brand-book";
 import { registerCampaignTools } from "./tools/campaign";
 import { registerCmoAgentTools } from "./tools/cmo-agent";
+import { registerCmoDecideTools } from "./tools/cmo-decide";
 import { registerWebsiteTools } from "./tools/website";
 import { registerContentPlanTools } from "./tools/content-plan";
 import { registerWeeklyVisibilityTools } from "./tools/weekly-visibility";
@@ -108,6 +109,7 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
     registerSeoTools(this.server, client);
     registerBrandBookTools(this.server, client);
     registerCmoAgentTools(this.server, client);
+    registerCmoDecideTools(this.server, client);
     registerCampaignTools(this.server, client);
     registerWebsiteTools(this.server, client);
     registerContentPlanTools(this.server, client);

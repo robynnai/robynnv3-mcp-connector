@@ -20,7 +20,7 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 │  │  OAuthProvider       │  │  McpAgent (Durable Object)        │ │
 │  │  /authorize → login  │  │  /mcp — Streamable HTTP           │ │
 │  │  /token    → tokens  │  │  /sse — SSE transport             │ │
-│  │  /register → DCR     │  │  24 tools + MCP Apps UI           │ │
+│  │  /register → DCR     │  │  40+ tools + MCP Apps UI          │ │
 │  └─────────┬───────────┘  └──────────────┬─────────────────────┘ │
 │            │                              │                      │
 │            │  KV Store (OAuth state)      │                      │
@@ -48,11 +48,12 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 | `robynn_status` | Status | Direct `robynnv3` status API | No |
 | `robynn_usage` | Status | Direct `robynnv3` usage API | No |
 | `robynn_conversations` | Thread management | `robynnv3` CMO thread list/create endpoints | No |
-| `robynn_create_content` | CMO execution | `robynnv3` CMO thread/run pipeline, defaulting to `cmo_v2` unless env overrides it | No |
-| `robynn_research` | CMO execution | `robynnv3` CMO thread/run pipeline, defaulting to `cmo_v2` unless env overrides it | No |
-| `robynn_assist` | CMO execution | `robynnv3` CMO thread/run pipeline with caller-provided assistant routing hints and preserved thread history | No |
-| `robynn_cmo_agent` | CMO execution | `robynnv3` MCP-safe CMO execution route | No |
+| `robynn_create_content` | CMO execution | `robynnv3` Instant Agent thread/run pipeline; omit `assistant_id` to use default `cmo_v3` | No |
+| `robynn_research` | CMO execution | `robynnv3` Instant Agent thread/run pipeline; omit `assistant_id` to use default `cmo_v3` | No |
+| `robynn_assist` | CMO execution | Instant Agent thread/run; omit `assistant_id` for `cmo_v3`, or override with `cmo_v2`\|`cmo_v3`\|`auto` | No |
+| `robynn_cmo_agent` | CMO execution | MCP-safe CMO route (Instant Agent); omit `assistant_id` for `cmo_v3`, optional override `cmo_v2`\|`cmo_v3`\|`auto` | No |
 | `robynn_run_status` | Thread management | Direct `robynnv3` CMO run status endpoint for long-running content/research jobs | No |
+| `robynn_cmo_decide` | CMO execution | MCP-safe CMO decide route; continues a clarify turn after `decision_card` selection | No |
 | `robynn_campaign_creator` | Campaign strategy | `robynnv3` MCP-safe marketing campaign route with Rory artifact persistence and unlisted report URLs for Robynn prospecting | No |
 | `robynn_campaign_status` | Campaign strategy | Direct `robynnv3` marketing campaign status route for pending or completed campaign runs with report URLs on completion | No |
 | `robynn_geo_analysis` | Intelligence | GEO proxy in `robynnv3` -> LangGraph `geo_researcher` by default | Yes |
@@ -68,7 +69,9 @@ Users connect by clicking "Robynn" in Claude's directory, authenticating via OAu
 | `robynn_website_audit_status` | Website intelligence | Polls the prospect audit row/run created by `robynn_website_audit` until the designed audit page has report data and download artifacts | Yes |
 | `robynn_website_strategy` | Website intelligence | `robynnv3` website adapter -> LangGraph `website_report_v1` | Yes |
 
-All tools return both `content` (text for LLM) and `structuredContent` (machine-readable JSON). Long-running `robynn_create_content`, `robynn_research`, and `robynn_assist` runs may return a pending `run_id` instead of blocking until completion; use `robynn_run_status` to fetch the final output. `robynn_cmo_agent` follows the same pending model through `robynn_run_status`, while `robynn_campaign_creator` may return a pending LangGraph thread/run pair that should be checked with `robynn_campaign_status`. The local CLI now waits only briefly for those runs before returning `pending`, which avoids MCP client timeouts in command-based agents like OpenClaw. You can tune that short wait with `ROBYNN_MCP_SYNC_WAIT_MS` (default `8000`, max `30000`). Tools with inline app support expose MCP Apps resources from the Worker, while the backend agent or service only returns data.
+All tools return both `content` (text for LLM) and `structuredContent` (machine-readable JSON). CMO tools (`robynn_cmo_agent`, `robynn_assist`, `robynn_run_status`, `robynn_cmo_decide`, and related Instant Agent runs) may also include AGUI `response_blocks` in `structuredContent` (decision cards, progress, tables, charts), plus `has_decision_cards` / `clarify_pending` flags when the backend attaches them. Omit `assistant_id` to use the Instant Agent default (`cmo_v3`); tools that accept the field support optional override `cmo_v2` \| `cmo_v3` \| `auto`.
+
+Long-running `robynn_create_content`, `robynn_research`, and `robynn_assist` runs may return a pending `run_id` instead of blocking until completion; use `robynn_run_status` to fetch the final output (including any live or finalized `response_blocks`). `robynn_cmo_agent` follows the same pending model through `robynn_run_status`. When a completed or polled response includes a `decision_card` block (`has_decision_cards` / `clarify_pending`), call `robynn_cmo_decide` with the `thread_id`, `run_id`, `decision_id`, and selected `option_id` to continue the clarify loop; pending decide runs are polled again via `robynn_run_status`. Clarify loop: `robynn_cmo_agent` → (optional) `robynn_run_status` → `robynn_cmo_decide` (repeat as needed). `robynn_campaign_creator` may return a pending LangGraph thread/run pair that should be checked with `robynn_campaign_status`. The local CLI now waits only briefly for those runs before returning `pending`, which avoids MCP client timeouts in command-based agents like OpenClaw. You can tune that short wait with `ROBYNN_MCP_SYNC_WAIT_MS` (default `8000`, max `30000`). Tools with inline app support expose MCP Apps resources from the Worker, while the backend agent or service only returns data.
 
 For Robynn-owned prospecting, `robynn_website_audit` creates the same public prospect audit page used by Super Admin and returns an unlisted `audit_url`, `prospect_audit_id`, and LangGraph thread/run IDs. Use `robynn_website_audit_status` with the returned `prospect_audit_id` to poll until the designed audit page is complete; completed status responses include `pdf_url` only when the underlying Super Admin PDF artifact exists. Completed `robynn_campaign_creator` / `robynn_campaign_status` responses persist canonical content as Rory/Brand Hub artifacts and include unlisted robynn.ai `report_url` links. These URLs are tokenized share links intended for prospecting handoff; raw Supabase Storage URLs are not returned.
 
@@ -114,6 +117,7 @@ src/
     ├── conversations.ts  # robynn_conversations
     ├── runs.ts           # robynn_run_status
     ├── cmo-agent.ts      # robynn_cmo_agent
+    ├── cmo-decide.ts     # robynn_cmo_decide
     ├── campaign.ts       # robynn_campaign_creator + robynn_campaign_status
     ├── geo.ts            # robynn_geo_analysis
     ├── battlecard.ts     # robynn_competitive_battlecard
@@ -238,7 +242,8 @@ robynn auth status
 
 The direct CMO and campaign tools are available in both the remote connector and the local CLI bridge:
 
-- `robynn_cmo_agent` for direct top-level CMO requests
+- `robynn_cmo_agent` for direct top-level Instant Agent / CMO v3 requests (omit `assistant_id` for default `cmo_v3`; optional `cmo_v2` \| `cmo_v3` \| `auto`). Results may include `response_blocks` in `structuredContent`.
+- `robynn_cmo_decide` to continue a clarify turn after selecting an option from a `decision_card` returned by `robynn_cmo_agent` or `robynn_run_status`. Clarify loop: `robynn_cmo_agent` → (optional) `robynn_run_status` → `robynn_cmo_decide`.
 - `robynn_campaign_creator` for campaign generation; completed runs include unlisted robynn.ai report URLs
 - `robynn_campaign_status` for follow-up polling on pending campaign runs; completed polls include the same saved artifact and report URLs
 

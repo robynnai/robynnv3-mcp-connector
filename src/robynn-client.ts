@@ -8,6 +8,7 @@ import type {
   CmoThreadRunRequest,
   CmoAgentRequest,
   CmoAgentResult,
+  CmoDecideRequest,
   BrandBookStatusRequest,
   BrandBookStatusResult,
   BrandBookGapAnalysisRequest,
@@ -535,6 +536,16 @@ export class RobynnClient {
     payload: CmoAgentRequest
   ): Promise<RobynnApiResponse<CmoAgentResult>> {
     return this.fetch("/api/cli/mcp/cmo/run", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, POLL_TIMEOUT_MS);
+  }
+
+  /** Continue a CMO clarify turn by submitting a decision_card selection */
+  async cmoDecide(
+    payload: CmoDecideRequest
+  ): Promise<RobynnApiResponse<CmoAgentResult>> {
+    return this.fetch("/api/cli/mcp/cmo/decide", {
       method: "POST",
       body: JSON.stringify(payload),
     }, POLL_TIMEOUT_MS);

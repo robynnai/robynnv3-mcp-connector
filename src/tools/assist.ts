@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import type { ResponseBlock } from "../types";
 import type { RobynnClient } from "../robynn-client";
+import { buildCmoAguiTextFallback } from "./cmo-text";
 import {
   getShortSyncWaitMs,
   isRunTimeoutError,
@@ -20,6 +22,22 @@ function buildThreadTitle(message: string) {
   }
 
   return `Assist: ${trimmed.slice(0, 47)}...`;
+}
+
+function extractAguiFields(data: {
+  response_blocks?: ResponseBlock[];
+  has_decision_cards?: boolean;
+  clarify_pending?: boolean;
+}) {
+  const responseBlocks = Array.isArray(data.response_blocks)
+    ? data.response_blocks
+    : [];
+
+  return {
+    response_blocks: responseBlocks,
+    has_decision_cards: Boolean(data.has_decision_cards),
+    clarify_pending: Boolean(data.clarify_pending),
+  };
 }
 
 export function registerAssistTools(server: McpServer, client: RobynnClient) {
@@ -87,17 +105,25 @@ export function registerAssistTools(server: McpServer, client: RobynnClient) {
           return toErrorResult("Assist run failed");
         }
 
+        const agui = extractAguiFields(result.data);
         const responseData = {
           output: result.data.output,
           thread_id: threadId,
           run_id: result.data.id,
           tokens_used: result.data.tokens_used,
           status: result.data.status,
+          ...agui,
         };
 
         return toSuccessResult(
           responseData as Record<string, unknown>,
-          result.data.output || "Assist run completed.",
+          buildCmoAguiTextFallback({
+            output: result.data.output,
+            clarify_pending: agui.clarify_pending,
+            has_decision_cards: agui.has_decision_cards,
+            response_blocks: agui.response_blocks,
+            defaultSummary: "Assist run completed.",
+          }),
         );
       } catch (err) {
         return toErrorResult(
