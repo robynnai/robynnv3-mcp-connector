@@ -139,7 +139,16 @@ function appendOrchestratorSummary(data: Record<string, unknown>) {
   return lines.join("\n");
 }
 
-export function registerWebsiteTools(server: McpServer, client: RobynnClient) {
+/** `full` = hosted Worker catalog; `core` = CLI-trimmed marketer surface. */
+export type WebsiteToolFamily = "full" | "core";
+
+export function registerWebsiteTools(
+  server: McpServer,
+  client: RobynnClient,
+  options: { family?: WebsiteToolFamily } = {},
+) {
+  const family = options.family ?? "full";
+
   registerAppTool(
     server,
     "robynn_website_audit",
@@ -258,6 +267,7 @@ export function registerWebsiteTools(server: McpServer, client: RobynnClient) {
     },
   );
 
+  if (family === "full") {
   registerAppTool(
     server,
     "robynn_website_audit_v2",
@@ -650,6 +660,7 @@ export function registerWebsiteTools(server: McpServer, client: RobynnClient) {
       }
     },
   );
+  }
 
   registerAppTool(
     server,

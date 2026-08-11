@@ -18,7 +18,10 @@ import { registerSeoTools } from '../tools/seo';
 import { registerBrandBookTools } from '../tools/brand-book';
 import { registerCampaignTools } from '../tools/campaign';
 import { registerCmoAgentTools } from '../tools/cmo-agent';
+import { registerCmoDecideTools } from '../tools/cmo-decide';
 import { registerWebsiteTools } from '../tools/website';
+import { registerContentPlanTools } from '../tools/content-plan';
+import { registerWeeklyVisibilityTools } from '../tools/weekly-visibility';
 import { registerConnectorTools } from '../tools/connectors';
 import { registerCapabilityTools } from '../tools/capabilities';
 import { registerBrandOperationTools } from '../tools/brand-operations';
@@ -153,8 +156,13 @@ program
     registerSeoTools(server, client);
     registerBrandBookTools(server, client);
     registerCmoAgentTools(server, client);
+    registerCmoDecideTools(server, client);
     registerCampaignTools(server, client);
-    registerWebsiteTools(server, client);
+    // CLI keeps the marketer core website path only (audit + status + strategy).
+    // Hosted Worker still registers the full audit-family surface.
+    registerWebsiteTools(server, client, { family: "core" });
+    registerContentPlanTools(server, client);
+    registerWeeklyVisibilityTools(server, client);
     registerCapabilityTools(server, client);
     registerBrandOperationTools(server, client);
     registerConnectorTools(server, client);

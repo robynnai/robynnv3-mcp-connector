@@ -23,6 +23,28 @@ function createServerHarness() {
 }
 
 describe("registerWebsiteTools", () => {
+  it("registers only the core website tools for the CLI family", () => {
+    const { server, handlers } = createServerHarness();
+    registerWebsiteTools(server as never, {} as never, { family: "core" });
+
+    expect([...handlers.keys()].sort()).toEqual([
+      "robynn_website_audit",
+      "robynn_website_audit_status",
+      "robynn_website_strategy",
+    ]);
+  });
+
+  it("registers the full website audit family by default", () => {
+    const { server, handlers } = createServerHarness();
+    registerWebsiteTools(server as never, {} as never);
+
+    expect(handlers.has("robynn_website_audit")).toBe(true);
+    expect(handlers.has("robynn_website_audit_v2")).toBe(true);
+    expect(handlers.has("robynn_website_optimization_audit")).toBe(true);
+    expect(handlers.has("robynn_website_audit_orchestrator")).toBe(true);
+    expect(handlers.has("robynn_website_strategy")).toBe(true);
+  });
+
   it("returns structured website audit results on success", async () => {
     const { server, handlers, configs } = createServerHarness();
     const client = {
