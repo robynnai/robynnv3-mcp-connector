@@ -44,6 +44,7 @@ function reportFixture(overrides: Record<string, unknown> = {}) {
     },
     source_freshness: {},
     missing_sources: [],
+    source_warnings: [],
     seo_kpis: {
       organic_clicks: 42,
       organic_impressions: 1000,
@@ -121,11 +122,12 @@ describe("robynn_weekly_visibility_report", () => {
         success: true,
         data: reportFixture({
           summary:
-            "Weekly visibility report needs GSC and GA4 data before it can summarize SEO performance.",
+            "Weekly visibility report needs GA4 data before it can summarize page-level SEO performance.",
           status: "missing_data",
-          missing_sources: ["gsc", "ga4"],
+          missing_sources: ["ga4"],
+          source_warnings: ["gsc"],
           next_steps: [
-            "Connect Google Search Console evidence through Brand Monitor.",
+            "Check Google Search Console in Integrations or refresh Brand Monitor.",
           ],
         }),
       }),
@@ -142,7 +144,45 @@ describe("robynn_weekly_visibility_report", () => {
 
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent.status).toBe("missing_data");
-    expect(result.content[0].text).toContain("Missing sources: gsc, ga4");
+    expect(result.content[0].text).toContain("Missing sources: ga4");
+    expect(result.content[0].text).toContain("Source warnings: gsc");
+  });
+
+  it("reports missing GSC as a non-blocking source warning", async () => {
+    const client = {
+      weeklyVisibilityReport: vi.fn().mockResolvedValue({
+        success: true,
+        data: reportFixture({
+          summary:
+            "Google Search Console keyword evidence is unavailable for this report.",
+          status: "partial",
+          missing_sources: [],
+          source_warnings: ["gsc"],
+          keyword_table: [],
+          striking_distance_keywords: [],
+          next_steps: [
+            "Check Google Search Console in Integrations or refresh Brand Monitor to add query clicks, impressions, CTR, and ranking movement.",
+          ],
+        }),
+      }),
+    };
+    const { handlers } = createHarness(client);
+
+    const result = (await handlers.get("robynn_weekly_visibility_report")!({
+      website_id: "11111111-1111-4111-8111-111111111111",
+    })) as {
+      structuredContent: Record<string, unknown>;
+      content: Array<{ text: string }>;
+      isError?: boolean;
+    };
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent.status).toBe("partial");
+    expect(result.structuredContent.source_warnings).toEqual(["gsc"]);
+    expect(result.content[0].text).toContain("Source warnings: gsc");
+    expect(result.content[0].text).toContain(
+      "Next steps: Check Google Search Console",
+    );
   });
 
   it("returns an MCP error result on upstream failure", async () => {

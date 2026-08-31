@@ -770,6 +770,7 @@ export interface WeeklyVisibilityReportResult {
   range: WeeklyVisibilityRange;
   source_freshness: Record<string, unknown>;
   missing_sources: string[];
+  source_warnings: string[];
   seo_kpis: {
     organic_clicks: number;
     organic_impressions: number;
