@@ -1,114 +1,59 @@
 /**
- * COS-PLUGIN-001 P01 — catalog baseline.
+ * COS-PLUGIN-001 P01 — catalog baseline (P13: on the real registration harness).
  *
- * Recounts the tool catalog from the real registration code paths through a
- * real MCP `tools/list` round-trip (SDK Client ↔ McpServer over an in-memory
- * transport), and checks that contracts/tool-route-map.json covers exactly the
- * registered tools with the annotations the code currently declares.
- *
- * The registrar call order is parsed from `RobynnMCP.init()` (src/index.ts)
- * and the CLI `mcp` command (src/cli/index.ts) so the counts cannot drift
- * from the shipped wiring. P12 applied the titles, hints and descriptions;
- * annotation expectations here change together with the map.
+ * Recounts the tool catalog through a real MCP `tools/list` round-trip and
+ * checks that contracts/tool-route-map.json covers exactly the registered tools
+ * with the annotations the code declares. Since P13 the tools come from the
+ * real `RobynnMCP` Durable Object (`onStart` → `init()`) and the real
+ * `robynn mcp` CLI action (see catalog-harness.ts), not from parsing the
+ * registrar calls. P12 applied the titles, hints and descriptions; annotation
+ * expectations here change together with the map. The full per-tool contract
+ * and the committed snapshot live in catalog-contract.test.ts.
  */
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { registerAssistTools } from "../tools/assist";
-import { registerBattlecardTools } from "../tools/battlecard";
-import { BRAND_BOOK_READS_PERSIST_COMPLETENESS, registerBrandBookTools } from "../tools/brand-book";
-import { registerBrandOperationTools } from "../tools/brand-operations";
-import { registerCampaignTools } from "../tools/campaign";
-import { registerCapabilityTools } from "../tools/capabilities";
-import { registerCmoAgentTools } from "../tools/cmo-agent";
-import { registerCmoDecideTools } from "../tools/cmo-decide";
-import { registerConnectorActionTools } from "../tools/connector-act";
-import { CONNECTED_APP_READS_PERSIST_POLICY, registerConnectorTools } from "../tools/connectors";
-import { registerContentPlanTools } from "../tools/content-plan";
-import { registerContentTools } from "../tools/content";
-import { registerContextTools } from "../tools/context";
-import { registerConversationTools } from "../tools/conversations";
-import { registerGeoTools } from "../tools/geo";
-import { registerHermesBridgeTools } from "../tools/hermes-bridge";
-import { registerResearchTools } from "../tools/research";
-import { registerRunTools } from "../tools/runs";
-import { registerSeoTools } from "../tools/seo";
-import { registerStatusTools } from "../tools/status";
-import { registerStrapiTools } from "../tools/strapi";
-import { registerVaultTools } from "../tools/vault";
-import { registerWebsiteTools } from "../tools/website";
-import { registerWeeklyVisibilityTools } from "../tools/weekly-visibility";
+vi.mock("cloudflare:workers", () => ({
+  WorkerEntrypoint: class {},
+  DurableObject: class {
+    ctx: unknown;
+    env: unknown;
+    constructor(ctx: unknown, env: unknown) {
+      this.ctx = ctx;
+      this.env = env;
+    }
+  },
+  env: {},
+}));
+vi.mock("cloudflare:email", () => ({ EmailMessage: class {} }));
+vi.mock("../cli/config", () => ({ readConfig: () => ({ apiKey: "p13-synthetic-cli-key" }), writeConfig: () => {} }));
+vi.mock("@modelcontextprotocol/sdk/server/stdio.js", async () =>
+  (await import("./catalog-harness")).cliStdioTransportMock(),
+);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Registrar = (server: McpServer, dep: never, options?: any) => void;
-
-const REGISTRARS: Record<string, Registrar> = {
-  registerAssistTools,
-  registerBattlecardTools,
-  registerBrandBookTools,
-  registerBrandOperationTools,
-  registerCampaignTools,
-  registerCapabilityTools,
-  registerCmoAgentTools,
-  registerCmoDecideTools,
-  registerConnectorActionTools,
-  registerConnectorTools,
-  registerContentPlanTools,
-  registerContentTools,
-  registerContextTools,
-  registerConversationTools,
-  registerGeoTools,
-  registerHermesBridgeTools,
-  registerResearchTools,
-  registerRunTools,
-  registerSeoTools,
-  registerStatusTools,
-  registerStrapiTools,
-  registerVaultTools,
-  registerWebsiteTools,
-  registerWeeklyVisibilityTools,
-};
-
-interface RegistrarCall {
-  name: string;
-  coreWebsiteFamily: boolean;
-}
+import { BRAND_BOOK_READS_PERSIST_COMPLETENESS } from "../tools/brand-book";
+import { CONNECTED_APP_READS_PERSIST_POLICY } from "../tools/connectors";
+import { APP_BASE_URL, schemaDigest, startCliSession, startWorkerSession } from "./catalog-harness";
 
 const readSource = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
 
-/** Registrar calls in source order, e.g. `registerWebsiteTools(server, client, { family: "core" })`. */
-function parseRegistrarCalls(source: string, serverExpr: string): RegistrarCall[] {
-  const escaped = serverExpr.replace(/\./g, "\\.");
-  const pattern = new RegExp(`(register\\w+Tools)\\(\\s*${escaped}\\s*,([^;]*)\\);`, "g");
-  return [...source.matchAll(pattern)].map((m) => ({
-    name: m[1],
-    coreWebsiteFamily: /family:\s*"core"/.test(m[2]),
-  }));
-}
+type ListedTool = Awaited<ReturnType<Awaited<ReturnType<typeof startWorkerSession>>["client"]["listTools"]>>["tools"][number];
+const catalog = {} as { worker: ListedTool[]; noVault: ListedTool[]; cli: ListedTool[] };
 
-async function listTools(calls: RegistrarCall[], opts: { vault: boolean }) {
-  const server = new McpServer({ name: "catalog-baseline", version: "0.0.0" });
-  for (const call of calls) {
-    if (call.name === "registerVaultTools" && !opts.vault) continue;
-    const register = REGISTRARS[call.name];
-    expect(register, `unknown registrar ${call.name}`).toBeTypeOf("function");
-    register(server, {} as never, call.coreWebsiteFamily ? { family: "core" } : undefined);
-  }
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: "catalog-baseline-client", version: "0.0.0" });
-  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
-  const { tools } = await client.listTools();
-  await client.close();
-  return tools;
-}
-
-const workerCalls = parseRegistrarCalls(readSource("src/index.ts"), "this.server");
-const cliCalls = parseRegistrarCalls(readSource("src/cli/index.ts"), "server");
+beforeAll(async () => {
+  process.env.ROBYNN_API_BASE_URL = APP_BASE_URL;
+  const worker = await startWorkerSession();
+  const noVault = await startWorkerSession({ vault: false });
+  const cli = await startCliSession();
+  catalog.worker = (await worker.client.listTools()).tools;
+  catalog.noVault = (await noVault.client.listTools()).tools;
+  catalog.cli = (await cli.client.listTools()).tools;
+  await Promise.all([worker.close(), noVault.close(), cli.close()]);
+}, 30_000);
+afterAll(() => {
+  delete process.env.ROBYNN_API_BASE_URL;
+});
 
 interface Hints {
   readOnlyHint: boolean;
@@ -135,22 +80,6 @@ interface RouteMapTool {
   environmentGate: string | null;
 }
 
-/** Sorted-key compact JSON without string-valued `description` keys (see the map's $comment). */
-function canonicalSchemaJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalSchemaJson).join(",")}]`;
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    const keys = Object.keys(record)
-      .filter((key) => !(key === "description" && typeof record[key] === "string"))
-      .sort();
-    return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalSchemaJson(record[key])}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
-const schemaDigest = (schema: unknown) =>
-  `sha256:${createHash("sha256").update(canonicalSchemaJson(schema)).digest("hex")}`;
-
 const declaredHints = (annotations: Record<string, unknown> | undefined): Hints => {
   const hints: Hints = {
     readOnlyHint: annotations?.readOnlyHint as boolean,
@@ -159,6 +88,11 @@ const declaredHints = (annotations: Record<string, unknown> | undefined): Hints 
   };
   if (annotations?.idempotentHint !== undefined) hints.idempotentHint = annotations.idempotentHint as boolean;
   return hints;
+};
+
+const routeMap = JSON.parse(readSource("contracts/tool-route-map.json")) as {
+  counts: { worker: number; workerWithoutVault: number; cli: number };
+  tools: RouteMapTool[];
 };
 
 /**
@@ -180,10 +114,12 @@ const P07_CONDITIONAL_TOOLS: Record<
   robynn_brand_book_status: brandBookConditional,
   robynn_brand_book_strategy: brandBookConditional,
   robynn_publish_brand_book_html: brandBookConditional,
-  // D-A keeps the connected-app query on tools:execute either way.
+  // D-A (open decision, default tools:execute): the post-P07 scope is read from the map's
+  // requiredScopeAfterP07, the single D-A flip point. A downgrade to brand:read needs P07 first:
+  // while the flag is pending the tool is not read-only, so rule 1 keeps requiredScope at tools:execute.
   robynn_query_connected_app: {
     pending: CONNECTED_APP_READS_PERSIST_POLICY,
-    scopeAfterP07: "tools:execute",
+    scopeAfterP07: routeMap.tools.find((t) => t.name === "robynn_query_connected_app")!.requiredScopeAfterP07!,
     marker: "connector policy",
   },
 };
@@ -203,24 +139,10 @@ const STARTER_POLLERS: Array<[starter: string, poller: string]> = [
   ["robynn_website_audit_orchestrator", "robynn_website_audit_orchestrator_status"],
 ];
 
-const routeMap = JSON.parse(readSource("contracts/tool-route-map.json")) as {
-  counts: { worker: number; workerWithoutVault: number; cli: number };
-  tools: RouteMapTool[];
-};
 
 describe("P01 catalog baseline (real tools/list)", () => {
-  it("parses the registrar wiring from RobynnMCP.init() and the CLI mcp command", () => {
-    expect(workerCalls).toHaveLength(24);
-    expect(workerCalls.at(-1)?.name).toBe("registerVaultTools");
-    expect(cliCalls).toHaveLength(23);
-    expect(cliCalls.filter((c) => c.coreWebsiteFamily).map((c) => c.name)).toEqual(["registerWebsiteTools"]);
-    expect(cliCalls.map((c) => c.name)).not.toContain("registerVaultTools");
-  });
-
   it("counts 48 Worker tools with Vault, 46 without, 40 in the local CLI", async () => {
-    const worker = await listTools(workerCalls, { vault: true });
-    const noVault = await listTools(workerCalls, { vault: false });
-    const cli = await listTools(cliCalls, { vault: false });
+    const { worker, noVault, cli } = catalog;
 
     expect(worker).toHaveLength(48);
     expect(noVault).toHaveLength(46);
@@ -242,7 +164,7 @@ describe("P01 catalog baseline (real tools/list)", () => {
   });
 
   it("records the P12 annotation catalog: 20/28 readOnly (25/23 after P07), 7 destructive, 19 openWorld, 26/16 idempotent, 48 titles", async () => {
-    const worker = await listTools(workerCalls, { vault: true });
+    const { worker } = catalog;
     const count = (pred: (t: (typeof worker)[number]) => boolean) => worker.filter(pred).length;
 
     // 25/23 once P07 removes both hidden writes; as shipped all five † tools are pending (20/28).
@@ -266,9 +188,9 @@ describe("P01 catalog baseline (real tools/list)", () => {
   });
 
   it("contracts/tool-route-map.json maps every registered tool exactly once with matching hints, title, input schema and surfaces", async () => {
-    const worker = await listTools(workerCalls, { vault: true });
-    const noVault = new Set((await listTools(workerCalls, { vault: false })).map((t) => t.name));
-    const cli = new Set((await listTools(cliCalls, { vault: false })).map((t) => t.name));
+    const { worker } = catalog;
+    const noVault = new Set(catalog.noVault.map((t) => t.name));
+    const cli = new Set(catalog.cli.map((t) => t.name));
 
     expect(routeMap.counts).toEqual({ worker: 48, workerWithoutVault: 46, cli: 40 });
     expect(routeMap.tools.map((t) => t.name).sort()).toEqual(worker.map((t) => t.name).sort());
@@ -350,7 +272,7 @@ describe("P01 catalog baseline (real tools/list)", () => {
 
 describe("P12 tool metadata (real tools/list)", () => {
   it("keeps the † tools conservative until P07 and records the post-P07 flip in the map", async () => {
-    const worker = await listTools(workerCalls, { vault: true });
+    const { worker } = catalog;
     const conditional = routeMap.tools.filter((t) => t.hintsAfterP07).map((t) => t.name).sort();
     expect(conditional).toEqual(Object.keys(P07_CONDITIONAL_TOOLS).sort());
 
@@ -373,7 +295,7 @@ describe("P12 tool metadata (real tools/list)", () => {
   });
 
   it("names the exact poller in every starter description and the starter in every poller description", async () => {
-    const worker = await listTools(workerCalls, { vault: true });
+    const { worker } = catalog;
     const description = (name: string) => worker.find((t) => t.name === name)?.description ?? "";
 
     for (const [starter, poller] of STARTER_POLLERS) {
@@ -383,7 +305,7 @@ describe("P12 tool metadata (real tools/list)", () => {
   });
 
   it("discloses credit use, environment gates and the brand-book export semantics", async () => {
-    const worker = await listTools(workerCalls, { vault: true });
+    const { worker } = catalog;
 
     for (const tool of worker) {
       const mapped = routeMap.tools.find((t) => t.name === tool.name)!;

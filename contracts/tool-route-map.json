@@ -1,5 +1,5 @@
 {
-  "$comment": "COS-PLUGIN-001 tool → app route map (P01, updated by P12). Verified against real tools/list by src/__tests__/catalog-baseline.test.ts. Paths in appRoutes[].file are relative to the robynnv3 app repo unless prefixed 'mcp:' in gaps. titleProposal = the shipped tool title (top-level and annotations.title). currentHints = annotations the code declares; proposedHints = target against today's backend (equal to currentHints after P12); hintsAfterP07 / requiredScopeAfterP07 = target once P07 removes the write named in `conditional` (the five † tools). pairedWith is an array of tool names. inputSchemaDigest = sha256 of the tools/list inputSchema with every string-valued 'description' key removed (sorted-key compact JSON).",
+  "$comment": "COS-PLUGIN-001 tool → app route map (P01, updated by P12 and P13). Verified against the real tools/list by src/__tests__/catalog-baseline.test.ts and src/__tests__/catalog-contract.test.ts (P13), which also check that each tool calls exactly its appRoutes; the sanitized tools/list snapshot is contracts/mcp-tools.json. Paths in appRoutes[].file are relative to the robynnv3 app repo unless prefixed 'mcp:' in gaps. titleProposal = the shipped tool title (top-level and annotations.title). currentHints = annotations the code declares; proposedHints = target against today's backend (equal to currentHints after P12); hintsAfterP07 / requiredScopeAfterP07 = target once P07 removes the write named in `conditional` (the five † tools). pairedWith is an array of tool names. inputSchemaDigest = sha256 of the tools/list inputSchema with every string-valued 'description' key removed (sorted-key compact JSON).",
   "baseline": {
     "mcpWorker": "85d7781add2914815e7fc48459645c2b4edb4095",
     "app": "6dd04bb315f20ca53612cd0a2aa0951da020ed78",
@@ -943,7 +943,7 @@
         "idempotentHint": true
       },
       "inputSchemaDigest": "sha256:5df38530e82fde4a418ddfd9cdb35bb7040c42ec877b863f45b724b23258811b",
-      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change.",
+      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change, then regenerate contracts/mcp-tools.json (the description changes).",
       "hintEvidence": "intended read; currently upserts the derived 'Brand Completeness' doc (brand-book-v2-service.ts:181-196,1871)",
       "appRoutes": [
         {
@@ -1005,7 +1005,7 @@
         "idempotentHint": true
       },
       "inputSchemaDigest": "sha256:29392f14967630c7478edf3b63c6fd4617fb2e00ea2d4dae6a4381c11a1ae5eb",
-      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change.",
+      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change, then regenerate contracts/mcp-tools.json (the description changes).",
       "hintEvidence": "deterministic, no LLM (brand-book-adapters.ts:255-372); same hidden completeness write",
       "appRoutes": [
         {
@@ -1067,7 +1067,7 @@
         "idempotentHint": true
       },
       "inputSchemaDigest": "sha256:2d51e7bf0fade09fd076f22effce7babcbdc3459b7128bbf1040a55358280fb2",
-      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change.",
+      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change, then regenerate contracts/mcp-tools.json (the description changes).",
       "hintEvidence": "deterministic templates (brand-book-adapters.ts:374-485); same hidden completeness write",
       "appRoutes": [
         {
@@ -1246,7 +1246,7 @@
         "idempotentHint": true
       },
       "inputSchemaDigest": "sha256:e812faf489716af95305541e1f3cd71e77ba392c759e30644e567621ff2ed379",
-      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change. The tool does NOT publish — it returns HTML inline.",
+      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change, then regenerate contracts/mcp-tools.json (the description changes). The tool does NOT publish — it returns HTML inline.",
       "hintEvidence": "inline HTML export, no storage/public URL (brand-book-adapters.ts:612-656); server fetches the stored logo URL (brand-book-export-service.ts:404)",
       "appRoutes": [
         {
@@ -2375,7 +2375,7 @@
       },
       "requiredScope": "tools:execute",
       "requiredScopeAfterP07": "tools:execute",
-      "openDecision": "D-A (Madhukar): requires tools:execute — default YES. To downgrade, change requiredScope (and requiredScopeAfterP07) to brand:read here plus the matching P07 route scope; no tool code or description changes.",
+      "openDecision": "D-A (Madhukar): requires tools:execute — default YES. The single flip point is requiredScopeAfterP07 in this entry (catalog-baseline.test.ts reads it). A downgrade to brand:read requires P07 first: until P07 removes the policy write the tool is not read-only, so rule 1 (readOnlyHint:false ⇒ tools:execute) keeps requiredScope at tools:execute. Before P07 the decision can be recorded by setting requiredScopeAfterP07 to brand:read alone. With P07 (flag flipped, currentHints/proposedHints = hintsAfterP07), set requiredScope to requiredScopeAfterP07 plus the matching P07 route scope; no tool code or description changes.",
       "currentHints": {
         "readOnlyHint": false,
         "destructiveHint": false,
@@ -2395,7 +2395,7 @@
         "idempotentHint": true
       },
       "inputSchemaDigest": "sha256:095903fc853e6752f219a1ced654a0e0567268f355d3cd0dff3f8429b4dabef7",
-      "conditional": "† readOnlyHint stays false until P07 removes the getOrCreatePolicy write from the read path (connector-execution-service.ts:330 -> connector-policy-service.ts:27-33,61-99). Then flip CONNECTED_APP_READS_PERSIST_POLICY (src/tools/connectors.ts) and set currentHints/proposedHints to hintsAfterP07 in the same change. requiredScope stays tools:execute either way (D-A).",
+      "conditional": "† readOnlyHint stays false until P07 removes the getOrCreatePolicy write from the read path (connector-execution-service.ts:330 -> connector-policy-service.ts:27-33,61-99). Then flip CONNECTED_APP_READS_PERSIST_POLICY (src/tools/connectors.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change, then regenerate contracts/mcp-tools.json (the description changes). requiredScopeAfterP07 is the D-A flip point (default tools:execute).",
       "hintEvidence": "curated read actions executed live against third-party apps via Composio/Arcade; the read path persists Robynn state: getOrCreatePolicy inserts a default connector_policies row or rewrites allowed_actions (re-adding admin-removed read actions) — plan §5 keeps read-only only if the backend prevents writes; connector_action_logs is an exempt audit write",
       "appRoutes": [
         {
