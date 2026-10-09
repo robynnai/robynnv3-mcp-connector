@@ -15,7 +15,8 @@ This repo provides the hosted Robynn MCP connector at `mcp.robynn.ai` and the lo
 
 - `docs/plugin-v1/AUTHORIZATION_CONTRACT.md` — grant record, introspection, Worker preflight, scope policy, error codes. Decision: stay on `@cloudflare/workers-oauth-provider` 0.3.0.
 - `docs/plugin-v1/TOOL_CONTRACT.md` + `contracts/tool-route-map.json` — all 48 tools: scope, current vs proposed hints, app routes, side effects.
-- `src/__tests__/provider-contract.test.ts` pins provider/agents behaviour; `src/__tests__/catalog-baseline.test.ts` recounts 48/46/40 via real `tools/list` and validates the map. Change the map and these tests together.
+- `src/__tests__/provider-contract.test.ts` (35 cases, facts F1–F20) pins provider/agents behaviour; `src/__tests__/catalog-baseline.test.ts` (7 cases) recounts 48/46/40 via real `tools/list` and validates the map in both directions. Change the map and these tests together.
+- Transport truth (F19): only streamable HTTP `/mcp` is served. `/sse` and `/sse/message` are auth-gated 404s that never reach a Durable Object, although `/sse` is still advertised in the resource aliases and landing JSON. v1 keeps SSE unserved (contract D10).
 
 ## Verification
 

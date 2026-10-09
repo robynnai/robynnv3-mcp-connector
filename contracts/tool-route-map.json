@@ -1,5 +1,5 @@
 {
-  "$comment": "COS-PLUGIN-001 P01 tool → app route map. Verified against real tools/list by src/__tests__/catalog-baseline.test.ts. Paths in appRoutes[].file are relative to the robynnv3 app repo unless prefixed 'mcp:' in gaps. currentHints = code at baseline; proposedHints = P12 target.",
+  "$comment": "COS-PLUGIN-001 P01 tool → app route map. Verified against real tools/list by src/__tests__/catalog-baseline.test.ts. Paths in appRoutes[].file are relative to the robynnv3 app repo unless prefixed 'mcp:' in gaps. currentHints = code at baseline; proposedHints = P12 target against today's backend; hintsAfterP07 = target once P07 removes the noted write; pairedWith is an array of tool names.",
   "baseline": {
     "mcpWorker": "85d7781add2914815e7fc48459645c2b4edb4095",
     "app": "6dd04bb315f20ca53612cd0a2aa0951da020ed78",
@@ -50,7 +50,7 @@
       "externalAccess": "Cloudflare R2 vault read when vault flag is on (internal)",
       "objectOwnership": "org from token; scope param is a fixed enum",
       "retrySafe": true,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -102,7 +102,7 @@
       "externalAccess": "none",
       "objectOwnership": "organization_website_id (:137-150) and sub_brand_id (sub-brand-service.ts:149-166) checked against org",
       "retrySafe": true,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -148,7 +148,7 @@
       "externalAccess": "none",
       "objectOwnership": "org from token",
       "retrySafe": true,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -200,7 +200,7 @@
       "externalAccess": "none",
       "objectOwnership": "Bearer branch uses token org; session branch checks membership (:49-59)",
       "retrySafe": true,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -260,7 +260,9 @@
       "externalAccess": "LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings",
       "objectOwnership": "thread_id via verifyThreadAccess (org + owner-or-org-visible) before billing; no collab-project check",
       "retrySafe": false,
-      "pairedWith": "robynn_run_status",
+      "pairedWith": [
+        "robynn_run_status"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -338,7 +340,9 @@
       "externalAccess": "LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings; agent web research not verified in app code",
       "objectOwnership": "as robynn_create_content",
       "retrySafe": false,
-      "pairedWith": "robynn_run_status",
+      "pairedWith": [
+        "robynn_run_status"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -404,7 +408,9 @@
       "externalAccess": "LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings",
       "objectOwnership": "as robynn_create_content",
       "retrySafe": false,
-      "pairedWith": "robynn_run_status",
+      "pairedWith": [
+        "robynn_run_status"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -476,7 +482,7 @@
       "externalAccess": "none",
       "objectOwnership": "list filtered to org + own/org-visible (:30-36); master-key subject sees private threads",
       "retrySafe": false,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -528,7 +534,12 @@
       "externalAccess": "LangGraph state read; OpenAI embeddings via recordInteraction",
       "objectOwnership": "getRunById unscoped, then org check (:16-19) + verifyThreadAccess (:21-30) before sync; no run.user_id check",
       "retrySafe": true,
-      "pairedWith": "robynn_create_content|robynn_research|robynn_assist|robynn_cmo_agent",
+      "pairedWith": [
+        "robynn_create_content",
+        "robynn_research",
+        "robynn_assist",
+        "robynn_cmo_agent"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -586,7 +597,10 @@
       "externalAccess": "LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings",
       "objectOwnership": "optional thread_id via verifyThreadAccess after the billing reserve (cmo-agent-runner.ts:158-169)",
       "retrySafe": false,
-      "pairedWith": "robynn_run_status, robynn_cmo_decide",
+      "pairedWith": [
+        "robynn_run_status",
+        "robynn_cmo_decide"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -644,7 +658,9 @@
       "externalAccess": "LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings",
       "objectOwnership": "thread verifyThreadAccess; run org+thread match; decision/option validated against run blocks (conversation-decision.ts:170-209); no run.user_id check",
       "retrySafe": true,
-      "pairedWith": "robynn_cmo_agent",
+      "pairedWith": [
+        "robynn_cmo_agent"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -708,7 +724,7 @@
       "externalAccess": "ChatGPT/Claude/Gemini/Perplexity sonar-pro web search; Anthropic",
       "objectOwnership": "no caller ids; downstream execute route trusts body organization_id",
       "retrySafe": false,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -772,7 +788,7 @@
       "externalAccess": "Serper, DataForSEO, Ahrefs, Semrush, direct fetch of competitor domain, Anthropic",
       "objectOwnership": "competitor resolved by name within org; agent re-verifies competitor_id",
       "retrySafe": false,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -842,7 +858,7 @@
       "externalAccess": "Serper scrape/search, Exa, Firecrawl, Semrush, Anthropic",
       "objectOwnership": "no caller ids",
       "retrySafe": false,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -901,7 +917,7 @@
       "externalAccess": "none",
       "objectOwnership": "no caller ids",
       "retrySafe": true,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -954,7 +970,7 @@
       "externalAccess": "none",
       "objectOwnership": "no caller ids",
       "retrySafe": true,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -1007,7 +1023,7 @@
       "externalAccess": "none",
       "objectOwnership": "no caller ids",
       "retrySafe": true,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -1059,7 +1075,7 @@
       "externalAccess": "none",
       "objectOwnership": "no caller ids",
       "retrySafe": true,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -1105,7 +1121,9 @@
       "externalAccess": "LangGraph brand_reflection -> Anthropic (no web)",
       "objectOwnership": "no caller ids; reads org-wide conversation_memories",
       "retrySafe": false,
-      "pairedWith": "robynn_brand_reflections",
+      "pairedWith": [
+        "robynn_brand_reflections"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -1170,7 +1188,7 @@
       "externalAccess": "fetch of stored logo previewUrl with no allow-list (possible SSRF)",
       "objectOwnership": "no caller ids",
       "retrySafe": true,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -1234,7 +1252,9 @@
       "externalAccess": "LangGraph marketing_campaign_builder (web use not verified)",
       "objectOwnership": "no caller ids",
       "retrySafe": false,
-      "pairedWith": "robynn_campaign_status",
+      "pairedWith": [
+        "robynn_campaign_status"
+      ],
       "environmentGate": "robynn-ai environment slug only",
       "gaps": [
         {
@@ -1297,7 +1317,9 @@
       "externalAccess": "LangGraph reads",
       "objectOwnership": "NONE: caller-supplied LangGraph thread/run ids read directly with no org/assistant metadata check",
       "retrySafe": false,
-      "pairedWith": "robynn_campaign_creator",
+      "pairedWith": [
+        "robynn_campaign_creator"
+      ],
       "environmentGate": "robynn-ai environment slug only",
       "gaps": [
         {
@@ -1347,7 +1369,7 @@
         "openWorldHint": true,
         "idempotentHint": false
       },
-      "hintEvidence": "BillingService.charge 'website-audit-report' (50 cr) before dispatch; inserts prospect_audits; public audit_url",
+      "hintEvidence": "BillingService.charge 'website-audit-report' (50 cr) before website resolution/dispatch; inserts prospect_audits; public audit_url",
       "appRoutes": [
         {
           "method": "POST",
@@ -1357,11 +1379,13 @@
         }
       ],
       "sideEffects": "prospect_audits insert/updates; LangGraph cmo_audit_v1 thread+run; public tokenized audit page",
-      "charges": "direct non-refundable charge before validation (+server.ts:88-105)",
+      "charges": "direct non-refundable charge (+server.ts:88-105) after zod validation and the environment gate (:60-81) but before website resolution/normalization, the prospect_audits insert and dispatch (prospect-audit-runner.ts:197-224)",
       "externalAccess": "agent crawls caller website_url (no app-side SSRF guard)",
       "objectOwnership": "no caller object ids",
       "retrySafe": false,
-      "pairedWith": "robynn_website_audit_status",
+      "pairedWith": [
+        "robynn_website_audit_status"
+      ],
       "environmentGate": "robynn-ai environment slug only",
       "gaps": [
         {
@@ -1374,7 +1398,7 @@
           "package": "P11",
           "file": "src/routes/api/cli/mcp/website/audit/+server.ts",
           "function": "POST",
-          "summary": "charges before runner failures; 500 without refund + client retry = double charge"
+          "summary": "charges before website resolution/dispatch; a runner failure returns 500 without refund, and the client retry charges again"
         },
         {
           "package": "P12",
@@ -1422,7 +1446,9 @@
       "externalAccess": "LangGraph + Anthropic (processors)",
       "objectOwnership": "NONE: fetchProspectAudit selects by id only (prospect-audit-runner.ts:164-179)",
       "retrySafe": true,
-      "pairedWith": "robynn_website_audit",
+      "pairedWith": [
+        "robynn_website_audit"
+      ],
       "environmentGate": "robynn-ai environment slug only",
       "gaps": [
         {
@@ -1480,7 +1506,9 @@
       "externalAccess": "public-URL-guarded crawl (Firecrawl/native fetch), LangGraph website_optimization_v2",
       "objectOwnership": "site_id org-scoped; goal_id unvalidated when site_id absent (scan-runner.ts:480)",
       "retrySafe": false,
-      "pairedWith": "robynn_website_audit_v2_status",
+      "pairedWith": [
+        "robynn_website_audit_v2_status"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -1547,7 +1575,9 @@
       "externalAccess": "none",
       "objectOwnership": "getScan(scanId, organizationId)",
       "retrySafe": true,
-      "pairedWith": "robynn_website_audit_v2",
+      "pairedWith": [
+        "robynn_website_audit_v2"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -1599,7 +1629,9 @@
       "externalAccess": "public-URL-guarded crawl; LangGraph v3 or local v3 Firecrawl/LLM",
       "objectOwnership": "site_id org-scoped; goal_id unvalidated (contracts.ts:507)",
       "retrySafe": false,
-      "pairedWith": "robynn_website_optimization_audit_status",
+      "pairedWith": [
+        "robynn_website_optimization_audit_status"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -1666,7 +1698,9 @@
       "externalAccess": "none",
       "objectOwnership": "getScan(run_id, organizationId)",
       "retrySafe": true,
-      "pairedWith": "robynn_website_optimization_audit",
+      "pairedWith": [
+        "robynn_website_optimization_audit"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -1718,7 +1752,9 @@
       "externalAccess": "public-URL-guarded crawl; LangGraph/Firecrawl/LLM via v3",
       "objectOwnership": "site_id org-scoped (:159-194)",
       "retrySafe": false,
-      "pairedWith": "robynn_website_audit_orchestrator_status",
+      "pairedWith": [
+        "robynn_website_audit_orchestrator_status"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -1776,7 +1812,9 @@
       "externalAccess": "none",
       "objectOwnership": "getScan(run_id, organizationId)",
       "retrySafe": true,
-      "pairedWith": "robynn_website_audit_orchestrator",
+      "pairedWith": [
+        "robynn_website_audit_orchestrator"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -1827,7 +1865,7 @@
       "externalAccess": "LangGraph crawl of caller website_url without app-side SSRF guard",
       "objectOwnership": "no caller ids",
       "retrySafe": false,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -1878,7 +1916,7 @@
       "externalAccess": "LangGraph content planner (no web)",
       "objectOwnership": "research_artifact_id and project_id org-scoped; research_packet unbounded",
       "retrySafe": false,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -1936,7 +1974,7 @@
       "externalAccess": "Google Search Console + GA4 via Composio (read)",
       "objectOwnership": "website and GSC connection resolved within org",
       "retrySafe": true,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -1988,7 +2026,7 @@
       "externalAccess": "none",
       "objectOwnership": "org-scoped summaries",
       "retrySafe": true,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -2033,7 +2071,9 @@
       "externalAccess": "none",
       "objectOwnership": "org-scoped lookup, but key collides with UI-created drafts/collections",
       "retrySafe": false,
-      "pairedWith": "robynn_brand_rebuild",
+      "pairedWith": [
+        "robynn_brand_rebuild"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -2091,7 +2131,9 @@
       "externalAccess": "none (internal cache invalidation)",
       "objectOwnership": "no caller ids",
       "retrySafe": true,
-      "pairedWith": "robynn_brand_source_add",
+      "pairedWith": [
+        "robynn_brand_source_add"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -2143,7 +2185,7 @@
       "externalAccess": "none",
       "objectOwnership": "org-scoped connections",
       "retrySafe": true,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -2192,7 +2234,7 @@
       "externalAccess": "none",
       "objectOwnership": "org-scoped connections",
       "retrySafe": true,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -2219,12 +2261,19 @@
         "openWorldHint": false
       },
       "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": true
+      },
+      "hintsAfterP07": {
         "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": true,
         "idempotentHint": true
       },
-      "hintEvidence": "curated read actions executed live against third-party apps via Composio/Arcade; incidental policy/log writes",
+      "conditional": "readOnlyHint stays false until P07 removes the getOrCreatePolicy write from the read path (connector-execution-service.ts:330 -> connector-policy-service.ts:27-33,61-99); then hintsAfterP07 applies. requiredScope stays tools:execute either way",
+      "hintEvidence": "curated read actions executed live against third-party apps via Composio/Arcade; the read path persists Robynn state: getOrCreatePolicy inserts a default connector_policies row or rewrites allowed_actions (re-adding admin-removed read actions) — plan §5 keeps read-only only if the backend prevents writes; connector_action_logs is an exempt audit write",
       "appRoutes": [
         {
           "method": "POST",
@@ -2238,7 +2287,9 @@
       "externalAccess": "Composio/Arcade -> HubSpot, GSC, GA, Google Ads, GitHub, ...",
       "objectOwnership": "connection_id UUID, org-scoped strict",
       "retrySafe": true,
-      "pairedWith": "robynn_connected_app_capabilities",
+      "pairedWith": [
+        "robynn_connected_app_capabilities"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -2296,7 +2347,9 @@
       "externalAccess": "Composio/Arcade write execution (idempotency_key forwarded)",
       "objectOwnership": "connection_id org-scoped but non-strict fallback to default connection (connector-execution-service.ts:383-427); write_confirmed self-asserted",
       "retrySafe": false,
-      "pairedWith": "robynn_connected_app_capabilities",
+      "pairedWith": [
+        "robynn_connected_app_capabilities"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -2373,7 +2426,7 @@
       "externalAccess": "Strapi API; PostHog",
       "objectOwnership": "artifact_id org-checked but any brand_hub_docs type; /api/publish updates at :1035/:1054 lack org filters",
       "retrySafe": false,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -2437,7 +2490,9 @@
       "externalAccess": "none",
       "objectOwnership": "NONE: conflict key lacks organization_id -> cross-org thread takeover",
       "retrySafe": true,
-      "pairedWith": "robynn_thread_append",
+      "pairedWith": [
+        "robynn_thread_append"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -2489,7 +2544,9 @@
       "externalAccess": "none",
       "objectOwnership": "thread org check only (:28-36); no user ownership; system/assistant roles accepted",
       "retrySafe": false,
-      "pairedWith": "robynn_thread_upsert",
+      "pairedWith": [
+        "robynn_thread_upsert"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -2552,7 +2609,9 @@
       "externalAccess": "OpenAI embeddings (processor)",
       "objectOwnership": "user scope can overwrite another user's memory (unified); session scope unbound",
       "retrySafe": false,
-      "pairedWith": "robynn_memory_get",
+      "pairedWith": [
+        "robynn_memory_get"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -2631,7 +2690,9 @@
       "externalAccess": "none",
       "objectOwnership": "org filter; user filter only for scope=user; legacy org/session lookup likely broken (.eq('user_id', null))",
       "retrySafe": true,
-      "pairedWith": "robynn_memory_write",
+      "pairedWith": [
+        "robynn_memory_write"
+      ],
       "environmentGate": null,
       "gaps": [
         {
@@ -2688,7 +2749,7 @@
       "externalAccess": "OpenAI query embedding (processor)",
       "objectOwnership": "legacy: omitted scope returns other users' user-scoped rows; unified: omits caller's own rows",
       "retrySafe": true,
-      "pairedWith": null,
+      "pairedWith": [],
       "environmentGate": null,
       "gaps": [
         {
@@ -2740,7 +2801,9 @@
       "externalAccess": "Cloudflare R2 (internal)",
       "objectOwnership": "prefix-scoped to props.organizationId; no current grant/membership check",
       "retrySafe": true,
-      "pairedWith": "robynn_vault_read",
+      "pairedWith": [
+        "robynn_vault_read"
+      ],
       "environmentGate": "requires VAULT binding + organizationId in props",
       "gaps": [
         {
@@ -2786,7 +2849,9 @@
       "externalAccess": "Cloudflare R2 (internal)",
       "objectOwnership": "prefix-scoped to props.organizationId; path checks in vault-r2.ts",
       "retrySafe": true,
-      "pairedWith": "robynn_vault_list",
+      "pairedWith": [
+        "robynn_vault_list"
+      ],
       "environmentGate": "requires VAULT binding + organizationId in props",
       "gaps": [
         {

@@ -120,8 +120,11 @@ interface RouteMapTool {
     idempotentHint?: boolean;
   };
   requiredScope: "brand:read" | "tools:execute";
+  hintsAfterP07?: RouteMapTool["proposedHints"];
+  conditional?: string;
   appRoutes: Array<{ method: string; path: string; file: string | null; hop?: "internal" }>;
   titleProposal: string;
+  pairedWith: string[];
 }
 
 const routeMap = JSON.parse(readSource("contracts/tool-route-map.json")) as {
@@ -215,6 +218,14 @@ describe("P01 catalog baseline (real tools/list)", () => {
       // Anything that is not read-only needs tools:execute (read-only tools may still
       // need it when they charge, generate or reach third parties — see AUTHORIZATION_CONTRACT §7).
       if (!tool.proposedHints.readOnlyHint) expect(tool.requiredScope, tool.name).toBe("tools:execute");
+      if (tool.hintsAfterP07) {
+        expect(tool.conditional, `${tool.name} hintsAfterP07 needs a conditional note`).toBeTruthy();
+        if (!tool.hintsAfterP07.readOnlyHint) expect(tool.requiredScope, tool.name).toBe("tools:execute");
+      }
+      expect(Array.isArray(tool.pairedWith), tool.name).toBe(true);
+      for (const peer of tool.pairedWith) {
+        expect(routeMap.tools.map((t) => t.name), `${tool.name}.pairedWith`).toContain(peer);
+      }
       expect(tool.appRoutes.length, tool.name).toBeGreaterThan(0);
       for (const route of tool.appRoutes) {
         if (tool.name.startsWith("robynn_vault_")) {
@@ -238,5 +249,18 @@ describe("P01 catalog baseline (real tools/list)", () => {
       const prefix = literal.split("${")[0];
       expect(clientSource, path).toContain(prefix);
     }
+  });
+
+  it("every app route the Worker client calls is mapped to at least one tool (reverse direction)", () => {
+    const clientSource = readSource("src/robynn-client.ts");
+    const normalize = (p: string) => p.replace(/\$\{[^}]+\}|\{[^}]+\}/g, "{}");
+    const clientPaths = new Set(
+      [...clientSource.matchAll(/["'`](\/api\/[^"'`?]+)["'`]/g)].map((m) => normalize(m[1])),
+    );
+    const mapped = new Set(
+      routeMap.tools.flatMap((t) => t.appRoutes.filter((r) => r.file !== null).map((r) => normalize(r.path))),
+    );
+    expect(clientPaths.size).toBeGreaterThan(35);
+    for (const path of clientPaths) expect(mapped, path).toContain(path);
   });
 });
