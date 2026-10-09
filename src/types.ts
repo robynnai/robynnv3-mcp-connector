@@ -19,6 +19,7 @@ export interface Env {
   // Injected by OAuthProvider at runtime
   OAUTH_PROVIDER: {
     parseAuthRequest(request: Request): Promise<OAuthRequestInfo>;
+    lookupClient(clientId: string): Promise<{ clientId: string; clientName?: string } | null>;
     completeAuthorization(options: {
       request: OAuthRequestInfo;
       userId: string;
@@ -48,6 +49,14 @@ export interface Props {
   refreshToken?: string;
   userId: string;
   organizationId: string;
+  /** App grant id (JWT `gid`), confirmed by introspection at /callback (P06). */
+  appGrantId?: string;
+  /** App credential version (JWT `ver`) captured at /callback (P06). */
+  credentialVersion?: number;
+  /** Scopes the app granted, already ⊆ the host's request (P06). */
+  scopes?: string[];
+  /** 2 = grant created by the hardened /callback (contract §6.2 step 4). */
+  authVersion?: number;
   _apiBaseUrl?: string;
   [key: string]: unknown;
 }

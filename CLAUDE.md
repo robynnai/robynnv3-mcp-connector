@@ -59,10 +59,11 @@ npx wrangler deploy       # Deploy to production (mcp.robynn.ai)
 The default export is an `OAuthProvider` that wraps everything:
 
 ```
-OAuthProvider
-├── /mcp, /sse         → RobynnMCP.serve() (McpAgent Durable Object)
+fetch wrapper           → 404 for /mcp* and /sse* paths other than exactly /mcp
+OAuthProvider (createOAuthProviderOptions: S256-only PKCE, no implicit flow)
+├── /mcp               → RobynnMCP.serve() (McpAgent Durable Object; SSE is not served)
 ├── /authorize         → Handled by OAuthProvider, delegated to auth handler
-├── /token, /register  → Handled by OAuthProvider automatically
+├── /token, /register  → Handled by OAuthProvider; /token redirect_uri is bound to /authorize
 └── /* (default)       → robynnAuthHandler (Hono app)
 ```
 
@@ -72,14 +73,14 @@ Extends `McpAgent<Env, Record<string, never>, Props>`:
 - One Durable Object instance per authenticated user
 - `this.props.accessToken` contains the user's robynn.ai JWT
 - `init()` creates a `RobynnClient`, registers shared MCP App resources, and registers all tools via `registerXTools(server, client)` functions
-- MCP transport (Streamable HTTP + SSE) handled automatically by the base class
+- MCP transport is Streamable HTTP at `/mcp`, handled by the base class. SSE is neither served nor advertised (`ADVERTISE_SSE = false` in `src/authorization/oauth-policy.ts`).
 
 ### Auth Flow (`src/auth-handler.ts`)
 
 Hono app handling the user-facing OAuth consent flow:
 
-1. `GET /authorize` — Generates CSRF state, stores in KV, redirects to `robynn.ai/oauth/authorize`
-2. `GET /callback` — Validates state from KV, exchanges auth code for JWT via `robynn.ai/api/oauth/token`, decodes JWT for user/org info, calls `completeAuthorization()`
+1. `GET /authorize` — Requires `response_type=code` and an S256 PKCE challenge. Validates scope (omitted ⇒ `brand:read`, unknown ⇒ `invalid_scope`, never widened) and `resource` (approved aliases only). Stores a browser-bound transaction (KV plus `HttpOnly` cookie), then redirects to `robynn.ai/oauth/authorize` with exactly the requested scope.
+2. `GET /callback` — Consumes the transaction (state + cookie, single use) and makes the signed code exchange. It validates the grant through app introspection; the JWT decode is only a hint, and there is no `"unknown"` fallback. Granted scopes must be ⊆ requested. Only then does it call `completeAuthorization()`. Errors go back to the host as OAuth error codes. See `docs/plugin-v1/WORKER_OAUTH_FRONT_DOOR.md`.
 3. `GET /` — Health check / landing JSON
 4. `GET /app-assets/report-app.js` — shared JS runtime for Robynn MCP Apps reports
 5. `GET /.well-known/mcp.json` — MCP discovery config
@@ -184,6 +185,8 @@ GEO, SEO, battlecard, brand-book, website audit/strategy, content plan, weekly v
 |------|---------|
 | `src/index.ts` | `RobynnMCP` McpAgent class + `OAuthProvider` default export |
 | `src/auth-handler.ts` | Hono app: `/authorize` redirect, `/callback` token exchange, health, `.well-known` |
+| `src/authorization/*` | OAuth front-door policy (scopes, PKCE, resources, `ADVERTISE_SSE`), browser-bound state, upstream grant/introspection, `/token` redirect binding |
+| `src/safe-log.ts` | Redacting structured logger: no codes, state, tokens, query strings or bodies in logs |
 | `src/robynn-client.ts` | HTTP client for robynn.ai API with timeout/polling |
 | `src/internal-mcp-auth.ts` | v2 HMAC signing (body digest + nonce) for Worker→robynn.ai requests; token code exchange and refresh |
 | `src/types.ts` | `Env`, `Props`, all request/result types for intelligence + guided-workflow tools |

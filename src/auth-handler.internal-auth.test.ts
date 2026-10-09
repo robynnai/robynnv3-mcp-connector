@@ -6,12 +6,15 @@ import {
   MCP_SIGNATURE_HEADER,
   MCP_TIMESTAMP_HEADER,
 } from "./internal-mcp-auth";
+import { createAuthorizationTransaction } from "./authorization/state";
 
 // COS-PLUGIN-001 P03: the /callback code exchange is always signed with
 // MCP_INTERNAL_AUTH_SECRET and never with CONNECTOR_STATE_SECRET.
+// P06: the transaction is now browser-bound (state + cookie), and failures
+// after a valid state return an OAuth error to the host's redirect URI.
 
-const STATE = "state-123";
 const CALLBACK_URL = "https://mcp.robynn.ai/callback";
+const HOST_REDIRECT = "http://localhost/cb";
 
 function kv(initial: Record<string, string>) {
   const store = new Map(Object.entries(initial));
@@ -22,22 +25,43 @@ function kv(initial: Record<string, string>) {
   };
 }
 
-function env(secrets: { MCP_INTERNAL_AUTH_SECRET?: string; CONNECTOR_STATE_SECRET?: string }) {
-  const state = JSON.stringify({
-    workerCallbackUrl: CALLBACK_URL,
-    oauthRequest: { responseType: "code", clientId: "host", redirectUri: "http://localhost/cb", state: "s", scope: ["brand:read"] },
-  });
+async function env(secrets: { MCP_INTERNAL_AUTH_SECRET?: string; CONNECTOR_STATE_SECRET?: string }) {
+  const store = kv({});
+  const { state, setCookie } = await createAuthorizationTransaction(
+    store,
+    {
+      oauthRequest: { responseType: "code", clientId: "host", redirectUri: HOST_REDIRECT, state: "s", scope: ["brand:read"] },
+      requestedScopes: ["brand:read"],
+      clientName: "Host",
+      workerCallbackUrl: CALLBACK_URL,
+    },
+    { secureCookie: true },
+  );
   return {
-    ...secrets,
-    ROBYNN_API_BASE_URL: "https://robynn.ai",
-    MCP_PUBLIC_BASE_URL: "https://mcp.robynn.ai",
-    OAUTH_KEY: kv({ [`oauth_state:${STATE}`]: state }),
-    OAUTH_PROVIDER: { completeAuthorization: vi.fn() },
+    state,
+    cookie: setCookie.split(";")[0],
+    bindings: {
+      ...secrets,
+      ROBYNN_API_BASE_URL: "https://robynn.ai",
+      MCP_PUBLIC_BASE_URL: "https://mcp.robynn.ai",
+      OAUTH_KEY: store,
+      OAUTH_PROVIDER: {
+        completeAuthorization: vi.fn(),
+        lookupClient: vi.fn(async () => ({ clientId: "host", clientName: "Host" })),
+      },
+    },
   };
 }
 
-function callback() {
-  return new Request(`${CALLBACK_URL}?code=app-code-1&state=${STATE}`);
+function callback(state: string, cookie: string) {
+  return new Request(`${CALLBACK_URL}?code=app-code-1&state=${state}`, { headers: { Cookie: cookie } });
+}
+
+function hostError(res: Response) {
+  expect(res.status).toBe(302);
+  const location = new URL(res.headers.get("location")!);
+  expect(location.origin + location.pathname).toBe(HOST_REDIRECT);
+  return location.searchParams.get("error");
 }
 
 afterEach(() => {
@@ -49,10 +73,13 @@ describe("/callback internal auth", () => {
   it("signs the code exchange with MCP_INTERNAL_AUTH_SECRET over the exact body", async () => {
     const fetchMock = vi.fn(async () => new Response('{"error":"invalid_grant"}', { status: 400 }));
     vi.stubGlobal("fetch", fetchMock);
-    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    const res = await robynnAuthHandler.fetch(callback(), env({ MCP_INTERNAL_AUTH_SECRET: "internal-secret" }) as never);
-    expect(res.status).toBe(500);
+    const e = await env({ MCP_INTERNAL_AUTH_SECRET: "internal-secret" });
+    const res = await robynnAuthHandler.fetch(callback(e.state, e.cookie), e.bindings as never);
+    // Upstream 4xx ⇒ OAuth `server_error` to the host (was a bare 500 before P06).
+    expect(hostError(res)).toBe("server_error");
+    expect(e.bindings.OAUTH_PROVIDER.completeAuthorization).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledOnce();
 
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
@@ -83,9 +110,13 @@ describe("/callback internal auth", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    const res = await robynnAuthHandler.fetch(callback(), env({ CONNECTOR_STATE_SECRET: "legacy-state-secret" }) as never);
-    expect(res.status).toBe(503);
+    const e = await env({ CONNECTOR_STATE_SECRET: "legacy-state-secret" });
+    const res = await robynnAuthHandler.fetch(callback(e.state, e.cookie), e.bindings as never);
+    // Fail closed: `temporarily_unavailable` to the host (was a bare 503 before P06).
+    expect(hostError(res)).toBe("temporarily_unavailable");
+    expect(e.bindings.OAUTH_PROVIDER.completeAuthorization).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
