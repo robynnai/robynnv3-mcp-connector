@@ -151,7 +151,7 @@ registerAppTool(server, {
 - **Always return both `content` and `structuredContent`** — text fallback for LLM + structured data for UI
 - **Cast `structuredContent`** to `Record<string, unknown>` (SDK type requirement)
 - **Wrap in try/catch** — return `isError: true` on failure
-- **Title and safety annotations required** — `toolMetadata(title, hints)` from `src/tools/util.ts` sets the title (top-level and `annotations.title`) and explicit `readOnlyHint`, `destructiveHint`, `openWorldHint` on every tool. Hints follow actual backend behaviour, not the HTTP method; keep `contracts/tool-route-map.json` in lock-step (`src/__tests__/catalog-baseline.test.ts` enforces titles, hints and input-schema digests). See `docs/plugin-v1/TOOL_CONTRACT.md`.
+- **Title and safety annotations required** — `toolMetadata(title, hints)` from `src/tools/util.ts` sets the title (top-level and `annotations.title`) and explicit `readOnlyHint`, `destructiveHint`, `openWorldHint` on every tool. Hints follow actual backend behaviour, not the HTTP method; keep `contracts/tool-route-map.json` in lock-step (`src/__tests__/catalog-baseline.test.ts` enforces titles, hints and input-schema digests). Every tool also needs a fixture in `src/__tests__/catalog-contract.fixtures.ts` (success, error and permission-denied cases through a real `tools/call`), and any metadata change regenerates the committed snapshot: `UPDATE_MCP_TOOLS_SNAPSHOT=1 pnpm exec vitest run src/__tests__/catalog-contract.test.ts`. See `docs/plugin-v1/TOOL_CONTRACT.md` §7.
 - **App tools link a report resource** — `outputResource.uri` points to a `ui://reports/*.html` resource registered in `report-app.ts`
 
 ## Tools Reference
