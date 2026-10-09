@@ -610,7 +610,9 @@ app.get("/callback", async (c) => {
     // The body is never read or logged: it may echo the code.
     await tokenResponse.body?.cancel().catch(() => undefined);
     return reject(
-      tokenResponse.status >= 500 ? "temporarily_unavailable" : "server_error",
+      tokenResponse.status >= 500 || tokenResponse.status === 429
+        ? "temporarily_unavailable"
+        : "server_error",
       "upstream_exchange_rejected",
       { upstreamStatus: tokenResponse.status },
     );

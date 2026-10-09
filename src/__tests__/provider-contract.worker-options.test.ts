@@ -620,6 +620,7 @@ describe("/callback — fail closed on identity and scope", () => {
   it.each([
     [400, "server_error"],
     [401, "server_error"],
+    [429, "temporarily_unavailable"],
     [500, "temporarily_unavailable"],
   ])("upstream exchange %s ⇒ %s without reading the body", async (status, error) => {
     const h = createHarness();
