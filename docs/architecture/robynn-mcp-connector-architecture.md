@@ -154,20 +154,11 @@ Flow:
 
 ### Trusted internal token exchange
 
-To avoid production rate-limit collisions for MCP callback traffic, the Worker signs the token exchange request to `robynn.ai/api/oauth/token` using a shared secret.
+The Worker is a confidential client of `robynn.ai/api/oauth/token`. Every code exchange **and** refresh is signed with the dedicated `MCP_INTERNAL_AUTH_SECRET` (no fallback), using signature v2: HMAC-SHA256 over the timestamp, a single-use nonce, the method, the path and a SHA-256 digest of the exact body.
 
-Design goals:
-
-- keep the existing public OAuth token endpoint
-- avoid a blanket token-endpoint bypass
-- only relax MCP token limiting for requests that prove they came from the trusted Worker
-
-Current implementation:
-
-- the Worker signs the token exchange request body with HMAC
-- the signature and timestamp are sent as internal headers
-- `robynnv3` verifies the signature before bypassing the `/api/oauth/token` limiter
-- untrusted callers still go through the normal rate limiting path
+- `robynnv3` rejects a missing, stale, replayed or invalid signature with `401 invalid_client` before it looks up any code or refresh token.
+- The same check (without consuming the nonce) lets signed Worker traffic skip the token-endpoint rate limiter.
+- Contract, test vector and deploy order: [`docs/plugin-v1/INTERNAL_AUTH_SIGNING.md`](../plugin-v1/INTERNAL_AUTH_SIGNING.md).
 
 ## Backend Dependencies
 
