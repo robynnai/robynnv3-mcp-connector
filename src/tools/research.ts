@@ -4,9 +4,11 @@ import type { RobynnClient } from "../robynn-client";
 import {
   getShortSyncWaitMs,
   isRunTimeoutError,
+  isSafePathId,
   toErrorResult,
   toPendingRunResult,
   toSuccessResult,
+  toolMetadata,
 } from "./util";
 
 export function registerResearchTools(
@@ -15,24 +17,36 @@ export function registerResearchTools(
 ) {
   const syncWaitMs = getShortSyncWaitMs();
 
-  server.tool(
+  server.registerTool(
     "robynn_research",
-    "Research companies, competitors, markets, or topics using Robynn's AI research capabilities. Returns structured findings with sources.",
     {
-      query: z
-        .string()
-        .describe("The research query or topic to investigate"),
-      type: z
-        .enum(["competitor", "market", "company", "general"])
-        .optional()
-        .describe("Type of research to perform"),
-      thread_id: z
-        .string()
-        .optional()
-        .describe("Continue in an existing conversation thread"),
+      ...toolMetadata("Run Market Research", {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: false,
+      }),
+      description:
+        "Research companies, competitors, markets, or topics with the Robynn CMO agent and return findings with sources. Starts an agent run that uses Robynn credits, saves the conversation to a thread visible to your organization (a new one unless thread_id is given), and may use external sources and your organization's connected apps. Each call starts a new run. If the run is still going after a short wait, returns run_id; poll it with robynn_run_status.",
+      inputSchema: {
+        query: z
+          .string()
+          .describe("The research query or topic to investigate"),
+        type: z
+          .enum(["competitor", "market", "company", "general"])
+          .optional()
+          .describe("Type of research to perform"),
+        thread_id: z
+          .string()
+          .optional()
+          .describe("Continue in an existing conversation thread"),
+      },
     },
-    { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     async ({ query, type, thread_id }) => {
+      if (thread_id && !isSafePathId(thread_id)) {
+        return toErrorResult("Invalid thread_id.");
+      }
+
       try {
         let threadId = thread_id;
         if (!threadId) {

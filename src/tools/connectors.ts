@@ -1,13 +1,21 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 export function registerConnectorTools(server: McpServer, client: RobynnClient) {
-  server.tool(
+  server.registerTool(
     "robynn_connected_apps",
-    "List connected apps available to the Robynn organization, including the default connection and curated read-only actions. Use these connected-app tools first for provider-specific operational questions such as CRM counts, pipeline state, HighLevel contacts, or repository facts. Use research tools for strategy and market analysis, not for connected-system facts.",
-    { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    {
+      ...toolMetadata("List Connected Apps", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
+      description:
+        "List the connected apps available to your Robynn organization, with each app's default connection and curated read actions. Read-only; uses Robynn's stored connection details and does not contact the apps. Use the connected-app tools first for provider-specific operational questions such as CRM counts, pipeline state, HighLevel contacts, or repository facts; use research tools for strategy and market analysis.",
+    },
     async () => {
       try {
         const result = await client.getConnectedAppCapabilities();
@@ -35,19 +43,27 @@ export function registerConnectorTools(server: McpServer, client: RobynnClient) 
     },
   );
 
-  server.tool(
+  server.registerTool(
     "robynn_connected_app_capabilities",
-    "Describe the curated read-only actions Robynn supports for a connected app, including JSON-schema-like input metadata and example prompts. Use this before guessing actions so clients stay on the supported read-only surface. For HighLevel, provider_key is highlevel and read actions include highlevel.list_contacts, highlevel.list_opportunities, highlevel.list_conversations, highlevel.list_conversation_messages, highlevel.list_email_templates, and highlevel.list_bulk_action_campaigns.",
     {
-      provider_key: z
-        .string()
-        .trim()
-        .min(1)
-        .describe(
-          "Connected app provider key, for example hubspot, highlevel, or github.",
-        ),
+      ...toolMetadata("Get Connected App Capabilities", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
+      description:
+        "Describe the curated read actions Robynn supports for one connected app, with JSON-schema-like input metadata and example prompts. Read-only; does not contact the app. Use this before guessing actions, then call robynn_query_connected_app. For HighLevel, provider_key is highlevel and read actions include highlevel.list_contacts, highlevel.list_opportunities, highlevel.list_conversations, highlevel.list_conversation_messages, highlevel.list_email_templates, and highlevel.list_bulk_action_campaigns.",
+      inputSchema: {
+        provider_key: z
+          .string()
+          .trim()
+          .min(1)
+          .describe(
+            "Connected app provider key, for example hubspot, highlevel, or github.",
+          ),
+      },
     },
-    { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     async ({ provider_key }) => {
       try {
         const result = await client.getConnectedAppCapabilities(provider_key);
@@ -77,35 +93,43 @@ export function registerConnectorTools(server: McpServer, client: RobynnClient) 
     },
   );
 
-  server.tool(
+  server.registerTool(
     "robynn_query_connected_app",
-    "Execute a curated read-only action against a connected app. Use robynn_connected_app_capabilities first to discover valid actions and input schema. Treat structuredContent.summary and structuredContent.highlights as the primary answer surfaces for text-only clients, and use raw_result only when deeper inspection is required. HighLevel examples include highlevel.list_contacts, highlevel.list_email_templates, and highlevel.list_bulk_action_campaigns.",
     {
-      provider_key: z
-        .string()
-        .trim()
-        .min(1)
-        .describe(
-          "Connected app provider key, for example hubspot, highlevel, or github.",
-        ),
-      action_key: z
-        .string()
-        .trim()
-        .min(1)
-        .describe(
-          "Curated Robynn read action key, for example hubspot.list_contacts or highlevel.list_contacts.",
-        ),
-      payload: z
-        .record(z.unknown())
-        .optional()
-        .describe("Action payload matching the JSON-schema-like input metadata returned by robynn_connected_app_capabilities."),
-      connection_id: z
-        .string()
-        .uuid()
-        .optional()
-        .describe("Optional specific connection id. Omit to use the provider default."),
+      ...toolMetadata("Query a Connected App", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      }),
+      description:
+        "Run a curated read-only action against one of your organization's connected apps (for example HubSpot, HighLevel, or GitHub) and return live data from that service; Robynn logs the call. Use robynn_connected_app_capabilities first to discover valid actions and input schema. Treat structuredContent.summary and structuredContent.highlights as the primary answer for text-only clients, and use raw_result only when deeper inspection is needed. HighLevel examples include highlevel.list_contacts, highlevel.list_email_templates, and highlevel.list_bulk_action_campaigns.",
+      inputSchema: {
+        provider_key: z
+          .string()
+          .trim()
+          .min(1)
+          .describe(
+            "Connected app provider key, for example hubspot, highlevel, or github.",
+          ),
+        action_key: z
+          .string()
+          .trim()
+          .min(1)
+          .describe(
+            "Curated Robynn read action key, for example hubspot.list_contacts or highlevel.list_contacts.",
+          ),
+        payload: z
+          .record(z.unknown())
+          .optional()
+          .describe("Action payload matching the JSON-schema-like input metadata returned by robynn_connected_app_capabilities."),
+        connection_id: z
+          .string()
+          .uuid()
+          .optional()
+          .describe("Optional specific connection id. Omit to use the provider default."),
+      },
     },
-    { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     async ({ provider_key, action_key, payload, connection_id }) => {
       try {
         const result = await client.readConnectedApp({

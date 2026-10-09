@@ -8,9 +8,10 @@
  *
  * The registrar call order is parsed from `RobynnMCP.init()` (src/index.ts)
  * and the CLI `mcp` command (src/cli/index.ts) so the counts cannot drift
- * from the shipped wiring. P12 is expected to change the annotation
- * expectations here together with the map.
+ * from the shipped wiring. P12 applied the titles, hints and descriptions;
+ * annotation expectations here change together with the map.
  */
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -20,7 +21,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { registerAssistTools } from "../tools/assist";
 import { registerBattlecardTools } from "../tools/battlecard";
-import { registerBrandBookTools } from "../tools/brand-book";
+import { BRAND_BOOK_READS_PERSIST_COMPLETENESS, registerBrandBookTools } from "../tools/brand-book";
 import { registerBrandOperationTools } from "../tools/brand-operations";
 import { registerCampaignTools } from "../tools/campaign";
 import { registerCapabilityTools } from "../tools/capabilities";
@@ -109,20 +110,76 @@ async function listTools(calls: RegistrarCall[], opts: { vault: boolean }) {
 const workerCalls = parseRegistrarCalls(readSource("src/index.ts"), "this.server");
 const cliCalls = parseRegistrarCalls(readSource("src/cli/index.ts"), "server");
 
+interface Hints {
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  openWorldHint: boolean;
+  idempotentHint?: boolean;
+}
+
 interface RouteMapTool {
   name: string;
   surfaces: { worker: boolean; workerWithoutVault: boolean; cli: boolean };
-  currentHints: { readOnlyHint: boolean; destructiveHint: boolean; openWorldHint: boolean };
-  proposedHints: {
-    readOnlyHint: boolean;
-    destructiveHint: boolean;
-    openWorldHint: boolean;
-    idempotentHint?: boolean;
-  };
+  currentHints: Hints;
+  proposedHints: Hints;
+  hintsAfterP07?: Hints;
   requiredScope: "brand:read" | "tools:execute";
+  requiredScopeAfterP07?: "brand:read" | "tools:execute";
+  scopeByArgument?: Record<string, Record<string, string>>;
   appRoutes: Array<{ method: string; path: string; file: string | null; hop?: "internal" }>;
   titleProposal: string;
+  inputSchemaDigest: string;
+  charges: string;
+  environmentGate: string | null;
 }
+
+/** Sorted-key compact JSON without string-valued `description` keys (see the map's $comment). */
+function canonicalSchemaJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalSchemaJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const keys = Object.keys(record)
+      .filter((key) => !(key === "description" && typeof record[key] === "string"))
+      .sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalSchemaJson(record[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+const schemaDigest = (schema: unknown) =>
+  `sha256:${createHash("sha256").update(canonicalSchemaJson(schema)).digest("hex")}`;
+
+const declaredHints = (annotations: Record<string, unknown> | undefined): Hints => {
+  const hints: Hints = {
+    readOnlyHint: annotations?.readOnlyHint as boolean,
+    destructiveHint: annotations?.destructiveHint as boolean,
+    openWorldHint: annotations?.openWorldHint as boolean,
+  };
+  if (annotations?.idempotentHint !== undefined) hints.idempotentHint = annotations.idempotentHint as boolean;
+  return hints;
+};
+
+/** † tools: read-only only once P07 removes the hidden brand-book completeness write. */
+const BRAND_BOOK_CONDITIONAL_TOOLS = [
+  "robynn_brand_book_gap_analysis",
+  "robynn_brand_book_status",
+  "robynn_brand_book_strategy",
+  "robynn_publish_brand_book_html",
+];
+
+/** TOOL_CONTRACT.md §4 starter → poller pairs. */
+const STARTER_POLLERS: Array<[starter: string, poller: string]> = [
+  ["robynn_create_content", "robynn_run_status"],
+  ["robynn_research", "robynn_run_status"],
+  ["robynn_assist", "robynn_run_status"],
+  ["robynn_cmo_agent", "robynn_run_status"],
+  ["robynn_cmo_agent", "robynn_cmo_decide"],
+  ["robynn_campaign_creator", "robynn_campaign_status"],
+  ["robynn_website_audit", "robynn_website_audit_status"],
+  ["robynn_website_audit_v2", "robynn_website_audit_v2_status"],
+  ["robynn_website_optimization_audit", "robynn_website_optimization_audit_status"],
+  ["robynn_website_audit_orchestrator", "robynn_website_audit_orchestrator_status"],
+];
 
 const routeMap = JSON.parse(readSource("contracts/tool-route-map.json")) as {
   counts: { worker: number; workerWithoutVault: number; cli: number };
@@ -162,15 +219,19 @@ describe("P01 catalog baseline (real tools/list)", () => {
     ]);
   });
 
-  it("records the current (pre-P12) annotation baseline: 31/17 readOnly, 1 destructive, 14 openWorld, 0 titles", async () => {
+  it("records the P12 annotation catalog: 21/27 readOnly, 7 destructive, 19 openWorld, 26/16 idempotent, 48 titles", async () => {
     const worker = await listTools(workerCalls, { vault: true });
     const count = (pred: (t: (typeof worker)[number]) => boolean) => worker.filter(pred).length;
 
-    expect(count((t) => t.annotations?.readOnlyHint === true)).toBe(31);
-    expect(count((t) => t.annotations?.readOnlyHint === false)).toBe(17);
-    expect(count((t) => t.annotations?.destructiveHint === true)).toBe(1);
-    expect(count((t) => t.annotations?.openWorldHint === true)).toBe(14);
-    expect(count((t) => t.annotations?.idempotentHint !== undefined)).toBe(0);
+    // P01 proposed 25/23; the four † brand-book tools stay non-read-only until P07 lands.
+    expect(BRAND_BOOK_READS_PERSIST_COMPLETENESS).toBe(true);
+    expect(count((t) => t.annotations?.readOnlyHint === true)).toBe(21);
+    expect(count((t) => t.annotations?.readOnlyHint === false)).toBe(27);
+    expect(count((t) => t.annotations?.destructiveHint === true)).toBe(7);
+    expect(count((t) => t.annotations?.openWorldHint === true)).toBe(19);
+    expect(count((t) => t.annotations?.idempotentHint === true)).toBe(26);
+    expect(count((t) => t.annotations?.idempotentHint === false)).toBe(16);
+    expect(count((t) => t.annotations?.idempotentHint === undefined)).toBe(6);
     expect(
       count(
         (t) =>
@@ -179,10 +240,11 @@ describe("P01 catalog baseline (real tools/list)", () => {
           typeof t.annotations?.openWorldHint === "boolean",
       ),
     ).toBe(48);
-    expect(count((t) => Boolean(t.title) || Boolean(t.annotations?.title))).toBe(0);
+    expect(count((t) => Boolean(t.title) && t.annotations?.title === t.title)).toBe(48);
+    expect(new Set(worker.map((t) => t.title)).size).toBe(48);
   });
 
-  it("contracts/tool-route-map.json maps every registered tool exactly once with matching current hints and surfaces", async () => {
+  it("contracts/tool-route-map.json maps every registered tool exactly once with matching hints, title, input schema and surfaces", async () => {
     const worker = await listTools(workerCalls, { vault: true });
     const noVault = new Set((await listTools(workerCalls, { vault: false })).map((t) => t.name));
     const cli = new Set((await listTools(cliCalls, { vault: false })).map((t) => t.name));
@@ -192,11 +254,11 @@ describe("P01 catalog baseline (real tools/list)", () => {
 
     for (const tool of worker) {
       const mapped = routeMap.tools.find((t) => t.name === tool.name)!;
-      expect(mapped.currentHints, tool.name).toEqual({
-        readOnlyHint: tool.annotations?.readOnlyHint,
-        destructiveHint: tool.annotations?.destructiveHint,
-        openWorldHint: tool.annotations?.openWorldHint,
-      });
+      expect(mapped.currentHints, tool.name).toEqual(declaredHints(tool.annotations));
+      expect(mapped.proposedHints, tool.name).toEqual(mapped.currentHints);
+      expect(tool.title, tool.name).toBe(mapped.titleProposal);
+      expect(tool.annotations?.title, tool.name).toBe(mapped.titleProposal);
+      expect(schemaDigest(tool.inputSchema), `${tool.name} input schema changed`).toBe(mapped.inputSchemaDigest);
       expect(mapped.surfaces, tool.name).toEqual({
         worker: true,
         workerWithoutVault: noVault.has(tool.name),
@@ -215,6 +277,7 @@ describe("P01 catalog baseline (real tools/list)", () => {
       // Anything that is not read-only needs tools:execute (read-only tools may still
       // need it when they charge, generate or reach third parties — see AUTHORIZATION_CONTRACT §7).
       if (!tool.proposedHints.readOnlyHint) expect(tool.requiredScope, tool.name).toBe("tools:execute");
+      if (!tool.currentHints.readOnlyHint) expect(tool.requiredScope, tool.name).toBe("tools:execute");
       expect(tool.appRoutes.length, tool.name).toBeGreaterThan(0);
       for (const route of tool.appRoutes) {
         if (tool.name.startsWith("robynn_vault_")) {
@@ -238,5 +301,58 @@ describe("P01 catalog baseline (real tools/list)", () => {
       const prefix = literal.split("${")[0];
       expect(clientSource, path).toContain(prefix);
     }
+  });
+});
+
+describe("P12 tool metadata (real tools/list)", () => {
+  it("keeps the † brand-book tools conservative until P07 and records the post-P07 flip in the map", async () => {
+    const worker = await listTools(workerCalls, { vault: true });
+    const conditional = routeMap.tools.filter((t) => t.hintsAfterP07).map((t) => t.name).sort();
+    expect(conditional).toEqual(BRAND_BOOK_CONDITIONAL_TOOLS);
+
+    for (const name of BRAND_BOOK_CONDITIONAL_TOOLS) {
+      const tool = worker.find((t) => t.name === name)!;
+      const mapped = routeMap.tools.find((t) => t.name === name)!;
+      expect(tool.annotations?.readOnlyHint, name).toBe(!BRAND_BOOK_READS_PERSIST_COMPLETENESS);
+      expect(mapped.requiredScope, name).toBe("tools:execute");
+      expect(mapped.hintsAfterP07?.readOnlyHint, name).toBe(true);
+      expect(mapped.requiredScopeAfterP07, name).toBe("brand:read");
+      expect(tool.description, name).toContain("brand-completeness summary");
+    }
+  });
+
+  it("names the exact poller in every starter description and the starter in every poller description", async () => {
+    const worker = await listTools(workerCalls, { vault: true });
+    const description = (name: string) => worker.find((t) => t.name === name)?.description ?? "";
+
+    for (const [starter, poller] of STARTER_POLLERS) {
+      expect(description(starter), `${starter} → ${poller}`).toContain(poller);
+      expect(description(poller), `${poller} ← ${starter}`).toContain(starter);
+    }
+  });
+
+  it("discloses credit use, environment gates and the brand-book export semantics", async () => {
+    const worker = await listTools(workerCalls, { vault: true });
+
+    for (const tool of worker) {
+      const mapped = routeMap.tools.find((t) => t.name === tool.name)!;
+      const description = tool.description ?? "";
+      if (!mapped.charges.startsWith("none") && /reserv|charge/i.test(mapped.charges)) {
+        expect(description, `${tool.name} must disclose credit use`).toMatch(/credit/i);
+      }
+      if (mapped.environmentGate?.includes("robynn-ai")) {
+        expect(description, `${tool.name} must disclose the robynn-ai gate`).toContain("robynn-ai");
+      }
+      // Argument-dependent tools (robynn_conversations) may describe their read-only action.
+      if (!tool.annotations?.readOnlyHint && !mapped.scopeByArgument) {
+        expect(description, `${tool.name} is not read-only`).not.toMatch(/read-only/i);
+      }
+      expect(description, tool.name).not.toMatch(/Claude settings/);
+    }
+
+    const exportTool = worker.find((t) => t.name === "robynn_publish_brand_book_html")!;
+    expect(exportTool.title).toBe("Export Brand Book as HTML");
+    expect(exportTool.description).toMatch(/^Export /);
+    expect(exportTool.description).toContain("not a publication");
   });
 });

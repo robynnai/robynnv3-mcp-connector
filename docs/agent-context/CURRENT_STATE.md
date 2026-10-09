@@ -16,6 +16,7 @@ This repo provides the hosted Robynn MCP connector at `mcp.robynn.ai` and the lo
 - `docs/plugin-v1/AUTHORIZATION_CONTRACT.md` — grant record, introspection, Worker preflight, scope policy, error codes. Decision: stay on `@cloudflare/workers-oauth-provider` 0.3.0.
 - `docs/plugin-v1/TOOL_CONTRACT.md` + `contracts/tool-route-map.json` — all 48 tools: scope, current vs proposed hints, app routes, side effects.
 - `src/__tests__/provider-contract.test.ts` pins provider/agents behaviour; `src/__tests__/catalog-baseline.test.ts` recounts 48/46/40 via real `tools/list` and validates the map. Change the map and these tests together.
+- P12 (tool metadata): every tool registers via `registerTool`/`registerAppTool` with `toolMetadata(title, hints)`. Hints, titles and input-schema digests are locked to the map. The four † brand-book tools stay `readOnlyHint:false` until P07 removes the hidden completeness write; flip `BRAND_BOOK_READS_PERSIST_COMPLETENESS` in `src/tools/brand-book.ts` and the map together.
 
 ## Verification
 

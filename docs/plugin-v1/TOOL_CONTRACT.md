@@ -1,6 +1,6 @@
 # Robynn plugin v1 — tool contract (COS-PLUGIN-001 P01)
 
-Status: **baseline + P12 target**. Machine-readable twin: [`contracts/tool-route-map.json`](../../contracts/tool-route-map.json).
+Status: **baseline + P12 applied** (titles, hints and descriptions ship from `plugin-v1/p12-tool-metadata`; see §6). Machine-readable twin: [`contracts/tool-route-map.json`](../../contracts/tool-route-map.json).
 Baseline: MCP Worker `85d7781`, app `6dd04bb`. Authorization rules: [`AUTHORIZATION_CONTRACT.md`](./AUTHORIZATION_CONTRACT.md).
 App-side per-route detail and owning packages: app repo `docs/plugin-v1/MCP_ROUTE_MATRIX.md`.
 
@@ -14,7 +14,9 @@ App-side per-route detail and owning packages: app repo `docs/plugin-v1/MCP_ROUT
 | Worker, Vault unavailable | **46** | `registerVaultTools` skipped (M `src/index.ts:127-136`) |
 | Local CLI (`robynn mcp`, stdio) | **40** | no Vault (2) and website family `core` (M `src/cli/index.ts:163`) drops 6 tools: `robynn_website_audit_v2`, `_v2_status`, `robynn_website_optimization_audit`, `_status`, `robynn_website_audit_orchestrator`, `_status` |
 
-Current annotation baseline (Worker, 48 tools): `readOnlyHint` true **31** / false **17**; `destructiveHint` true **1**; `openWorldHint` true **14**; all 48 declare the three booleans explicitly; `idempotentHint` declared on **0**; tool-level `title` on **0**. The existing "registers exactly 41 tools" test (M `src/tools/all-tools.test.ts:695-728`) is a partial harness (omits Hermes' 5 and Vault's 2) and does not establish the remote inventory.
+P01 annotation baseline (Worker, 48 tools): `readOnlyHint` true **31** / false **17**; `destructiveHint` true **1**; `openWorldHint` true **14**; all 48 declare the three booleans explicitly; `idempotentHint` declared on **0**; tool-level `title` on **0**.
+
+**After P12** (asserted by `catalog-baseline.test.ts`): `readOnlyHint` true **21** / false **27**; `destructiveHint` true **7**; `openWorldHint` true **19**; `idempotentHint` true **26** / false **16** / omitted **6**; a unique `title` on all **48** (top-level and `annotations.title`). The readOnly split is 21/27 rather than P01's proposed 25/23 because the four † tools stay non-read-only until P07 (see †). The existing "registers exactly 41 tools" test (M `src/tools/all-tools.test.ts:695-728`) is a partial harness (omits Hermes' 5 and Vault's 2) and does not establish the remote inventory.
 
 The unauthenticated fallback (`robynn_status` registered by M `src/index.ts:50-64` when props carry no access token) is a separate, unannotated registration and is not part of the 48.
 
@@ -28,11 +30,11 @@ Conventions used for the proposed hints (P12 implements them; P13 snapshots them
 - **idempotentHint** — `T` only with evidence that a repeat call has no additional effect; `F` when a repeat duplicates work/charges/writes; `–` (omit) when unproven.
 - **Scope** — see AUTHORIZATION_CONTRACT §7: `readOnlyHint:false ⇒ tools:execute`; read-only tools that charge, generate, crawl caller URLs or run generic connected-app queries are also `tools:execute`. `*` = argument-dependent scope.
 - **Retry-safe** — whether the Worker client may automatically retry after 5xx/network failure (P11 input). Today it retries **every** call once (M `src/robynn-client.ts:168-200`).
-- **†** — proposed read-only hint and `brand:read` scope assume P07 removes the hidden "Brand Completeness" write from the brand-book read path (A `src/lib/services/brand-hub-docs/brand-book-v2-service.ts` `calculateBrandCompleteness`). If it is not removed, P12 must set `readOnlyHint:false` and the scope becomes `tools:execute`.
+- **†** — read-only hint and `brand:read` scope require P07 to remove the hidden "Brand Completeness" write from the brand-book read path (A `src/lib/services/brand-hub-docs/brand-book-v2-service.ts` `calculateBrandCompleteness`). **P12 ships the conservative values** (`readOnlyHint:false`, `tools:execute`), keyed off `BRAND_BOOK_READS_PERSIST_COMPLETENESS` in M `src/tools/brand-book.ts`. The post-P07 values are in the map as `hintsAfterP07` / `requiredScopeAfterP07`; flip the constant and the map together.
 
-Summary of the proposed changes: **27 of 48 tools change at least one of the three existing hints** (10 flip `readOnlyHint`); proposed totals are readOnly **25**, destructive **7**, openWorld **19**; `idempotentHint` true **26** / false **16** / omitted **6**; **22** tools are not retry-safe. Scope split: **20 `brand:read` / 28 `tools:execute`**.
+Summary of the changes: P01 proposed that **27 of 48 tools** change at least one of the three existing hints (10 flipping `readOnlyHint`), for totals of readOnly **25**. As shipped by P12 with the † tools conservative, **30 tools** change and **12** flip `readOnlyHint`, for readOnly **21**; the other totals are unchanged: destructive **7**, openWorld **19**; `idempotentHint` true **26** / false **16** / omitted **6**; **22** tools are not retry-safe. Scope split: **20 `brand:read` / 28 `tools:execute`** after P07; **16 / 32** while the † tools stay conservative (as shipped by P12).
 
-| # | Tool | Title proposal | Scope | Current RO/D/OW | Proposed RO/D/OW/Idem | Changed | App route(s) | Retry-safe | CLI |
+| # | Tool | Title | Scope | P01 RO/D/OW | Shipped RO/D/OW/Idem (P12) | Changed | App route(s) | Retry-safe | CLI |
 |---:|---|---|---|---|---|---|---|---|---|
 | 1 | `robynn_brand_context` | Get Brand Context | brand:read | T/F/F | T/F/F/T | — | GET `/api/cli/context/{scope}` | yes | yes |
 | 2 | `robynn_brand_context_search` | Search Brand Context | brand:read | T/F/F | T/F/F/T | — | POST `/api/cli/mcp/brand-context/search` | yes | yes |
@@ -48,12 +50,12 @@ Summary of the proposed changes: **27 of 48 tools change at least one of the thr
 | 12 | `robynn_geo_analysis` | Analyze AI Search Visibility (GEO) | tools:execute | T/F/F | T/F/T/– | openWorld | POST `/api/cli/mcp/geo-analysis`<br>POST `/api/agents/geo/execute` (internal hop) | **no** | yes |
 | 13 | `robynn_competitive_battlecard` | Build a Competitive Battlecard | tools:execute | T/F/F | F/T/T/F | readOnly, destructive, openWorld | POST `/api/cli/mcp/competitive-battlecard` | **no** | yes |
 | 14 | `robynn_seo_opportunities` | Find SEO Opportunities | tools:execute | T/F/F | T/F/T/– | openWorld | POST `/api/cli/mcp/seo-opportunities`<br>POST `/api/agents/seo/execute` (internal hop) | **no** | yes |
-| 15 | `robynn_brand_book_status` | Check Brand Book Completeness | brand:read | T/F/F | T/F/F/T † | — | GET `/api/cli/mcp/brand-book/status` | yes | yes |
-| 16 | `robynn_brand_book_gap_analysis` | Analyze Brand Book Gaps | brand:read | T/F/F | T/F/F/T † | — | POST `/api/cli/mcp/brand-book/gap-analysis` | yes | yes |
-| 17 | `robynn_brand_book_strategy` | Plan Brand Book Improvements | brand:read | T/F/F | T/F/F/T † | — | POST `/api/cli/mcp/brand-book/strategy` | yes | yes |
+| 15 | `robynn_brand_book_status` | Check Brand Book Completeness | tools:execute † | T/F/F | F/F/F/T † | readOnly | GET `/api/cli/mcp/brand-book/status` | yes | yes |
+| 16 | `robynn_brand_book_gap_analysis` | Analyze Brand Book Gaps | tools:execute † | T/F/F | F/F/F/T † | readOnly | POST `/api/cli/mcp/brand-book/gap-analysis` | yes | yes |
+| 17 | `robynn_brand_book_strategy` | Plan Brand Book Improvements | tools:execute † | T/F/F | F/F/F/T † | readOnly | POST `/api/cli/mcp/brand-book/strategy` | yes | yes |
 | 18 | `robynn_brand_reflections` | List Brand Reflections | brand:read | T/F/F | T/F/F/T | — | GET `/api/cli/mcp/brand-book/reflections` | yes | yes |
 | 19 | `robynn_trigger_brand_reflections` | Generate Brand Reflections | tools:execute | F/F/F | F/F/F/F | — | POST `/api/cli/mcp/brand-book/trigger-reflections` | **no** | yes |
-| 20 | `robynn_publish_brand_book_html` | Export Brand Book as HTML | brand:read | F/F/F | T/F/T/T † | readOnly, openWorld | POST `/api/cli/mcp/brand-book/publish-html` | yes | yes |
+| 20 | `robynn_publish_brand_book_html` | Export Brand Book as HTML | tools:execute † | F/F/F | F/F/T/T † | openWorld | POST `/api/cli/mcp/brand-book/publish-html` | yes | yes |
 | 21 | `robynn_campaign_creator` | Create a Marketing Campaign | tools:execute | F/F/T | F/F/T/F | — | POST `/api/cli/mcp/marketing-campaign` | **no** | yes |
 | 22 | `robynn_campaign_status` | Check Campaign Status | tools:execute | T/F/T | F/F/F/– | readOnly, openWorld | GET `/api/cli/mcp/marketing-campaign/status` | **no** | yes |
 | 23 | `robynn_website_audit` | Start a Website Audit | tools:execute | T/F/T | F/F/T/F | readOnly | POST `/api/cli/mcp/website/audit` | **no** | yes |
@@ -204,7 +206,7 @@ Summary of the proposed changes: **27 of 48 tools change at least one of the thr
 - **Hint evidence:** intended read; currently upserts the derived 'Brand Completeness' doc (brand-book-v2-service.ts:181-196,1871).
 - **Side effects:** brand_hub_docs 'Brand Completeness' upsert + brand-context cache invalidation (to be removed). **Charges:** none. **External access:** none.
 - **Object ownership:** no caller ids.
-- **† Conditional:** readOnly/brand:read assumes P07 removes the completeness write; otherwise readOnlyHint:false + tools:execute.
+- **† Conditional:** ships `readOnlyHint:false` + `tools:execute` (P12); becomes `T/F/F/T` + `brand:read` once P07 removes the completeness write.
 - **Gaps:** P07 — `src/lib/server/mcp/api.ts` `requireMcpApiContext`: no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin; P07 — `src/lib/services/brand-hub-docs/brand-book-v2-service.ts` `calculateBrandCompleteness (via aggregateBrandBookData)`: read path upserts the 'Brand Completeness' brand_hub_docs row; remove the write or P12 must mark the tool readOnlyHint:false + tools:execute.
 
 ### `robynn_brand_book_gap_analysis`
@@ -493,8 +495,35 @@ Skills (P15) must call the **exact** paired poller and preserve the returned job
 
 ## 5. Inputs for later packages
 
-- **P12**: apply `titleProposal` as the tool-level `title`, `proposedHints` (including `idempotentHint` only where present), and rewrite descriptions to disclose `charges` / `externalAccess` / `environmentGate` from the map. Fix the description defects listed under each tool's P12 gaps. Update `catalog-baseline.test.ts` expectations (31/17/1/14 → 25/23/7/19) in the same change as the map's `currentHints`.
+- **P12** (done, §6): applied `titleProposal` as the tool-level `title`, `proposedHints` (with `idempotentHint` only where present), and rewrote descriptions to disclose `charges` / `externalAccess` / `environmentGate`. `catalog-baseline.test.ts` now expects 21/27/7/19 (25/23/7/19 after the P07 † flip) and checks the map's `currentHints` in the same change. Each P12 gap in the map carries a `resolution`.
 - **P13**: snapshot the real `tools/list` (names, titles, annotations, input schemas) and keep `contracts/tool-route-map.json` in lock-step; prove 48/46/40.
 - **P10**: build the Worker `TOOL_POLICY` from `requiredScope`, `scopeByArgument`, `argumentPolicy`.
 - **P11**: disable automatic retry for every tool with `retrySafe:false`; add idempotency keys where listed.
 - **P07/P08/P09**: the `gaps` arrays name the exact app file + function; the app route matrix groups them by route.
+
+## 6. P12 implementation notes
+
+- **Registration.** All 48 tools register through `server.registerTool` (the SDK's `server.tool()` is deprecated) or `registerAppTool`. Both spread `toolMetadata(title, hints)` from M `src/tools/util.ts`, which sets the top-level `title`, mirrors it into `annotations.title` for hosts that only read the annotation, and declares the three safety booleans plus `idempotentHint` where the map has evidence.
+- **Input schemas.** No tool was renamed and no input schema changed shape. The map's `inputSchemaDigest` hashes each `tools/list` `inputSchema` with string `description` keys removed, so the test fails on any shape change but allows wording fixes. Parameter wording changed on 10 tools: `currently ignored` markers for inputs the app drops (`analysis_depth`; website audit `goals` / `competitors` / `analysis_depth`; v2 `mode`; brand-book export `theme` / `include_private_sections`); v2 `site_id` = Website Studio site; `dry_run` semantics for `robynn_trigger_brand_reflections` and `robynn_content_plan`; memory `session` scope; connector `idempotency_key` replay; `run_id` starters.
+- **Description conventions.** Each description says:
+  - what the tool does;
+  - what it saves or overwrites;
+  - whether it uses Robynn credits (and whether that is refundable);
+  - which third parties it reaches;
+  - whether a repeat call duplicates work;
+  - which exact poller or starter it pairs with (§4).
+- **Description checks** (`catalog-baseline.test.ts`):
+  - every starter names its exact poller, and every poller names its starter;
+  - charging tools say "credits";
+  - `robynn-ai`-gated tools say so;
+  - non-read-only tools never call themselves read-only;
+  - `robynn_publish_brand_book_html` is described as an export, not a publication.
+- **D-A.** The `robynn_query_connected_app` description does not mention its scope. The single flip point is `requiredScope` in the map (see its `openDecision` note), mirrored by the P07 route scope.
+- **Path-id guard.** `robynn_create_content`, `robynn_research`, `robynn_assist`, `robynn_run_status` and `robynn_thread_append` reject `thread_id` / `run_id` values outside `[A-Za-z0-9_-]{1,128}` before any request (`isSafePathId`). This closes the same-origin path-traversal gap at the tool layer. P11 should still `encodeURIComponent` path ids in M `src/robynn-client.ts`.
+- **Unauthenticated fallback.** `registerUnauthenticatedStatusTool` (M `src/tools/status.ts`) gives the fallback `robynn_status` the same title and hints plus host-neutral copy. Wiring it into `RobynnMCP.init()` (M `src/index.ts`) is left to the owner of that file (P10); until then the old unannotated, Claude-specific fallback remains.
+- **Not done in P12** (would change input schemas or files owned elsewhere):
+  - bounding the `robynn_seo_opportunities` arrays;
+  - adding `confirmed_estimate_id` / `site_id` to `robynn_website_optimization_audit`;
+  - returning the bound organization and granted permissions from `robynn_status` (needs P10 introspection);
+  - Worker server instructions (none exist today; they would live in M `src/index.ts`).
+

@@ -1,15 +1,23 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RobynnClient } from "../robynn-client";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 export function registerCapabilityTools(
   server: McpServer,
   client: RobynnClient,
 ) {
-  server.tool(
+  server.registerTool(
     "robynn_capabilities",
-    "Return Robynn's semantic capability manifest for Hermes and other MCP clients, including availability, safety metadata, required role, mapped MCP tools, and mapped robynnv3 API routes.",
-    { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    {
+      ...toolMetadata("List Robynn Capabilities", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
+      description:
+        "Return Robynn's capability manifest for MCP clients: availability, safety metadata, required role, and the MCP tools and Robynn API routes behind each capability. Read-only.",
+    },
     async () => {
       try {
         const result = await client.getBridgeCapabilities();

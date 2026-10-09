@@ -1,53 +1,60 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 export function registerBrandOperationTools(
   server: McpServer,
   client: RobynnClient,
 ) {
-  server.tool(
+  server.registerTool(
     "robynn_brand_source_add",
-    "Add a Brand Hub source through Robynn APIs. Supports website source drafts and text/markdown notes. Use an idempotency_key so repeated MCP calls do not create duplicate logical sources.",
     {
-      source_type: z
-        .enum(["website", "text"])
-        .describe("The source kind to add: website or text."),
-      url: z
-        .string()
-        .url()
-        .optional()
-        .describe("Required for website sources."),
-      title: z
-        .string()
-        .min(1)
-        .max(200)
-        .optional()
-        .describe("Source title. Required for text sources."),
-      content: z
-        .string()
-        .min(1)
-        .optional()
-        .describe("Required for text sources. Markdown is supported."),
-      content_type: z
-        .enum(["markdown", "plain"])
-        .optional()
-        .describe("Text source content type. Defaults to markdown."),
-      page_limit: z
-        .number()
-        .int()
-        .positive()
-        .max(500)
-        .optional()
-        .describe("Optional crawl page limit for website source drafts."),
-      idempotency_key: z
-        .string()
-        .min(1)
-        .max(160)
-        .describe("Stable key for this logical source add request."),
+      ...toolMetadata("Add a Brand Source", {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: false,
+      }),
+      description:
+        "Add a Brand Hub source: a website source draft or a text/markdown note. Saves to Brand Hub; reusing an idempotency_key updates (overwrites) the source saved under that key instead of adding another. Does not crawl the website. Run robynn_brand_rebuild afterwards to update Brand Context.",
+      inputSchema: {
+        source_type: z
+          .enum(["website", "text"])
+          .describe("The source kind to add: website or text."),
+        url: z
+          .string()
+          .url()
+          .optional()
+          .describe("Required for website sources."),
+        title: z
+          .string()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe("Source title. Required for text sources."),
+        content: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("Required for text sources. Markdown is supported."),
+        content_type: z
+          .enum(["markdown", "plain"])
+          .optional()
+          .describe("Text source content type. Defaults to markdown."),
+        page_limit: z
+          .number()
+          .int()
+          .positive()
+          .max(500)
+          .optional()
+          .describe("Optional crawl page limit for website source drafts."),
+        idempotency_key: z
+          .string()
+          .min(1)
+          .max(160)
+          .describe("Stable key for this logical source add request."),
+      },
     },
-    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     async (args) => {
       try {
         if (args.source_type === "website") {
@@ -103,15 +110,23 @@ export function registerBrandOperationTools(
     },
   );
 
-  server.tool(
+  server.registerTool(
     "robynn_brand_rebuild",
-    "Rebuild the organization's Brand Context through Robynn APIs after Brand Hub source changes. Requires write_confirmed: true.",
     {
-      write_confirmed: z
-        .literal(true)
-        .describe("Must be true to confirm the Brand Context rebuild."),
+      ...toolMetadata("Rebuild Brand Context", {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
+      description:
+        "Rebuild the organization's Brand Context from its current Brand Hub sources, replacing the existing Brand Context. Run after robynn_brand_source_add. Requires write_confirmed: true.",
+      inputSchema: {
+        write_confirmed: z
+          .literal(true)
+          .describe("Must be true to confirm the Brand Context rebuild."),
+      },
     },
-    { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     async ({ write_confirmed }) => {
       try {
         const result = await client.rebuildBrandContext({

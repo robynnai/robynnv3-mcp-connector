@@ -3,15 +3,21 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
 import { REPORT_RESOURCE_URIS } from "../ui/report-app";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 export function registerBattlecardTools(server: McpServer, client: RobynnClient) {
   registerAppTool(
     server,
     "robynn_competitive_battlecard",
     {
+      ...toolMetadata("Build a Competitive Battlecard", {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: true,
+        idempotentHint: false,
+      }),
       description:
-        "Generate a current competitive battlecard against a named competitor using Robynn's market and brand context. Returns comparison sections, objections, differentiators, risks, and recommended actions.",
+        "Build a competitive battlecard against a named competitor: comparison, objections, differentiators, risks, and recommended actions. Researches the competitor through external data providers (search, SEO, and backlink services) and its website, saves a new battlecard to Robynn, and creates or updates the competitor's profile, including a weekly refresh schedule. No Robynn credits are charged; each call generates a new battlecard. focus_areas and include_objections are advisory. report_*_path values are server-side paths, not links.",
       inputSchema: {
         competitor_name: z.string().describe("The competitor to analyze"),
         company_name: z
@@ -28,11 +34,6 @@ export function registerBattlecardTools(server: McpServer, client: RobynnClient)
           .boolean()
           .optional()
           .describe("Whether to include objection handling in the battlecard"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: false,
       },
       _meta: {
         ui: {

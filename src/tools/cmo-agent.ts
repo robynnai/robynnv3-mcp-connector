@@ -6,7 +6,7 @@ import type { ResponseBlock } from "../types";
 import type { RobynnClient } from "../robynn-client";
 import { REPORT_RESOURCE_URIS } from "../ui/report-app";
 import { buildCmoAguiTextFallback } from "./cmo-text";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 const assistantIdSchema = z.enum(["cmo_v2", "cmo_v3", "auto"]);
 const routeHintSchema = z.enum(["fast", "deep", "auto"]);
@@ -40,8 +40,14 @@ export function registerCmoAgentTools(server: McpServer, client: RobynnClient) {
     server,
     "robynn_cmo_agent",
     {
+      ...toolMetadata("Run the Robynn CMO Agent", {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: false,
+      }),
       description:
-        "Run the Robynn CMO v3 orchestrator (Instant Agent) with optional route_hint. Use for Rory-style strategic marketing work that may route across specialized sub-agents, preserve thread context, and return clarify turns as decision_card response_blocks.",
+        "Run the Robynn CMO v3 orchestrator (Instant Agent) for strategic marketing work that may route across specialized sub-agents, with optional route_hint. Starts an agent run that uses Robynn credits, saves the conversation to a thread visible to your organization (a new one unless thread_id is given), and may use your organization's connected apps. Each call starts a new run. Poll pending runs with robynn_run_status; clarify turns come back as decision_card response_blocks, answered with robynn_cmo_decide.",
       inputSchema: {
         message: z.string().describe("The user message or request to send to Robynn"),
         thread_id: z.string().optional().describe("Continue in an existing conversation thread"),
@@ -51,11 +57,6 @@ export function registerCmoAgentTools(server: McpServer, client: RobynnClient) {
         claude_skill_slug: z.string().optional().describe("Optional Claude skill slug to preserve"),
         history_summary: z.string().optional().describe("Optional summary of prior thread history"),
         memory_enabled: z.boolean().optional().describe("Whether backend memory should be enabled for this run"),
-      },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        openWorldHint: false,
       },
       _meta: {
         ui: {

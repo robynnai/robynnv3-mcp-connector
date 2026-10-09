@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
 import type { WeeklyVisibilityReportResult } from "../types";
 import { REPORT_RESOURCE_URIS } from "../ui/report-app";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -69,8 +69,14 @@ export function registerWeeklyVisibilityTools(
     server,
     "robynn_weekly_visibility_report",
     {
+      ...toolMetadata("Get Weekly Visibility Report", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      }),
       description:
-        "Build a weekly SEO and GEO visibility report for one connected Robynn website. Requires a Robynn organization website id with Google Search Console and GA4 data available through Brand Monitor. Returns SEO KPIs, keyword/page tables, non-ranking pages, striking-distance keywords, GEO prompt visibility, and recommendations.",
+        "Build a weekly SEO and GEO visibility report for one Robynn organization website with Google Search Console and GA4 connected through Brand Monitor. Reads live data from those connected Google properties. Returns SEO KPIs, keyword and page tables, non-ranking pages, striking-distance keywords, GEO prompt visibility, and recommendations. Read-only; nothing is saved.",
       inputSchema: {
         website_id: z
           .string()
@@ -99,11 +105,6 @@ export function registerWeeklyVisibilityTools(
           .boolean()
           .optional()
           .describe("Whether to include deterministic page, keyword, and GEO recommendations"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: false,
       },
       _meta: {
         ui: {
