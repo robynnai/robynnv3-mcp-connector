@@ -135,6 +135,21 @@ npx tsc --noEmit          # Type-check
 npx wrangler deploy       # Deploy to Cloudflare
 ```
 
+### Local secrets (`.dev.vars`)
+
+`wrangler dev` reads Worker secrets from the gitignored `.dev.vars`. In the
+`robynn-v3-workspace` checkout, generate it from Doppler (do not hand-copy it):
+
+```bash
+# from the workspace root
+./scripts/env-sync.sh --profile prod-staging
+```
+
+This writes `.dev.vars` (mode `600`) from Doppler `robynnv3/dev`, filtered to
+`MCP_INTERNAL_AUTH_SECRET` and `CONNECTOR_STATE_SECRET`. These sign the trusted
+OAuth token exchange with robynnv3, so they must match the robynnv3 backend the
+Worker points at. Non-secret vars stay in `wrangler.toml` `[vars]`.
+
 ### Local Testing
 
 Detailed runbook: [docs/local-testing.md](/Users/madhukarkumar/Developer/robynnv3-standalone/robynn-mcp-server/docs/local-testing.md)
@@ -187,6 +202,9 @@ Changes are live at `mcp.robynn.ai` within seconds.
 | `ROBYNN_API_BASE_URL` | `https://robynn.ai` | wrangler.toml `[vars]` |
 | `MCP_SERVER_NAME` | `Robynn` | wrangler.toml `[vars]` |
 | `MCP_SERVER_VERSION` | `0.1.5` | wrangler.toml `[vars]` |
+| `MCP_PUBLIC_BASE_URL` | `https://mcp.robynn.ai` | wrangler.toml `[vars]` |
+| `MCP_INTERNAL_AUTH_SECRET` | secret | Worker secret; locally `.dev.vars` via workspace `env-sync.sh` |
+| `CONNECTOR_STATE_SECRET` | secret (fallback signer) | wrangler.toml `[vars]`; locally overridden by `.dev.vars` |
 | `OAUTH_KEY` | KV namespace | wrangler.toml binding |
 | `MCP_OBJECT` | Durable Object | wrangler.toml binding |
 
