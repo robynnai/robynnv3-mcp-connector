@@ -185,7 +185,7 @@ GEO, SEO, battlecard, brand-book, website audit/strategy, content plan, weekly v
 | `src/index.ts` | `RobynnMCP` McpAgent class + `OAuthProvider` default export |
 | `src/auth-handler.ts` | Hono app: `/authorize` redirect, `/callback` token exchange, health, `.well-known` |
 | `src/robynn-client.ts` | HTTP client for robynn.ai API with timeout/polling |
-| `src/internal-mcp-auth.ts` | HMAC signing for trusted MCP→robynn.ai token exchanges |
+| `src/internal-mcp-auth.ts` | v2 HMAC signing (body digest + nonce) for Worker→robynn.ai requests; token code exchange and refresh |
 | `src/types.ts` | `Env`, `Props`, all request/result types for intelligence + guided-workflow tools |
 | `src/tools/context.ts` | `robynn_brand_context` + `robynn_brand_context_search` |
 | `src/tools/status.ts` | `robynn_status` + `robynn_usage` |
@@ -215,8 +215,7 @@ GEO, SEO, battlecard, brand-book, website audit/strategy, content plan, weekly v
 | `MCP_OBJECT` | Durable Object (`RobynnMCP`) | One instance per authenticated user — hosts MCP server |
 | `ROBYNN_API_BASE_URL` | Env var | `https://robynn.ai` |
 | `MCP_PUBLIC_BASE_URL` | Env var | `https://mcp.robynn.ai` — used for URL rewriting and report resource URIs |
-| `CONNECTOR_STATE_SECRET` | Env var | Secret for HMAC-signed OAuth state |
-| `MCP_INTERNAL_AUTH_SECRET` | Env var (optional) | Secret for signing trusted token exchanges with robynn.ai |
+| `MCP_INTERNAL_AUTH_SECRET` | Secret (required, set out of band) | Signs Worker → robynn.ai internal requests (`/api/oauth/token` code exchange and refresh); no fallback. See `docs/plugin-v1/INTERNAL_AUTH_SIGNING.md` |
 | `MCP_SERVER_NAME` | Env var | `Robynn` |
 | `MCP_SERVER_VERSION` | Env var | `0.1.5` (wrangler.toml; package/`APP_VERSION` may differ) |
 
@@ -227,7 +226,7 @@ This Worker depends on several endpoints on robynn.ai (the SvelteKit frontend):
 | Endpoint | Purpose | Auth |
 |----------|---------|------|
 | `GET /oauth/authorize` | OAuth consent page (Supabase login + consent) | Session |
-| `POST /api/oauth/token` | Token exchange (auth code → JWT + refresh token) | HMAC signature (`internal-mcp-auth.ts`) |
+| `POST /api/oauth/token` | Token exchange and refresh (auth code / refresh token → JWT + refresh token) | Required v2 HMAC signature (`internal-mcp-auth.ts`); unsigned ⇒ `401 invalid_client` |
 | `GET /api/cli/context/[scope]` | Granular brand context (8 scopes) | Bearer (API key or JWT) |
 | `GET /api/cli/usage` | Token balance | Bearer |
 | `GET /api/agents/cmo/threads` | List CMO threads | Bearer |
@@ -245,7 +244,7 @@ This Worker depends on several endpoints on robynn.ai (the SvelteKit frontend):
 | `POST /api/cli/mcp/competitive-battlecard` | Competitive battlecard | Bearer |
 | `POST /api/cli/mcp/seo-opportunities` | SEO opportunity analysis | Bearer |
 
-JWT tokens issued by robynn.ai contain `{ sub: userId, org: organizationId, scope }`.
+JWT tokens issued by robynn.ai contain `{ iss, aud: "robynn-api:mcp", type: "access", sub: userId, org: organizationId, cid, scope, iat, exp, jti }` (strictly validated app-side).
 
 ## Common Tasks
 

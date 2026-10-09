@@ -3,10 +3,15 @@ main = "src/index.ts"
 compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
+# Non-secret configuration only. Secrets are never committed here; they are set
+# out of band (`wrangler secret put`, by the release owner):
+#   MCP_INTERNAL_AUTH_SECRET  required. Signs Worker -> app internal requests
+#                             (/api/oauth/token code exchange and refresh).
+#                             Must equal the app's MCP_INTERNAL_AUTH_SECRET.
+# CONNECTOR_STATE_SECRET is not read by this Worker and must not be set here.
 [vars]
 ROBYNN_API_BASE_URL = "https://robynn.ai"
 MCP_PUBLIC_BASE_URL = "https://mcp.robynn.ai"
-CONNECTOR_STATE_SECRET = "970e7bc2624b210ed012f0e955d17dd7c3c921dbf0e7f7156d7bfb400f9b0e84"
 MCP_SERVER_NAME = "Robynn"
 MCP_SERVER_VERSION = "0.1.5"
 

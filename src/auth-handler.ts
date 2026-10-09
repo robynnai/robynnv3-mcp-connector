@@ -3,10 +3,8 @@ import type { Env } from "./types";
 import { REPORT_APP_SCRIPT } from "./ui/report-app-script";
 import { getServerVersion } from "./version";
 import {
-  MCP_SIGNATURE_HEADER,
-  MCP_TIMESTAMP_HEADER,
-  shouldSignTrustedMcpTokenExchange,
-  signTrustedMcpTokenExchange,
+  buildSignedTokenRequest,
+  getInternalAuthSecret,
 } from "./internal-mcp-auth";
 
 type HonoEnv = { Bindings: Env };
@@ -281,44 +279,25 @@ app.get("/callback", async (c) => {
     oauthRequest: import("./types").OAuthRequestInfo;
   };
 
-  const internalAuthSecret =
-    c.env.MCP_INTERNAL_AUTH_SECRET?.trim() ||
-    c.env.CONNECTOR_STATE_SECRET?.trim();
-  const tokenExchangeHeaders: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  if (
-    shouldSignTrustedMcpTokenExchange(internalAuthSecret, OAUTH_CLIENT_ID)
-  ) {
-    const { signature, timestamp } = await signTrustedMcpTokenExchange(
-      internalAuthSecret,
-      {
-        grantType: "authorization_code",
-        code,
-        clientId: OAUTH_CLIENT_ID,
-        redirectUri: storedState.workerCallbackUrl,
-      }
-    );
-
-    tokenExchangeHeaders[MCP_SIGNATURE_HEADER] = signature;
-    tokenExchangeHeaders[MCP_TIMESTAMP_HEADER] = timestamp;
+  // Worker -> app token exchange is always signed with the dedicated
+  // MCP_INTERNAL_AUTH_SECRET (no fallback); the app rejects unsigned requests.
+  const internalAuthSecret = getInternalAuthSecret(c.env);
+  if (!internalAuthSecret) {
+    console.error("[Auth] MCP_INTERNAL_AUTH_SECRET is not configured");
+    return c.text("Authorization is temporarily unavailable", 503);
   }
 
   // Exchange authorization code for tokens with robynn.ai
-  const tokenResponse = await fetch(
-    `${c.env.ROBYNN_API_BASE_URL}/api/oauth/token`,
+  const tokenRequest = await buildSignedTokenRequest(
+    internalAuthSecret,
+    c.env.ROBYNN_API_BASE_URL,
     {
-      method: "POST",
-      headers: tokenExchangeHeaders,
-      body: JSON.stringify({
-        grant_type: "authorization_code",
-        code,
-        client_id: OAUTH_CLIENT_ID,
-        redirect_uri: storedState.workerCallbackUrl,
-      }),
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: storedState.workerCallbackUrl,
     }
   );
+  const tokenResponse = await fetch(tokenRequest.url, tokenRequest.init);
 
   if (!tokenResponse.ok) {
     const errorText = await tokenResponse.text();

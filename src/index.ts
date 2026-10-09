@@ -3,6 +3,7 @@ import type { TokenExchangeCallbackOptions, TokenExchangeCallbackResult } from "
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { RobynnClient } from "./robynn-client";
+import { buildSignedTokenRequest, getInternalAuthSecret } from "./internal-mcp-auth";
 import { getProtectedResourceMetadata, robynnAuthHandler } from "./auth-handler";
 import { registerContextTools } from "./tools/context";
 import { registerStatusTools } from "./tools/status";
@@ -73,6 +74,7 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
         refreshAccessToken: async () => {
           const refreshed = await refreshUpstreamAccessToken(
             this.props,
+            getInternalAuthSecret(this.env),
             this.env.ROBYNN_API_BASE_URL,
           );
 
@@ -137,7 +139,6 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
   }
 }
 
-const OAUTH_CLIENT_ID = "robynn-mcp-worker";
 const SUPPORTED_OAUTH_SCOPES = ["brand:read", "tools:execute"];
 
 interface UpstreamTokenRefreshResult {
@@ -148,6 +149,7 @@ interface UpstreamTokenRefreshResult {
 
 async function refreshUpstreamAccessToken(
   props: Props | undefined,
+  internalAuthSecret: string | null,
   fallbackApiBaseUrl?: string,
 ): Promise<UpstreamTokenRefreshResult | undefined> {
   const refreshToken = props?.refreshToken;
@@ -155,15 +157,13 @@ async function refreshUpstreamAccessToken(
   if (!props || !refreshToken || !apiBaseUrl) return undefined;
 
   try {
-    const res = await fetch(`${apiBaseUrl}/api/oauth/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
-        client_id: OAUTH_CLIENT_ID,
-      }),
-    });
+    // Signed like the code exchange; the app rejects unsigned refreshes.
+    const tokenRequest = await buildSignedTokenRequest(
+      internalAuthSecret,
+      apiBaseUrl,
+      { grant_type: "refresh_token", refresh_token: refreshToken },
+    );
+    const res = await fetch(tokenRequest.url, tokenRequest.init);
 
     if (!res.ok) {
       console.error(
@@ -208,11 +208,15 @@ async function refreshUpstreamAccessToken(
  */
 async function tokenExchangeCallback(
   options: TokenExchangeCallbackOptions,
+  env: Env,
 ): Promise<TokenExchangeCallbackResult | void> {
   if (options.grantType !== GrantType.REFRESH_TOKEN) return;
 
   const props = options.props as Props;
-  const refreshed = await refreshUpstreamAccessToken(props);
+  const refreshed = await refreshUpstreamAccessToken(
+    props,
+    getInternalAuthSecret(env),
+  );
   if (!refreshed) return;
 
   return {
@@ -236,7 +240,7 @@ function createOAuthProvider(env: Env) {
     resourceMetadata: getProtectedResourceMetadata(publicBaseUrl),
     accessTokenTTL: 3600,
     refreshTokenTTL: 30 * 24 * 3600,
-    tokenExchangeCallback,
+    tokenExchangeCallback: (options) => tokenExchangeCallback(options, env),
   });
 }
 
