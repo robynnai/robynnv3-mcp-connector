@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ResponseBlock } from "../types";
 import type { RobynnClient } from "../robynn-client";
 import { buildCmoAguiTextFallback } from "./cmo-text";
-import { toErrorResult, toSuccessResult } from "./util";
+import { isSafePathId, toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 function extractAguiFields(data: {
   response_blocks?: ResponseBlock[];
@@ -31,14 +31,26 @@ function buildPendingPollText(runId: string, threadId: string) {
 }
 
 export function registerRunTools(server: McpServer, client: RobynnClient) {
-  server.tool(
+  server.registerTool(
     "robynn_run_status",
-    "Get the latest status for a long-running Robynn CMO run. Use this after robynn_create_content or robynn_research returns a pending run_id.",
     {
-      run_id: z.string().describe("The Robynn run_id returned by a prior content or research request"),
+      ...toolMetadata("Check Run Status", {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
+      description:
+        "Get the status or final output of a Robynn CMO run started by robynn_create_content, robynn_research, robynn_assist, or robynn_cmo_agent. The first poll after the run finishes saves its output (messages and artifacts) to Robynn and settles its credit reservation; repeat polls are safe and do not charge again.",
+      inputSchema: {
+        run_id: z.string().describe("The run_id returned by robynn_create_content, robynn_research, robynn_assist, or robynn_cmo_agent"),
+      },
     },
-    { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     async ({ run_id }) => {
+      if (!isSafePathId(run_id)) {
+        return toErrorResult("Invalid run_id.");
+      }
+
       try {
         const result = await client.getRun(run_id);
 

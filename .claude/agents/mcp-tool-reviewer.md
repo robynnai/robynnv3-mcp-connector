@@ -7,13 +7,13 @@ Review all MCP tool implementations in `src/tools/` for adherence to project con
 
 ## Checklist
 
-- [ ] Every tool has safety annotations: `readOnlyHint`, `destructiveHint`, `openWorldHint`
+- [ ] Every tool has a title and explicit safety annotations via `toolMetadata(title, { readOnlyHint, destructiveHint, openWorldHint })`, matching `contracts/tool-route-map.json` (`catalog-baseline.test.ts` enforces this)
 - [ ] Every tool returns both `content` (text array) and `structuredContent`
 - [ ] `structuredContent` is cast to `Record<string, unknown>` (SDK type requirement)
 - [ ] Every tool handler is wrapped in try/catch with `isError: true` on failure
 - [ ] All Zod schema parameters have `.describe("...")` for LLM context
 - [ ] App tools (`registerAppTool`) have an `outputResource` with a valid `ui://reports/*.html` URI
-- [ ] Standard tools use `server.tool()` — not `registerAppTool`
+- [ ] Standard tools use `server.registerTool()` (not the deprecated `server.tool()`) — not `registerAppTool`
 - [ ] All tools are registered in `src/index.ts` `init()`
 - [ ] Each tool file has a corresponding `.test.ts` file
 

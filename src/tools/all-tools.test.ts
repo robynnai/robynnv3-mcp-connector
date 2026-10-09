@@ -16,7 +16,7 @@ import { registerCmoDecideTools } from "./cmo-decide";
 import { registerWebsiteTools } from "./website";
 import { registerContentPlanTools } from "./content-plan";
 import { registerWeeklyVisibilityTools } from "./weekly-visibility";
-import { registerConnectorTools } from "./connectors";
+import { CONNECTED_APP_READS_PERSIST_POLICY, registerConnectorTools } from "./connectors";
 import { registerCapabilityTools } from "./capabilities";
 import { registerBrandOperationTools } from "./brand-operations";
 import { registerConnectorActionTools } from "./connector-act";
@@ -34,24 +34,16 @@ function createServerHarness() {
     }
   >();
 
-  // server.tool() uses positional args: (name, desc, schema, annotations, handler)
-  // or (name, desc, annotations, handler) for no-schema tools
-  const tool = vi.fn((...args: unknown[]) => {
-    const name = args[0] as string;
-    const description = args[1] as string;
-    const handler = args[args.length - 1] as Handler;
-    handlers.set(name, handler);
-    toolMetadata.set(name, { description });
-  });
-
-  // registerAppTool calls server.registerTool(name, config, handler)
+  // Every tool (plain and registerAppTool) goes through
+  // server.registerTool(name, config, handler).
   const registerTool = vi.fn(
-    (name: string, _config: unknown, handler: Handler) => {
+    (name: string, config: { description: string }, handler: Handler) => {
       handlers.set(name, handler);
+      toolMetadata.set(name, { description: config.description });
     },
   );
 
-  const server = { tool, registerTool } as never;
+  const server = { registerTool } as never;
 
   return { server, handlers, toolMetadata };
 }
@@ -805,7 +797,16 @@ describe("connector tool guidance", () => {
     ).toContain("structuredContent.highlights");
     expect(
       toolMetadata.get("robynn_query_connected_app")?.description,
-    ).toContain("read-only");
+    ).toContain("curated read action");
+    // While the read path persists connector policy (P07 †) the tool must disclose
+    // it and must not call itself read-only; after P07 it is plainly read-only.
+    const queryDescription = toolMetadata.get("robynn_query_connected_app")?.description;
+    if (CONNECTED_APP_READS_PERSIST_POLICY) {
+      expect(queryDescription).toContain("connector policy");
+      expect(queryDescription).not.toContain("read-only");
+    } else {
+      expect(queryDescription).toContain("Read-only");
+    }
     expect(
       toolMetadata.get("robynn_connected_apps")?.description,
     ).toContain("HighLevel contacts");

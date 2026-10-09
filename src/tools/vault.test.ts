@@ -60,12 +60,12 @@ type Handler = (args: never) => Promise<never>;
 
 function createServerHarness() {
   const handlers = new Map<string, Handler>();
-  const tool = vi.fn((...args: unknown[]) => {
+  const registerTool = vi.fn((...args: unknown[]) => {
     const name = args[0] as string;
     const handler = args[args.length - 1] as Handler;
     handlers.set(name, handler);
   });
-  const server = { tool } as never;
+  const server = { registerTool } as never;
   return { server, handlers };
 }
 

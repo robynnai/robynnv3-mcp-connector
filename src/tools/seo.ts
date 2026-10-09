@@ -3,15 +3,20 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
 import { REPORT_RESOURCE_URIS } from "../ui/report-app";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 export function registerSeoTools(server: McpServer, client: RobynnClient) {
   registerAppTool(
     server,
     "robynn_seo_opportunities",
     {
+      ...toolMetadata("Find SEO Opportunities", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+      }),
       description:
-        "Identify SEO keyword gaps and content opportunities relative to your market and competitors. Returns keyword gaps, recommended actions, and competitive SEO comparison data.",
+        "Find SEO keyword gaps and content opportunities relative to your market and competitors; returns keyword gaps, recommended actions, and competitive comparison data. Queries external search and SEO data providers and reads company_url. Nothing is saved and no Robynn credits are charged, but each call runs a full analysis.",
       inputSchema: {
         company_name: z.string().describe("Your company or brand name"),
         company_url: z
@@ -30,11 +35,6 @@ export function registerSeoTools(server: McpServer, client: RobynnClient) {
           .string()
           .optional()
           .describe("Additional market or category context"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: false,
       },
       _meta: {
         ui: {

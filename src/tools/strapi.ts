@@ -3,15 +3,21 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { RobynnClient } from "../robynn-client";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 export function registerStrapiTools(server: McpServer, client: RobynnClient) {
   registerAppTool(
     server,
     "robynn_publish_strapi_draft",
     {
+      ...toolMetadata("Save a Strapi Draft", {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: true,
+        idempotentHint: false,
+      }),
       description:
-        "Create or update a draft in the organization's connected self-hosted Strapi instance. Requires write_confirmed=true and never publishes live.",
+        "Create or update a draft in your organization's connected self-hosted Strapi CMS; never publishes live. Writes to Strapi (a draft already linked to the same artifact_id is overwritten; without artifact_id each call creates a new draft) and records the publish in Robynn. Requires write_confirmed=true.",
       inputSchema: {
         write_confirmed: z
           .literal(true)
@@ -37,11 +43,6 @@ export function registerStrapiTools(server: McpServer, client: RobynnClient) {
           .uuid()
           .optional()
           .describe("Optional explicit website publish target ID."),
-      },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        openWorldHint: true,
       },
       _meta: {
         ui: {

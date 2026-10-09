@@ -194,7 +194,7 @@ describe("registerWebsiteTools", () => {
     );
     expect(
       configs.get("robynn_website_audit_v2")?.annotations?.readOnlyHint
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("registers website optimization audit tools and sends default args", async () => {
@@ -353,7 +353,7 @@ describe("registerWebsiteTools", () => {
     expect(
       configs.get("robynn_website_audit_orchestrator")?.annotations
         ?.readOnlyHint
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("polls website audit orchestrator status with pagination", async () => {

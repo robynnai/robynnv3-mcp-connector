@@ -1,27 +1,35 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 export function registerConversationTools(
   server: McpServer,
   client: RobynnClient,
 ) {
-  server.tool(
+  server.registerTool(
     "robynn_conversations",
-    "Manage conversation threads with the Robynn CMO. List existing threads or create a new one.",
     {
-      action: z
-        .enum(["list", "create"])
-        .describe(
-          "Action to perform: list existing threads or create a new one",
-        ),
-      title: z
-        .string()
-        .optional()
-        .describe("Title for a new thread (only used with action=create)"),
+      ...toolMetadata("List or Start Conversations", {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: false,
+      }),
+      description:
+        "List your organization's Robynn CMO conversation threads (action=list, read-only) or create a new thread (action=create, visible to your organization; each call creates another thread).",
+      inputSchema: {
+        action: z
+          .enum(["list", "create"])
+          .describe(
+            "Action to perform: list existing threads or create a new one",
+          ),
+        title: z
+          .string()
+          .optional()
+          .describe("Title for a new thread (only used with action=create)"),
+      },
     },
-    { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     async ({ action, title }) => {
       try {
         if (action === "list") {
