@@ -2,7 +2,8 @@
 
 Status: **contract lock for P03–P11, P16**. Source of truth for the plan's §6 "minimal authorization design".
 Baseline: MCP Worker `85d7781`, app `6dd04bb` (both = `origin/main` on 2026-10-09).
-Proof: `src/__tests__/provider-contract.test.ts` (31 cases) and `src/__tests__/catalog-baseline.test.ts`.
+Proof: `src/__tests__/provider-contract.test.ts` (35 cases) and `src/__tests__/catalog-baseline.test.ts` (7 cases).
+Revision: P01 review fixes (2026-10-09) — B1 (`/sse` is not served: F19/F20, D10, §6.1, §6.4), B2 (`robynn_query_connected_app` conditional), non-blocking notes 1–5, 7.
 
 Notation: **M** = this repo (`robynnv3-mcp-connector`), **A** = `robynnv3`. Line numbers are at the baseline SHAs.
 Per-route gaps live in A `docs/plugin-v1/MCP_ROUTE_MATRIX.md`; per-tool scope/hints live in
@@ -14,16 +15,16 @@ Per-route gaps live in A `docs/plugin-v1/MCP_ROUTE_MATRIX.md`; per-tool scope/hi
 
 | # | Decision | Basis |
 |---|---|---|
-| D1 | **No `@cloudflare/workers-oauth-provider` upgrade for v1.** Every required contract below is implementable on 0.3.0. | §2 facts F1–F14, all proven by test |
+| D1 | **No `@cloudflare/workers-oauth-provider` upgrade for v1.** Every required contract below is implementable on 0.3.0. | §2 facts F1–F20, all proven by test |
 | D2 | Keep two token layers (host↔Worker provider tokens; Worker↔app JWT) and one MCP surface `/mcp`. | Plan §6 |
 | D3 | Scope vocabulary stays `brand:read`, `tools:execute`. Omitted scope ⇒ `brand:read`. Unknown scope ⇒ reject (`invalid_scope`). Never widen. | Plan §6; F6, F7 |
 | D4 | The **app** owns the durable grant record (`oauth_grants`); the provider grant is a cache that the Worker revokes when the app grant dies. | F12, F13; no app grant table exists today |
 | D5 | Authorization is checked **per `tools/call` in the Worker fetch wrapper** (before the Durable Object), plus independently in every app route. No positive authorization cache in v1. | F3, F4, F15–F18 |
-| D6 | The DO must not refresh upstream credentials itself; refresh happens only on the provider `/token` path. | F10, F11; split-brain at M `src/index.ts:73-93` |
-| D7 | MCP sessions are bound to one provider grant; a different grant presenting an existing `mcp-session-id` gets `404 Session not found`. | F15–F18 |
+| D6 | The DO must not refresh upstream credentials itself; refresh happens only on the provider `/token` path. | F13 (existing access tokens keep their props snapshot), F18 (`updateProps` writes only DO storage); split-brain at M `src/index.ts:73-93` |
+| D7 | MCP sessions are bound to one provider grant; a different grant presenting an existing `mcp-session-id` gets `404 Session not found`. The binding lives in the **session Durable Object's own storage** (strongly consistent), not KV. | F15–F18 |
 | D8 | OAuth credentials can never resolve to the organization master-key admin path. | A `src/lib/server/mcp/api.ts:30-47`, `_compat.ts:61-77` |
 | D9 | Session-scoped memory is rejected for OAuth callers (`unsupported_memory_scope`). | Plan decision; A `hermes-bridge-types.ts:11-24` |
-| D10 | `/sse` stays registered only if a target host needs it; otherwise P06 removes it from `apiRoute`. Claude Code 2.1.29x and Codex 0.16x use streamable HTTP. Either way, unknown `/mcp*` and `/sse*` paths are rejected by the wrapper (F14). | F14 |
+| D10 | **SSE is not served at the baseline and is not enabled in v1** (orchestrator decision D-C). The only API handler is `RobynnMCP.serve("/mcp")` (M `src/index.ts:230`); `GET /sse` and `POST /sse/message` pass the provider token check (prefix `apiRoute`, `src/index.ts:228`) and then hit an auth-gated JSON-RPC 404 without addressing a DO (F19). `/sse` is nevertheless advertised in the protected-resource aliases (`src/auth-handler.ts:18`) and the landing JSON `endpoints.sse` (`src/auth-handler.ts:400`). v1: keep SSE unserved and stop advertising it behind one flag (e.g. `ADVERTISE_SSE=false`, default). "Keeping `/sse`" can only mean today's auth-gated 404. Removing it entirely (drop `/sse` from `apiRoute`, the resource aliases and the landing JSON) cannot break any client at the baseline. **Enabling** SSE later requires a session binding keyed on `?sessionId=` (F20) plus the same per-call authorization as `/mcp`, and its own P16/P18 coverage. Claude Code 2.1.29x and Codex 0.16x use streamable HTTP. | F14, F19, F20 |
 
 ---
 
@@ -57,7 +58,9 @@ Each fact names the test (in `src/__tests__/provider-contract.test.ts`) that pro
 | F15 | `McpAgent.serve("/mcp")` addresses the DO as `idFromName("streamable-http:" + mcp-session-id)` — **session id only**, not user/grant. The initialize request gets `newUniqueId()`. | Any valid token + a known session id reaches that DO. |
 | F16 | The current request's `ctx.props` is forwarded to the DO on **every** request (`x-partykit-props`). Unknown session ids return `404 Session not found`. | Per-request props are available at the DO boundary. |
 | F17 | partyserver calls `onStart(props)` **once per activation**: a warm DO ignores later callers' props; after eviction the **latest caller's** props are adopted. | Without a binding check a warm DO runs tools with the first caller's credentials, and a cold one with whoever came last. |
-| F18 | `McpAgent.onStart(props)` persists props to DO storage key `props` when given, else reloads them. `RobynnMCP.updateProps` (M `src/index.ts:90`) writes only DO storage, never the provider grant. | DO-side refresh diverges from the provider grant (split brain). |
+| F18 | `McpAgent.onStart(props)` persists props to DO storage key `props` when given, else reloads them. `RobynnMCP.updateProps` (M `src/index.ts:91`) writes only DO storage, never the provider grant. | DO-side refresh diverges from the provider grant (split brain). |
+| F19 | The Worker wires only `RobynnMCP.serve("/mcp")` (streamable HTTP). Its handler matches the exact pathname `/mcp`; `GET /sse` and `POST /sse/message?sessionId=…` get JSON-RPC `404 "Not found"` and **never call `idFromName`** — even though `apiRoute` still includes `/sse`, so the provider first demands a valid token. | No SSE MCP surface exists today; the advertisement is stale (D10). |
+| F20 | `McpAgent.serveSSE("/sse")` (not used today) names the DO `sse:{sessionId}` from the client-supplied `?sessionId=`; `GET /sse?sessionId=<anything>` creates/addresses that DO with **no initialized-session check** (streamable HTTP would 404), and `POST /sse/message` carries the id only in the query string. F17 warm/cold props behaviour applies to `sse:` DOs too. | An `mcp-session-id`-header binding would not cover SSE; enabling SSE needs a `?sessionId=` binding and server-generated ids. |
 
 ---
 
@@ -84,7 +87,7 @@ New table `public.oauth_grants` (additive migration; service-role only RLS, like
 Linked changes:
 
 - `oauth_authorization_codes`: add `grant_id uuid` (FK), keep exact `scope` (drop the full-scope default at A `src/lib/server/oauth/codes.ts:31` and in the migration default).
-- `oauth_refresh_tokens`: add `grant_id uuid` (FK), `parent_token_hash text`, `used_at timestamptz`, `replaced_by text`. Rotation = one RPC that consumes the presented token and inserts the child atomically; presenting a consumed token revokes the grant (`refresh_reuse`).
+- `oauth_refresh_tokens`: add `grant_id uuid` (FK), `parent_token_hash text`, `used_at timestamptz`, `replaced_by text`. Rotation = one RPC that consumes the presented token and inserts the child atomically. Presenting a consumed token revokes the grant (`refresh_reuse`) **unless** it is the immediate parent re-presented within a bounded grace window (proposal: 30 s), in which case the RPC returns the already-issued child pair instead of revoking — this absorbs the benign concurrent-refresh race. The Worker additionally serializes refreshes per grant (§6.3 step 2), so the grace window is a backstop, not the primary mechanism.
 - Access JWT (A `src/lib/server/oauth/tokens.ts:generateAccessToken`) — see §4.
 
 ## 4. Upstream access-token claims (app JWT, P03/P05)
@@ -99,7 +102,7 @@ Header `{"alg":"HS256","typ":"JWT"}` — validated, not ignored. Secret: `OAUTH_
 | `sub` | user UUID | UUID; reject `organization_master_key` and any non-UUID |
 | `org` | organization UUID | UUID |
 | `gid` | grant UUID | UUID; required for OAuth tokens minted after cutover |
-| `ver` | integer | `== oauth_grants.credential_version` (checked in the per-route authorization step, §6) |
+| `ver` | integer | `== oauth_grants.credential_version`. **Enforced in the app** by P07's `requireMcpOperation` on every MCP route (the Worker never decodes the upstream JWT). The Worker also sends its stored `credential_version` to introspection (§5), which returns `credential_version_stale` on mismatch. |
 | `cid` | `robynn-mcp-worker` | exact |
 | `scope` | space-separated subset of the grant scopes | each item ∈ allowed set |
 | `iat`, `exp` | integers (seconds) | finite numbers; `exp > now` strictly; `exp - iat ≤ 3600` |
@@ -129,6 +132,7 @@ type RobynnCredential =
   "user_id": "1111…",
   "organization_id": "aaaa…",
   "client_id": "robynn-mcp-worker",
+  "credential_version": 3,                 // props.credentialVersion (JWT ver captured at /callback and on each refresh)
   "host_grant_id": "Kx9…",                 // provider grantId (audit only)
   "operation": { "tool": "robynn_memory_write", "required_scope": "tools:execute" }  // optional, audit
 }
@@ -161,7 +165,7 @@ type RobynnCredential =
 { "active": false, "reason": "grant_revoked" }
 ```
 
-`reason` ∈ `grant_not_found`, `grant_revoked`, `grant_expired`, `identity_mismatch` (tuple doesn't match the stored grant), `membership_inactive`, `user_disabled`, `credential_version_stale`.
+`reason` ∈ `grant_not_found`, `grant_revoked`, `grant_expired`, `identity_mismatch` (tuple doesn't match the stored grant), `membership_inactive`, `user_disabled`, `credential_version_stale` (request `credential_version` ≠ `oauth_grants.credential_version`).
 
 **Errors:** `401 invalid_client` (signature), `400 invalid_request` (malformed body), `429` (rate limit), `5xx` ⇒ Worker treats as `authorization_unavailable` (fail closed, retryable).
 
@@ -173,7 +177,7 @@ All steps live in a new M `src/authorization/` module, invoked from the default 
 
 1. `parseAuthRequest`; require `response_type=code`, a `code_challenge`, and `code_challenge_method=S256` (F9). Provider option `allowPlainPKCE:false`.
 2. Scope: omitted ⇒ `["brand:read"]`; any unknown item ⇒ redirect `error=invalid_scope` (F7). Pass the **requested** scope set to the app consent (replace fixed `DEFAULT_OAUTH_SCOPE_STRING` at `auth-handler.ts:247`).
-3. `resource`: accept only the approved aliases (`{base}`, `{base}/mcp`, `{base}/sse` if D10 keeps it); do not merge foreign values (`normalizeOAuthRequestResource`, `auth-handler.ts:46-66`).
+3. `resource`: accept only the approved aliases `{base}` and `{base}/mcp`; reject anything else with `invalid_target` and do not merge foreign values (`normalizeOAuthRequestResource`, `auth-handler.ts:46-66`). `{base}/sse` is **not** an approved alias in v1 (D10, F19): stop emitting it from `getProtectedResourceAliases` (`auth-handler.ts:35-44`) and `endpoints.sse` in the landing JSON (`:400`) behind `ADVERTISE_SSE=false`. For backwards compatibility a host that still sends `resource={base}/sse` may be mapped to `{base}/mcp` rather than rejected — P06 records the choice; it must never widen the audience.
 4. State: random, stored in KV with the parsed request, the authorize-time `redirect_uri`, and a browser-binding nonce set as an `HttpOnly; Secure; SameSite=Lax` cookie; consumed with delete-before-use.
 
 ### 6.2 `/callback` (P06)
@@ -181,7 +185,7 @@ All steps live in a new M `src/authorization/` module, invoked from the default 
 1. Validate state + cookie nonce; reject replays.
 2. Exchange the app code with the signed request (P03 signature covers code **and** refresh).
 3. Validate the app token response: call introspection (§5) — not the base64 decode at `auth-handler.ts:337-350`. Require `active`, UUID `user_id`/`organization_id`, `grant_id`, and `scopes ⊆ requested`. Any failure ⇒ error page, **no** `completeAuthorization`. Never `"unknown"`.
-4. `completeAuthorization({ userId: user_id, scope: <app-granted scopes>, metadata: { organizationId, appGrantId, hostClientName }, props: { accessToken, refreshToken, userId, organizationId, appGrantId, scopes, authVersion: 2 }, revokeExistingGrants: true })`.
+4. `completeAuthorization({ userId: user_id, scope: <app-granted scopes>, metadata: { organizationId, appGrantId, hostClientName }, props: { accessToken, refreshToken, userId, organizationId, appGrantId, credentialVersion, scopes, authVersion: 2 }, revokeExistingGrants: true })`.
 5. Write `worker_user_id`/`worker_grant_id` back to the app grant (signed call; part of P05/P10).
 6. Logs: never log `location`, codes, state, tokens or upstream bodies (current leaks: `index.ts:169-173,286-293`, `auth-handler.ts:325`).
 
@@ -190,7 +194,7 @@ All steps live in a new M `src/authorization/` module, invoked from the default 
 Around `oauthProvider.fetch` for `POST /token`:
 
 1. Clone the request; for `grant_type=authorization_code`, check `redirect_uri` (if present) equals the authorize-time value (F10).
-2. For `grant_type=refresh_token`, parse `{userId}:{grantId}` from `refresh_token` (F1, F11) and hold a per-grant lock (KV lease or DO) so concurrent refreshes serialize.
+2. For `grant_type=refresh_token`, parse `{userId}:{grantId}` from `refresh_token` (F1, F11) and route the whole refresh through a **per-grant Durable Object** (`idFromName("refresh:" + grantId)`, e.g. a small `RefreshCoordinator` class or an RPC on an existing namespace) that runs one refresh at a time and returns the in-flight result to concurrent callers. **Do not use a KV lease**: Workers KV is eventually consistent and cannot provide mutual exclusion, and two concurrent upstream refreshes would trip P05's `refresh_reuse` revocation. P05's grace window (§3) is the backstop.
 3. `tokenExchangeCallback` (refresh only): call app `/api/oauth/token` (signed refresh). Outcomes:
    - success ⇒ introspect, require same `user_id`/`organization_id`/`grant_id`; return `{ newProps, accessTokenTTL: min(3600, upstream expires_in) - 60, accessTokenScope: intersect(requestedScope, app scopes) }`.
    - `invalid_grant` / inactive ⇒ throw `UpstreamGrantRevoked`.
@@ -200,10 +204,14 @@ Around `oauthProvider.fetch` for `POST /token`:
 
 ### 6.4 MCP request preflight (P10) — **before every `/mcp` request reaches the DO**
 
-1. Path allow-list: exactly `/mcp` (and `/sse`, `/sse/message` only if D10 keeps SSE). Anything else under the API prefix ⇒ `404` (F14).
+1. Path allow-list: exactly `/mcp`. Everything else under the API prefixes — `/mcpx`, `/mcp/*` (F14) and `/sse`, `/sse/message` (F19: already a 404 today) — ⇒ `404` before forwarding. If SSE is ever enabled (D10), it gets its own allow-list entry **and** the `?sessionId=` binding in step 4.
 2. Provider has already validated the host token (F3). `summary = env.OAUTH_PROVIDER.unwrapToken(bearer)` ⇒ `hostGrantId`, `hostScopes`, `userId`, `clientId` (F4). `null` ⇒ `401 invalid_token`.
 3. Reject `props.authVersion !== 2` ⇒ `401 invalid_token` + revoke (legacy cutover).
-4. **Session binding** (D7): for requests carrying `mcp-session-id`, load KV `mcp-session:{sessionId}` ⇒ `{hostGrantId, userId, organizationId, appGrantId}`; mismatch or missing ⇒ `404` JSON-RPC `-32001 Session not found` (forces re-initialize). On a successful `initialize` response, write the binding (TTL = refresh TTL). Strip any client-supplied `x-robynn-*` headers.
+4. **Session binding** (D7), stored in the **session DO's own storage** (strongly consistent; KV may not be readable at other locations straight after the write):
+   - The wrapper adds `hostGrantId` (from step 2) to `ctx.props` before forwarding. `RobynnMCP.onStart` writes `binding = {hostGrantId, userId, organizationId, appGrantId}` to DO storage the first time props arrive (that is the `initialize` caller, F15–F16) and never overwrites it.
+   - For requests carrying `mcp-session-id`, the wrapper calls an RPC on the same DO (`env.MCP_OBJECT.idFromName("streamable-http:" + sessionId)`, e.g. `getSessionBinding()`, which reads storage directly and needs no `setName`) **before** `RobynnMCP.serve` addresses it. Missing binding or any field mismatch ⇒ `404` JSON-RPC `-32001 Session not found` (forces re-initialize).
+   - SSE is unserved in v1 (D10). If it is enabled later, the same binding must be keyed on `sse:{?sessionId=}`, `GET /sse` must ignore client-chosen ids for new sessions (server-generated only) and reject unknown ones, and `POST /sse/message` must be checked by its query id (F20).
+   - Strip any client-supplied `x-robynn-*` headers.
 5. For each JSON-RPC message with `method == "tools/call"`:
    1. `policy = TOOL_POLICY[params.name]` (generated from `contracts/tool-route-map.json`; unknown tool ⇒ deny `tool_not_permitted`).
    2. Introspect (§5) with `{grant_id: props.appGrantId, user_id, organization_id}`. Inactive ⇒ revoke the provider grant + return `401 invalid_token` (host re-auths). Unavailable ⇒ JSON-RPC tool error `authorization_unavailable` (no forwarding).
@@ -230,7 +238,7 @@ Rules:
 1. `readOnlyHint:false` ⇒ `tools:execute` (asserted by `catalog-baseline.test.ts`). A read-only tool that charges or runs LLM generation is still `tools:execute` (e.g. `robynn_website_strategy`, `robynn_geo_analysis`, `robynn_seo_opportunities`, `robynn_content_plan`).
 2. Starter/poller pairs: a poller that persists or advances work (`robynn_website_audit_status`, `robynn_campaign_status`, `robynn_run_status`) is `tools:execute`; pure pollers are `brand:read`.
 3. Per-tool assignment: [`TOOL_CONTRACT.md`](./TOOL_CONTRACT.md) §2, machine-readable in `contracts/tool-route-map.json` (`requiredScope`, plus `scopeByArgument` / `argumentPolicy`). **16 tools are `brand:read`, 32 are `tools:execute`** while the four † brand-book tools stay conservative (P12: `robynn_brand_book_status`, `_gap_analysis`, `_strategy`, `robynn_publish_brand_book_html` still trigger the hidden "Brand Completeness" write). Once P07 removes that write they return to `brand:read`: **20 / 28** (the map's `requiredScopeAfterP07`). `robynn_conversations` is argument-dependent (`action=list` ⇒ `brand:read`, `create` ⇒ `tools:execute`); memory tools reject `scope:"session"`.
-4. Open product decision (Madhukar): `robynn_query_connected_app` is `tools:execute` in v1 (live third-party CRM/analytics data through the user's connections is not "existing Robynn data"); downgrading it to `brand:read` later only needs a map change plus a P07 route change.
+4. Open product decision (Madhukar): `robynn_query_connected_app` is `tools:execute` in v1 (live third-party CRM/analytics data through the user's connections is not "existing Robynn data"); downgrading it to `brand:read` later only needs a map change plus a P07 route change. Its `readOnlyHint` is **false** until P07 removes the `getOrCreatePolicy` write from the read path (map field `hintsAfterP07`, TOOL_CONTRACT †; code flag `CONNECTED_APP_READS_PERSIST_POLICY` in M `src/tools/connectors.ts`); the scope is `tools:execute` either way.
 5. The **app enforces the same mapping per route** (P07) via a helper `requireMcpOperation(request, locals, { scope, roles? })` that replaces `requireMcpApiContext` / `requireAgentMcpApiContext` / `requireCmoCompatibilityContext` for OAuth credentials. Route → scope is in A `docs/plugin-v1/MCP_ROUTE_MATRIX.md`.
 
 ## 8. Error codes
@@ -281,9 +289,9 @@ Every denial is decided **before** any business work, charge, object read or ext
 |---|---|
 | P03 | JWT header/claim matrix (§4) incl. missing/non-numeric `exp`, `exp == now`, sentinel `sub`, wrong `aud`, agent-run token rejected as access token; unsigned/invalid-signature code **and** refresh at A token route; no `CONNECTOR_STATE_SECRET` fallback (A `tokens.test.ts:59` must flip). |
 | P04 | explicit org selection, tampered org/scope rejected, omitted ⇒ `brand:read`, unknown ⇒ error, no empty⇒full fallback; Writer regression (`writer-consent*.test.ts`). |
-| P05 | `oauth_grants` lifecycle; atomic refresh rotation under concurrency; reuse revokes grant; `credential_version` bump invalidates JWTs. |
-| P06 | F7/F9/F10 closed at the Worker (extend `provider-contract.test.ts` with the real `createOAuthProvider` options), state cookie binding, resource allow-list, script-safe interstitial, log canaries. |
-| P07 | every route class in the route matrix denies read-only grants on execute routes, removed members, and OAuth `sub=organization_master_key`. |
-| P10 | session binding (F15–F17 attack: user B token + user A session id ⇒ 404), introspection fail-closed, revoked grant ⇒ existing session denied, Vault never touches R2 after revocation, refresh fail-closed (F12) with `invalid_grant`/`temporarily_unavailable`, legacy grant cutover. |
-| P11 | no automatic retry for non-idempotent tools (`idempotentHint` absent/false in the map). |
+| P05 | `oauth_grants` lifecycle; atomic refresh rotation under concurrency; reuse outside the grace window revokes the grant, immediate-parent reuse inside it does not; `credential_version` bump invalidates JWTs (enforced by P07 `requireMcpOperation`). |
+| P06 | F7/F9/F10 closed at the Worker (extend `provider-contract.test.ts` with the real `createOAuthProvider` options), state cookie binding, resource allow-list without `/sse` and `ADVERTISE_SSE=false` default (D10), script-safe interstitial, log canaries. |
+| P07 | every route class in the route matrix denies read-only grants on execute routes, removed members, stale `ver`, and OAuth `sub=organization_master_key`; the connector read path no longer writes `connector_policies` (unlocks `hintsAfterP07` for `robynn_query_connected_app`). |
+| P10 | session binding (F15–F17 attack: user B token + user A session id ⇒ 404; binding read from DO storage), `/sse` and `/sse/message` still 404 and never reach a DO (F19), introspection fail-closed incl. `credential_version_stale`, revoked grant ⇒ existing session denied, Vault never touches R2 after revocation, refresh fail-closed (F12) with `invalid_grant`/`temporarily_unavailable`, concurrent host refreshes for one grant serialize through the per-grant DO (no `refresh_reuse` revocation), legacy grant cutover. |
+| P11 | no automatic retry for tools with `retrySafe:false` in `contracts/tool-route-map.json` (22 tools). |
 | P16 | the full chain end-to-end on local Supabase with synthetic data. |

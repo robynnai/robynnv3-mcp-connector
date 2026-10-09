@@ -13,6 +13,7 @@
  */
 import { readFileSync, realpathSync } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -323,20 +324,18 @@ describe("workers-oauth-provider 0.3.0: grant identity and token scopes", () => 
 
     const seen = h.apiSeen[0];
     expect(seen.props).toEqual(h.plan.props);
-    expect(Object.keys(seen.props as object)).not.toEqual(
-      expect.arrayContaining(["scope"]),
-    );
+    expect(seen.props).not.toHaveProperty("scope");
     expect(seen.props).not.toHaveProperty("grantId");
     expect(seen.props).not.toHaveProperty("clientId");
   });
 
   it("lets the API handler recover grantId, clientId and token scope via env.OAUTH_PROVIDER.unwrapToken(bearer)", async () => {
-    const { accessToken, clientId } = await connect(h, { scope: "brand:read tools:execute" });
+    const { clientId, refreshToken } = await connect(h, { scope: "brand:read tools:execute" });
     // Host down-scopes on refresh: token scope narrower than grant scope.
     const { json } = await token(h, {
       grant_type: "refresh_token",
       client_id: clientId,
-      refresh_token: (await connect(h, { clientId })).refreshToken,
+      refresh_token: refreshToken,
       scope: "brand:read",
     });
     await callApi(h, json.access_token);
@@ -348,7 +347,6 @@ describe("workers-oauth-provider 0.3.0: grant identity and token scopes", () => 
     expect(summary.scope).toEqual(["brand:read"]);
     expect(summary.grant.scope).toEqual(["brand:read", "tools:execute"]);
     expect(summary.grant.props).toEqual(h.plan.props);
-    expect(accessToken).not.toBe(json.access_token);
   });
 
   it("does NOT enforce token scope at API time: a brand:read-only token reaches the API handler", async () => {
@@ -614,8 +612,21 @@ describe("workers-oauth-provider 0.3.0: rotation and revocation", () => {
     expect(r1.status).toBe(200);
     expect((await callApi(h, first.accessToken)).status).toBe(200);
 
+    // Using the NEW refresh token retires the previous one.
+    const r2 = await token(h, { grant_type: "refresh_token", client_id: first.clientId, refresh_token: r1.json.refresh_token });
+    expect(r2.status).toBe(200);
+    const stale = await token(h, { grant_type: "refresh_token", client_id: first.clientId, refresh_token: first.refreshToken });
+    expect(stale.json.error).toBe("invalid_grant");
+  });
+
+  it("re-presenting the previous refresh token (grace) succeeds but invalidates the unused new one", async () => {
+    const first = await connect(h);
+    const r1 = await token(h, { grant_type: "refresh_token", client_id: first.clientId, refresh_token: first.refreshToken });
     const graceReuse = await token(h, { grant_type: "refresh_token", client_id: first.clientId, refresh_token: first.refreshToken });
     expect(graceReuse.status).toBe(200);
+
+    const orphaned = await token(h, { grant_type: "refresh_token", client_id: first.clientId, refresh_token: r1.json.refresh_token });
+    expect(orphaned.json.error).toBe("invalid_grant");
   });
 
   it("revokeGrant(grantId, userId) invalidates every access token and the refresh token of that grant", async () => {
@@ -735,28 +746,36 @@ function fakeDurableObjectNamespace() {
       async setInitializeRequest() {
         initialized.add(id.name);
       },
+      async onSSEMcpMessage() {
+        return undefined;
+      },
     }),
   };
   return { namespace, seen };
 }
 
-describe("agents 0.7.5 McpAgent: session addressing and props propagation", () => {
-  const silence = () => vi.spyOn(console, "error").mockImplementation(() => {});
+/**
+ * Workers runtime global; Node 22 lacks it. agents builds patterns with literal pathnames only
+ * (`/mcp`, `/sse`, `/sse/message`), for which URLPattern semantics are exact-pathname equality.
+ */
+function ensureUrlPattern() {
+  if (!("URLPattern" in globalThis)) {
+    vi.stubGlobal(
+      "URLPattern",
+      class {
+        constructor(private readonly init: { pathname: string }) {}
+        test(url: URL | string) {
+          return new URL(String(url)).pathname === this.init.pathname;
+        }
+      },
+    );
+  }
+}
 
-  // Workers runtime global; Node 22 lacks it. Exact-pathname match is all serve("/mcp") needs.
-  beforeEach(() => {
-    if (!("URLPattern" in globalThis)) {
-      vi.stubGlobal(
-        "URLPattern",
-        class {
-          constructor(private readonly init: { pathname: string }) {}
-          test(url: URL | string) {
-            return new URL(String(url)).pathname === this.init.pathname;
-          }
-        },
-      );
-    }
-  });
+const silence = () => vi.spyOn(console, "error").mockImplementation(() => {});
+
+describe("agents 0.7.5 McpAgent: session addressing and props propagation", () => {
+  beforeEach(ensureUrlPattern);
 
   it("keys the Durable Object ONLY by the client-supplied mcp-session-id, and forwards the current caller's ctx.props on every request", async () => {
     const restore = silence();
@@ -803,10 +822,72 @@ describe("agents 0.7.5 McpAgent: session addressing and props propagation", () =
   });
 });
 
+describe("agents 0.7.5 SSE: what the Worker actually serves under /sse (F19, F20)", () => {
+  beforeEach(ensureUrlPattern);
+
+  it("F19: the Worker wires only RobynnMCP.serve(\"/mcp\") (streamable HTTP) while apiRoute still includes /sse", () => {
+    const index = readFileSync(join(process.cwd(), "src", "index.ts"), "utf8");
+    expect(index).toContain('apiHandler: RobynnMCP.serve("/mcp")');
+    expect(index).toContain('apiRoute: ["/mcp", "/sse"]');
+    expect(index).not.toMatch(/serveSSE|transport:\s*"sse"/);
+  });
+
+  it("F19: serve(\"/mcp\") answers GET /sse and POST /sse/message with 404 and never addresses a Durable Object", async () => {
+    const { namespace, seen } = fakeDurableObjectNamespace();
+    const idFromName = vi.spyOn(namespace, "idFromName");
+    const handler = McpAgent.serve("/mcp");
+    const env = { MCP_OBJECT: namespace };
+    const ctx = { props: { userId: USER_A, organizationId: ORG_A, accessToken: "a" } } as never;
+
+    const getSse = await handler.fetch(new Request(`${ORIGIN}/sse`, { headers: { Accept: "text/event-stream" } }), env, ctx);
+    const postMessage = await handler.fetch(
+      new Request(`${ORIGIN}/sse/message?sessionId=abc`, { method: "POST", headers: MCP_ACCEPT, body: JSON.stringify(TOOLS_LIST) }),
+      env,
+      ctx,
+    );
+
+    expect(getSse.status).toBe(404);
+    expect(postMessage.status).toBe(404);
+    expect(idFromName).not.toHaveBeenCalled();
+    expect(seen).toEqual([]);
+  });
+
+  it("F20: serveSSE keys the DO by the client-chosen ?sessionId= with no existence check on GET, and POST /sse/message addresses it by query only", async () => {
+    const restore = silence();
+    const { namespace, seen } = fakeDurableObjectNamespace();
+    const handler = McpAgent.serveSSE("/sse");
+    const env = { MCP_OBJECT: namespace };
+    const victimProps = { userId: USER_A, organizationId: ORG_A, accessToken: "a" };
+    const otherProps = { userId: "22222222-2222-4222-8222-222222222222", organizationId: ORG_B, accessToken: "b" };
+
+    // GET with an arbitrary, never-initialized session id is accepted and addresses sse:<id>.
+    // Not awaited: with no reader on the SSE stream the handler's error path blocks on writer.close().
+    void handler.fetch(new Request(`${ORIGIN}/sse?sessionId=chosen-by-client`), env, { props: victimProps } as never);
+    await vi.waitFor(() => expect(seen).toHaveLength(1));
+    const post = await handler.fetch(
+      new Request(`${ORIGIN}/sse/message?sessionId=chosen-by-client`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(TOOLS_LIST),
+      }),
+      env,
+      { props: otherProps } as never,
+    );
+    restore.mockRestore();
+
+    expect(post.status).toBe(202);
+    expect(seen).toEqual([
+      { name: "sse:chosen-by-client", props: victimProps },
+      { name: "sse:chosen-by-client", props: otherProps },
+    ]);
+  });
+});
+
 describe("partyserver 0.3.3 + McpAgent.onStart: which props a session actually uses", () => {
   async function loadPartyServer() {
-    const agentsDir = realpathSync(join(process.cwd(), "node_modules", "agents"));
-    const entry = join(agentsDir, "..", "partyserver", "dist", "index.js");
+    // Resolve partyserver exactly as the installed `agents` package does (it is not a direct dependency).
+    const agentsEntry = realpathSync(join(process.cwd(), "node_modules", "agents", "dist", "index.js"));
+    const entry = createRequire(agentsEntry).resolve("partyserver");
     return (await import(/* @vite-ignore */ entry)) as {
       Server: new (ctx: unknown, env: unknown) => { fetch(req: Request): Promise<Response> };
     };

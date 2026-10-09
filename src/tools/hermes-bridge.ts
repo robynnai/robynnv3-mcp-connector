@@ -74,9 +74,9 @@ export function registerHermesBridgeTools(server: McpServer, client: RobynnClien
         content: z.string().describe("Message body. Plain text."),
         tool_calls: z.array(z.record(z.unknown())).optional().describe("Optional raw tool calls made during this turn."),
         tool_name: z.string().optional().describe("If role=tool, the tool name."),
-        tokens_in: z.number().int().optional(),
-        tokens_out: z.number().int().optional(),
-        latency_ms: z.number().int().optional(),
+        tokens_in: z.number().int().optional().describe("Optional input token count for this turn."),
+        tokens_out: z.number().int().optional().describe("Optional output token count for this turn."),
+        latency_ms: z.number().int().optional().describe("Optional turn latency in milliseconds."),
       },
     },
     async (args) => {
@@ -137,8 +137,8 @@ export function registerHermesBridgeTools(server: McpServer, client: RobynnClien
       description:
         "Fetch a durable memory by scope + key. Returns null if no such memory exists. Read-only.",
       inputSchema: {
-        scope: SCOPE_ENUM,
-        key: z.string(),
+        scope: SCOPE_ENUM.describe("Scope the memory was saved under: org, user, or session (session is unsupported for plugin connections)."),
+        key: z.string().describe("Memory key used when it was saved."),
       },
     },
     async ({ scope, key }) => {

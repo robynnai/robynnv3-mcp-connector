@@ -16,7 +16,7 @@ export function registerBrandOperationTools(
         openWorldHint: false,
       }),
       description:
-        "Add a Brand Hub source: a website source draft or a text/markdown note. Saves to Brand Hub; reusing an idempotency_key updates (overwrites) the source saved under that key instead of adding another. Does not crawl the website. Run robynn_brand_rebuild afterwards to update Brand Context.",
+        "Add a Brand Hub source: a website source draft or a text/markdown note. Saves to Brand Hub; reusing an idempotency_key updates (overwrites) the source saved under that key instead of adding another. Does not start a crawl: page_limit is saved with the website draft for a later crawl. Run robynn_brand_rebuild afterwards to update Brand Context.",
       inputSchema: {
         source_type: z
           .enum(["website", "text"])
@@ -47,7 +47,7 @@ export function registerBrandOperationTools(
           .positive()
           .max(500)
           .optional()
-          .describe("Optional crawl page limit for website source drafts."),
+          .describe("Optional page limit saved with the website source draft for a later crawl (no crawl starts now)."),
         idempotency_key: z
           .string()
           .min(1)

@@ -1,6 +1,6 @@
 # Robynn plugin v1 — tool contract (COS-PLUGIN-001 P01)
 
-Status: **baseline + P12 applied** (titles, hints and descriptions ship from `plugin-v1/p12-tool-metadata`; see §6). Machine-readable twin: [`contracts/tool-route-map.json`](../../contracts/tool-route-map.json).
+Status: **baseline + P12 applied** (titles, hints and descriptions ship from `plugin-v1/p12-tool-metadata`; see §6; P01 review fixes B2 and notes 5–6 merged). Machine-readable twin: [`contracts/tool-route-map.json`](../../contracts/tool-route-map.json).
 Baseline: MCP Worker `85d7781`, app `6dd04bb`. Authorization rules: [`AUTHORIZATION_CONTRACT.md`](./AUTHORIZATION_CONTRACT.md).
 App-side per-route detail and owning packages: app repo `docs/plugin-v1/MCP_ROUTE_MATRIX.md`.
 
@@ -16,7 +16,7 @@ App-side per-route detail and owning packages: app repo `docs/plugin-v1/MCP_ROUT
 
 P01 annotation baseline (Worker, 48 tools): `readOnlyHint` true **31** / false **17**; `destructiveHint` true **1**; `openWorldHint` true **14**; all 48 declare the three booleans explicitly; `idempotentHint` declared on **0**; tool-level `title` on **0**.
 
-**After P12** (asserted by `catalog-baseline.test.ts`): `readOnlyHint` true **21** / false **27**; `destructiveHint` true **7**; `openWorldHint` true **19**; `idempotentHint` true **26** / false **16** / omitted **6**; a unique `title` on all **48** (top-level and `annotations.title`). The readOnly split is 21/27 rather than P01's proposed 25/23 because the four † tools stay non-read-only until P07 (see †). The existing "registers exactly 41 tools" test (M `src/tools/all-tools.test.ts:695-728`) is a partial harness (omits Hermes' 5 and Vault's 2) and does not establish the remote inventory.
+**After P12** (asserted by `catalog-baseline.test.ts`): `readOnlyHint` true **20** / false **28**; `destructiveHint` true **7**; `openWorldHint` true **19**; `idempotentHint` true **26** / false **16** / omitted **6**; a unique `title` on all **48** (top-level and `annotations.title`). P01's corrected proposal is 24/24 and becomes 25/23 once P07 removes both hidden writes; P12 ships 20/28 because all five † tools stay non-read-only until then (see †).
 
 The unauthenticated fallback (`robynn_status` registered by M `src/index.ts:50-64` when props carry no access token) is a separate, unannotated registration and is not part of the 48.
 
@@ -24,15 +24,18 @@ The unauthenticated fallback (`robynn_status` registered by M `src/index.ts:50-6
 
 Conventions used for the proposed hints (P12 implements them; P13 snapshots them):
 
-- **readOnlyHint** — false if *any* path of the call persists or advances Robynn state, reserves/charges credits, or writes to a third party. HTTP method is irrelevant (several GETs write; several POSTs are pure reads).
+- **readOnlyHint** — false if *any* path of the call persists or advances Robynn state, reserves/charges credits, or writes to a third party. HTTP method is irrelevant (several GETs write; several POSTs are pure reads). **Exempt:** append-only telemetry/audit/usage-log rows and derived caches that change no user-visible state (e.g. `org_context_request_telemetry` and snapshot caches for `robynn_brand_context_search`, `connector_action_logs`). Writes that change policy, documents, settings or ownership are never exempt.
 - **destructiveHint** — true when a call can overwrite or replace existing user data (singleton rebuilds, keyed upserts that clobber, third-party updates). Append-only writes and new-version inserts are not destructive.
 - **openWorldHint** — true when the call reaches third parties on the user's behalf: web search/crawl of arbitrary URLs, connected apps (Composio/Arcade, Strapi, Google APIs), paid data vendors, or an agent run that holds a connectors-scoped token. Robynn's own DB, R2, LangGraph and LLM providers used as processors are **not** open world.
 - **idempotentHint** — `T` only with evidence that a repeat call has no additional effect; `F` when a repeat duplicates work/charges/writes; `–` (omit) when unproven.
 - **Scope** — see AUTHORIZATION_CONTRACT §7: `readOnlyHint:false ⇒ tools:execute`; read-only tools that charge, generate, crawl caller URLs or run generic connected-app queries are also `tools:execute`. `*` = argument-dependent scope.
+- **pairedWith** (map) — array of tool names; empty when the tool has no starter/poller or companion relationship.
 - **Retry-safe** — whether the Worker client may automatically retry after 5xx/network failure (P11 input). Today it retries **every** call once (M `src/robynn-client.ts:168-200`).
-- **†** — read-only hint and `brand:read` scope require P07 to remove the hidden "Brand Completeness" write from the brand-book read path (A `src/lib/services/brand-hub-docs/brand-book-v2-service.ts` `calculateBrandCompleteness`). **P12 ships the conservative values** (`readOnlyHint:false`, `tools:execute`), keyed off `BRAND_BOOK_READS_PERSIST_COMPLETENESS` in M `src/tools/brand-book.ts`. The post-P07 values are in the map as `hintsAfterP07` / `requiredScopeAfterP07`; flip the constant and the map together.
+- **†** — conditional on a P07 backend fix. `proposedHints` are the target **against today's backend** and are what P12 ships; `hintsAfterP07` / `requiredScopeAfterP07` apply once P07 removes the noted write. Each form has one code flag; flip the flag and the map entry together (`catalog-baseline.test.ts` derives its expectations from the flags). Two forms:
+  - **Brand-book reads** (`robynn_brand_book_status`, `_gap_analysis`, `_strategy`, `robynn_publish_brand_book_html`): the read path upserts the hidden "Brand Completeness" doc (A `src/lib/services/brand-hub-docs/brand-book-v2-service.ts` `calculateBrandCompleteness`). P12 ships `readOnlyHint:false` + `tools:execute` (flag `BRAND_BOOK_READS_PERSIST_COMPLETENESS`, M `src/tools/brand-book.ts`); after P07: read-only + `brand:read`.
+  - **`robynn_query_connected_app`** (P01 review B2, P12 review B1): the read path persists `connector_policies` via `getOrCreatePolicy` (A `connector-execution-service.ts:330` → `connector-policy-service.ts:27-33,61-99`), and plan §5 keeps it read-only only if the backend prevents writes. P12 ships `readOnlyHint:false` (flag `CONNECTED_APP_READS_PERSIST_POLICY`, M `src/tools/connectors.ts`), and the description discloses the policy create/update and call logging; after P07: `readOnlyHint:true`. `requiredScope` stays `tools:execute` either way (D-A).
 
-Summary of the changes: P01 proposed that **27 of 48 tools** change at least one of the three existing hints (10 flipping `readOnlyHint`), for totals of readOnly **25**. As shipped by P12 with the † tools conservative, **30 tools** change and **12** flip `readOnlyHint`, for readOnly **21**; the other totals are unchanged: destructive **7**, openWorld **19**; `idempotentHint` true **26** / false **16** / omitted **6**; **22** tools are not retry-safe. Scope split: **20 `brand:read` / 28 `tools:execute`** after P07; **16 / 32** while the † tools stay conservative (as shipped by P12).
+Summary of the changes: P01 proposed that **27 of 48 tools** change at least one of the three existing hints (11 flipping `readOnlyHint`), for readOnly **24**. As shipped by P12 with all five † tools conservative, **30 tools** change and **13** flip `readOnlyHint`, for readOnly **20** / not read-only **28** (**25 / 23** after both P07 fixes). The other totals are unchanged: destructive **7**, openWorld **19**; `idempotentHint` true **26** / false **16** / omitted **6**; **22** tools are not retry-safe. Scope split: **16 `brand:read` / 32 `tools:execute`** as shipped; **20 / 28** after P07 (the query tool stays `tools:execute`).
 
 | # | Tool | Title | Scope | P01 RO/D/OW | Shipped RO/D/OW/Idem (P12) | Changed | App route(s) | Retry-safe | CLI |
 |---:|---|---|---|---|---|---|---|---|---|
@@ -74,7 +77,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 | 36 | `robynn_brand_rebuild` | Rebuild Brand Context | tools:execute | F/F/F | F/T/F/T | destructive | POST `/api/cli/brand/rebuild` | yes | yes |
 | 37 | `robynn_connected_apps` | List Connected Apps | brand:read | T/F/F | T/F/F/T | — | GET `/api/cli/connectors/capabilities` | yes | yes |
 | 38 | `robynn_connected_app_capabilities` | Get Connected App Capabilities | brand:read | T/F/F | T/F/F/T | — | GET `/api/cli/connectors/capabilities` | yes | yes |
-| 39 | `robynn_query_connected_app` | Query a Connected App | tools:execute | T/F/F | T/F/T/T | openWorld | POST `/api/cli/connectors/read` | yes | yes |
+| 39 | `robynn_query_connected_app` | Query a Connected App | tools:execute | T/F/F | F/F/T/T † | readOnly, openWorld | POST `/api/cli/connectors/read` | yes | yes |
 | 40 | `robynn_connected_app_action` | Act in a Connected App | tools:execute | F/T/T | F/T/T/F | — | POST `/api/cli/connectors/act` | **no** | yes |
 | 41 | `robynn_publish_strapi_draft` | Save a Strapi Draft | tools:execute | F/F/T | F/T/T/F | destructive | POST `/api/cli/mcp/strapi-draft`<br>POST `/api/publish` (internal hop) | **no** | yes |
 | 42 | `robynn_thread_upsert` | Save a Conversation Thread | tools:execute | F/F/F | F/T/F/T | destructive | POST `/api/cli/threads` | yes | yes |
@@ -124,7 +127,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/content.ts`. **App auth today:** agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39).
 - **Hint evidence:** creates thread + run, reserves credits, LangGraph run with connectors-scoped agent token.
 - **Side effects:** instant_agent_threads (org-visible) insert; instant_agent_runs, instant_agent_messages, brand_hub_docs/artifacts, interactions_history (src/lib/server/instant-agent/runs.ts startInstantAgentRun/finalizeRunIfNeeded). **Charges:** checkRoryTurnCap (src/lib/server/billing/rory-cap.ts:49, fails open) + reserveOrShadow 'instant-agent-chat' (threads/[threadId]/runs/+server.ts:69-80); terminal settle via apply_instant_agent_run_terminal_billing_effect. **External access:** LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings.
-- **Object ownership:** thread_id via verifyThreadAccess (org + owner-or-org-visible) before billing; no collab-project check. **Paired with:** robynn_run_status.
+- **Object ownership:** thread_id via verifyThreadAccess (org + owner-or-org-visible) before billing; no collab-project check. **Paired with:** `robynn_run_status`.
 - **Gaps:** P07 — `src/routes/api/agents/cmo/_compat.ts` `requireCmoCompatibilityContext`: no membership/scope; master-key sentinel; agentsApiGuard admits any valid bearer; P11 — `mcp:src/tools/content.ts` `registerContentTools`: send a deterministic client_request_key; startRun retry can duplicate run + charge; P12 — `mcp:src/robynn-client.ts` `startRun/getRun`: thread_id/run_id unvalidated and not URL-encoded (path traversal to other same-origin routes); P10 — `src/lib/server/instant-agent/runs.ts` `startInstantAgentRun`: connectors agent-run token minted for OAuth-initiated runs regardless of granted scope.
 
 ### `robynn_research`
@@ -132,7 +135,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/research.ts`. **App auth today:** agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39).
 - **Hint evidence:** same run path as create_content (type=research).
 - **Side effects:** instant_agent_threads (org-visible) insert; instant_agent_runs, instant_agent_messages, brand_hub_docs/artifacts, interactions_history (src/lib/server/instant-agent/runs.ts startInstantAgentRun/finalizeRunIfNeeded). **Charges:** checkRoryTurnCap (src/lib/server/billing/rory-cap.ts:49, fails open) + reserveOrShadow 'instant-agent-chat' (threads/[threadId]/runs/+server.ts:69-80); terminal settle via apply_instant_agent_run_terminal_billing_effect. **External access:** LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings; agent web research not verified in app code.
-- **Object ownership:** as robynn_create_content. **Paired with:** robynn_run_status.
+- **Object ownership:** as robynn_create_content. **Paired with:** `robynn_run_status`.
 - **Gaps:** P07 — `src/routes/api/agents/cmo/_compat.ts` `requireCmoCompatibilityContext`: no membership/scope; master-key sentinel; agentsApiGuard admits any valid bearer; P11 — `mcp:src/tools/research.ts` `registerResearchTools`: no client_request_key; unsafe retry.
 
 ### `robynn_assist`
@@ -140,7 +143,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/assist.ts`. **App auth today:** agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39).
 - **Hint evidence:** same run path; caller-controlled claude_skill_slug/history_summary/memory_enabled forwarded to LangGraph.
 - **Side effects:** instant_agent_threads (org-visible) insert; instant_agent_runs, instant_agent_messages, brand_hub_docs/artifacts, interactions_history (src/lib/server/instant-agent/runs.ts startInstantAgentRun/finalizeRunIfNeeded). **Charges:** checkRoryTurnCap (src/lib/server/billing/rory-cap.ts:49, fails open) + reserveOrShadow 'instant-agent-chat' (threads/[threadId]/runs/+server.ts:69-80); terminal settle via apply_instant_agent_run_terminal_billing_effect. **External access:** LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings.
-- **Object ownership:** as robynn_create_content. **Paired with:** robynn_run_status.
+- **Object ownership:** as robynn_create_content. **Paired with:** `robynn_run_status`.
 - **Gaps:** P07 — `src/routes/api/agents/cmo/_compat.ts` `requireCmoCompatibilityContext`: no membership/scope; master-key sentinel; agentsApiGuard admits any valid bearer; P09 — `src/lib/server/mcp/orchestrator-contract.ts` `CmoThreadRunRequestSchema`: cap history_summary, allow-list claude_skill_slug, constrain memory_enabled to caller memory; P11 — `mcp:src/tools/assist.ts` `registerAssistTools`: no client_request_key; unsafe retry.
 
 ### `robynn_conversations`
@@ -157,7 +160,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/runs.ts`. **App auth today:** agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39).
 - **Hint evidence:** GET syncInstantAgentRun can finalize the run: writes messages, brand_hub_docs, threads, settles billing (runs.ts:11612-11638,12010-12077); CAS + deterministic ids make repeats idempotent.
 - **Side effects:** finalization writes on first terminal poll. **Charges:** settles/releases the run's existing reservation only. **External access:** LangGraph state read; OpenAI embeddings via recordInteraction.
-- **Object ownership:** getRunById unscoped, then org check (:16-19) + verifyThreadAccess (:21-30) before sync; no run.user_id check. **Paired with:** robynn_create_content|robynn_research|robynn_assist|robynn_cmo_agent.
+- **Object ownership:** getRunById unscoped, then org check (:16-19) + verifyThreadAccess (:21-30) before sync; no run.user_id check. **Paired with:** `robynn_create_content`, `robynn_research`, `robynn_assist`, `robynn_cmo_agent`.
 - **Gaps:** P07 — `src/routes/api/agents/cmo/_compat.ts` `requireCmoCompatibilityContext`: no membership/scope; master-key sentinel; agentsApiGuard admits any valid bearer; P11 — `src/routes/api/agents/cmo/runs/[runId]/+server.ts` `GET`: failed/cancelled runs return HTTP 500 -> client retry, status=failed never surfaced; P09 — `src/routes/api/agents/cmo/_compat.ts` `verifyThreadAccess`: org members can read others' runs in org-visible threads.
 
 ### `robynn_cmo_agent`
@@ -165,7 +168,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/cmo-agent.ts`. **App auth today:** requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39).
 - **Hint evidence:** creates thread/run, reserves credits, LangGraph CMO with connectors token.
 - **Side effects:** instant_agent_threads (org-visible) insert; instant_agent_runs, instant_agent_messages, brand_hub_docs/artifacts, interactions_history (src/lib/server/instant-agent/runs.ts startInstantAgentRun/finalizeRunIfNeeded); up to 8s in-request sync (cmo-agent-runner.ts:217-230). **Charges:** reserveOrShadow 'instant-agent-chat' (cmo/run/+server.ts:44-55); no Rory turn cap. **External access:** LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings.
-- **Object ownership:** optional thread_id via verifyThreadAccess after the billing reserve (cmo-agent-runner.ts:158-169). **Paired with:** robynn_run_status, robynn_cmo_decide.
+- **Object ownership:** optional thread_id via verifyThreadAccess after the billing reserve (cmo-agent-runner.ts:158-169). **Paired with:** `robynn_run_status`, `robynn_cmo_decide`.
 - **Gaps:** P07 — `src/routes/api/agents/cmo/_compat.ts` `requireCmoCompatibilityContext`: no membership/scope; master-key sentinel; agentsApiGuard admits any valid bearer; P11 — `src/routes/api/cli/mcp/cmo/run/+server.ts` `POST`: failed run returns 500 -> client retry -> duplicate thread/run/reservation; tool sends no idempotency key; P07 — `src/routes/api/cli/mcp/cmo/run/+server.ts` `POST`: add checkRoryTurnCap parity with threads/[threadId]/runs.
 
 ### `robynn_cmo_decide`
@@ -173,7 +176,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/cmo-decide.ts`. **App auth today:** requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39).
 - **Hint evidence:** claims the decision gate (CAS) and starts a continuation run; gate-scoped continuation key collapses retries (conversation-decision.ts:245-314).
 - **Side effects:** instant_agent_runs.metadata gate claim/close + continuation run effects. **Charges:** reserveOrShadow (decide/+server.ts:64-75); released on no-new-run/failure. **External access:** LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings.
-- **Object ownership:** thread verifyThreadAccess; run org+thread match; decision/option validated against run blocks (conversation-decision.ts:170-209); no run.user_id check. **Paired with:** robynn_cmo_agent.
+- **Object ownership:** thread verifyThreadAccess; run org+thread match; decision/option validated against run blocks (conversation-decision.ts:170-209); no run.user_id check. **Paired with:** `robynn_cmo_agent`.
 - **Gaps:** P07 — `src/routes/api/agents/cmo/_compat.ts` `requireCmoCompatibilityContext`: no membership/scope; master-key sentinel; agentsApiGuard admits any valid bearer; P11 — `src/routes/api/cli/mcp/cmo/decide/+server.ts` `POST`: catch releases the reservation even after a continuation was admitted; P09 — `src/lib/server/instant-agent/conversation-decision.ts` `runConversationDecision`: any org member can resolve another member's gate.
 
 ### `robynn_geo_analysis`
@@ -240,7 +243,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/brand-book.ts`. **App auth today:** requireMcpApiContext (src/lib/server/mcp/api.ts:15).
 - **Hint evidence:** processes the pending changelog queue: inserts/updates brand_hub_docs_changelog and brand_reflection_clusters; LLM synthesis.
 - **Side effects:** rate-limit upsert; changelog + reflection cluster writes. **Charges:** none (LLM spend unmetered). **External access:** LangGraph brand_reflection -> Anthropic (no web).
-- **Object ownership:** no caller ids; reads org-wide conversation_memories. **Paired with:** robynn_brand_reflections.
+- **Object ownership:** no caller ids; reads org-wide conversation_memories. **Paired with:** `robynn_brand_reflections`.
 - **Gaps:** P07 — `src/lib/server/mcp/api.ts` `requireMcpApiContext`: no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin; P11 — `src/lib/server/mcp/brand-book-adapters.ts` `assertTriggerReflectionsCooldown/armTriggerReflectionsCooldown`: non-atomic cooldown armed only on success; retry/concurrency reprocesses the queue; P09 — `src/lib/services/brand-hub-docs-changelog/aggregate-pattern-analyser.ts` `gatherCorpus`: reads all users' conversation_memories into org-visible evidence; P12 — `mcp:src/tools/brand-book.ts` `registerBrandBookTools`: dry_run description inaccurate (synthesis skipped).
 
 ### `robynn_publish_brand_book_html`
@@ -257,7 +260,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/campaign.ts`. **App auth today:** requireMcpApiContext (src/lib/server/mcp/api.ts:15).
 - **Hint evidence:** LangGraph marketing_campaign_builder run; persists thread, brand_hub_docs, messages and a tokenized report.
 - **Side effects:** persistCampaignArtifact: instant_agent_threads, brand_hub_docs, create_doc_version, instant_agent_messages, storage upsert + tokenized report URL. **Charges:** none found. **External access:** LangGraph marketing_campaign_builder (web use not verified).
-- **Object ownership:** no caller ids. **Gate:** robynn-ai environment slug only. **Paired with:** robynn_campaign_status.
+- **Object ownership:** no caller ids. **Gate:** robynn-ai environment slug only. **Paired with:** `robynn_campaign_status`.
 - **Gaps:** P07 — `src/lib/server/mcp/api.ts` `requireMcpApiContext`: no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin; P11 — `src/routes/api/cli/mcp/marketing-campaign/+server.ts` `POST`: 502/500 -> client retry -> new LangGraph run + duplicate artifact; P07 — `src/lib/server/mcp/api.ts` `resolveMcpEnvironment`: unordered limit(1) environment selection.
 
 ### `robynn_campaign_status`
@@ -265,23 +268,23 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/campaign.ts`. **App auth today:** requireMcpApiContext (src/lib/server/mcp/api.ts:15).
 - **Hint evidence:** GET persists the campaign artifact on success and re-uploads/updates on every repeat poll (campaign-artifact-persistence.ts:143-173).
 - **Side effects:** persistCampaignArtifact writes (as creator); concurrent first polls can duplicate. **Charges:** none. **External access:** LangGraph reads.
-- **Object ownership:** NONE: caller-supplied LangGraph thread/run ids read directly with no org/assistant metadata check. **Gate:** robynn-ai environment slug only. **Paired with:** robynn_campaign_creator.
+- **Object ownership:** NONE: caller-supplied LangGraph thread/run ids read directly with no org/assistant metadata check. **Gate:** robynn-ai environment slug only. **Paired with:** `robynn_campaign_creator`.
 - **Gaps:** P07 — `src/lib/server/mcp/api.ts` `requireMcpApiContext`: no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin; P08 — `src/lib/server/mcp/marketing-campaign-runner.ts` `getMarketingCampaignRunStatus`: verify LangGraph thread metadata.organization_id and assistant_id before reading state (cross-tenant read + persist); P08 — `src/lib/server/mcp/campaign-artifact-persistence.ts` `persistCampaignArtifact`: unique (org, thread, run) + skip re-store when already persisted; P12 — `mcp:src/tools/campaign.ts` `registerCampaignTools`: readOnlyHint true is wrong.
 
 ### `robynn_website_audit`
 
 - **Registrar:** M `src/tools/website.ts`. **App auth today:** requireMcpApiContext (src/lib/server/mcp/api.ts:15).
-- **Hint evidence:** BillingService.charge 'website-audit-report' (50 cr) before dispatch; inserts prospect_audits; public audit_url.
-- **Side effects:** prospect_audits insert/updates; LangGraph cmo_audit_v1 thread+run; public tokenized audit page. **Charges:** direct non-refundable charge before validation (+server.ts:88-105). **External access:** agent crawls caller website_url (no app-side SSRF guard).
-- **Object ownership:** no caller object ids. **Gate:** robynn-ai environment slug only. **Paired with:** robynn_website_audit_status.
-- **Gaps:** P07 — `src/lib/server/mcp/api.ts` `requireMcpApiContext`: no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin; P11 — `src/routes/api/cli/mcp/website/audit/+server.ts` `POST`: charges before runner failures; 500 without refund + client retry = double charge; P12 — `mcp:src/tools/website.ts` `registerWebsiteTools`: readOnlyHint true is wrong; disclose charge and robynn-ai restriction; goals/competitors/analysis_depth ignored.
+- **Hint evidence:** BillingService.charge 'website-audit-report' (50 cr) before website resolution/dispatch; inserts prospect_audits; public audit_url.
+- **Side effects:** prospect_audits insert/updates; LangGraph cmo_audit_v1 thread+run; public tokenized audit page. **Charges:** direct non-refundable charge (+server.ts:88-105) after zod validation and the environment gate (:60-81) but before website resolution/normalization, the prospect_audits insert and dispatch (prospect-audit-runner.ts:197-224). **External access:** agent crawls caller website_url (no app-side SSRF guard).
+- **Object ownership:** no caller object ids. **Gate:** robynn-ai environment slug only. **Paired with:** `robynn_website_audit_status`.
+- **Gaps:** P07 — `src/lib/server/mcp/api.ts` `requireMcpApiContext`: no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin; P11 — `src/routes/api/cli/mcp/website/audit/+server.ts` `POST`: charges before website resolution/dispatch; a runner failure returns 500 without refund, and the client retry charges again; P12 — `mcp:src/tools/website.ts` `registerWebsiteTools`: readOnlyHint true is wrong; disclose charge and robynn-ai restriction; goals/competitors/analysis_depth ignored.
 
 ### `robynn_website_audit_status`
 
 - **Registrar:** M `src/tools/website.ts`. **App auth today:** requireMcpApiContext (src/lib/server/mcp/api.ts:15).
 - **Hint evidence:** status GET advances the audit: LangGraph poll, LLM extraction, prospect_audits updates (prospect-audit-runner.ts:421-429,510-514); converges once complete.
 - **Side effects:** prospect_audits updates; storage read; Anthropic extraction. **Charges:** none. **External access:** LangGraph + Anthropic (processors).
-- **Object ownership:** NONE: fetchProspectAudit selects by id only (prospect-audit-runner.ts:164-179). **Gate:** robynn-ai environment slug only. **Paired with:** robynn_website_audit.
+- **Object ownership:** NONE: fetchProspectAudit selects by id only (prospect-audit-runner.ts:164-179). **Gate:** robynn-ai environment slug only. **Paired with:** `robynn_website_audit`.
 - **Gaps:** P07 — `src/lib/server/mcp/api.ts` `requireMcpApiContext`: no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin; P08 — `src/lib/server/mcp/prospect-audit-runner.ts` `fetchProspectAudit / pollMcpProspectAuditStatus`: no organization_id filter: reads/advances other orgs' audits and returns their audit_url + LangGraph ids; P12 — `mcp:src/tools/website.ts` `registerWebsiteTools`: readOnlyHint true is wrong.
 
 ### `robynn_website_audit_v2`
@@ -289,7 +292,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/website.ts`. **App auth today:** requireMcpApiContext (src/lib/server/mcp/api.ts:15).
 - **Hint evidence:** reserveOrShadow 'website-audit-v2' (50 cr); creates scans/pages/recommendations/heal findings; crawls.
 - **Side effects:** design_studio_optimization_scans/_scan_pages/_recommendations, design_studio_heal_findings, design_studio_sites platform detection. **Charges:** reservation; released on dispatch failure or active-scan reuse. **External access:** public-URL-guarded crawl (Firecrawl/native fetch), LangGraph website_optimization_v2.
-- **Object ownership:** site_id org-scoped; goal_id unvalidated when site_id absent (scan-runner.ts:480). **Paired with:** robynn_website_audit_v2_status.
+- **Object ownership:** site_id org-scoped; goal_id unvalidated when site_id absent (scan-runner.ts:480). **Paired with:** `robynn_website_audit_v2_status`.
 - **Gaps:** P07 — `src/lib/server/mcp/api.ts` `requireMcpApiContext`: no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin; P08 — `src/lib/server/design-studio/seo-geo/v2/scan-runner.ts` `startCliWebsiteAuditV2`: validate goal_id against org when site_id is absent; P11 — `src/lib/server/design-studio/seo-geo/v2/scan-runner.ts` `findReusableActiveV2Scan`: 30-min reuse is only partial retry protection; P12 — `mcp:src/tools/website.ts` `registerWebsiteTools`: readOnlyHint true is wrong; mode ignored; site_id description.
 
 ### `robynn_website_audit_v2_status`
@@ -297,7 +300,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/website.ts`. **App auth today:** requireMcpApiContext (src/lib/server/mcp/api.ts:15).
 - **Hint evidence:** pure read via org-scoped getScan (v2/scan-runner.ts:549-556).
 - **Side effects:** none. **Charges:** none. **External access:** none.
-- **Object ownership:** getScan(scanId, organizationId). **Paired with:** robynn_website_audit_v2.
+- **Object ownership:** getScan(scanId, organizationId). **Paired with:** `robynn_website_audit_v2`.
 - **Gaps:** P07 — `src/lib/server/mcp/api.ts` `requireMcpApiContext`: no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin; P12 — `mcp:src/tools/website.ts` `registerWebsiteTools`: openWorldHint should be false.
 
 ### `robynn_website_optimization_audit`
@@ -305,7 +308,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/website.ts`. **App auth today:** requireAgentMcpApiContext (src/lib/server/mcp/api.ts:57) -> validateConnectorGatewayAuth.
 - **Hint evidence:** reserveOrShadow 'website-optimization-v3'; fresh scan id per call; crawls + LLM.
 - **Side effects:** scans/pages/recommendations; evidence_graph.start_request for cron replay. **Charges:** reservation (units = estimate), settled by runner. **External access:** public-URL-guarded crawl; LangGraph v3 or local v3 Firecrawl/LLM.
-- **Object ownership:** site_id org-scoped; goal_id unvalidated (contracts.ts:507). **Paired with:** robynn_website_optimization_audit_status.
+- **Object ownership:** site_id org-scoped; goal_id unvalidated (contracts.ts:507). **Paired with:** `robynn_website_optimization_audit_status`.
 - **Gaps:** P07 — `src/lib/server/auth/connector-gateway-auth.ts` `validateConnectorGatewayAuth`: membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership; P11 — `src/lib/server/design-studio/seo-geo/v3/scan-runner.ts` `startCliWebsiteOptimizationAuditV3`: fresh randomUUID per call; idempotency_scan_id stripped by the MCP schema; P08 — `src/lib/server/design-studio/seo-geo/v3/scan-runner.ts` `startCliWebsiteOptimizationAuditV3`: goal_id persisted without org/site validation; P12 — `mcp:src/tools/website.ts` `registerWebsiteTools`: readOnlyHint true is wrong; no confirmed_estimate_id/site_id inputs.
 
 ### `robynn_website_optimization_audit_status`
@@ -313,7 +316,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/website.ts`. **App auth today:** requireAgentMcpApiContext (src/lib/server/mcp/api.ts:57) -> validateConnectorGatewayAuth.
 - **Hint evidence:** pure read via org-scoped getScan (v3/scan-runner.ts:560-567).
 - **Side effects:** none. **Charges:** none. **External access:** none.
-- **Object ownership:** getScan(run_id, organizationId). **Paired with:** robynn_website_optimization_audit.
+- **Object ownership:** getScan(run_id, organizationId). **Paired with:** `robynn_website_optimization_audit`.
 - **Gaps:** P07 — `src/lib/server/auth/connector-gateway-auth.ts` `validateConnectorGatewayAuth`: membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership; P12 — `mcp:src/tools/website.ts` `registerWebsiteTools`: openWorldHint should be false.
 
 ### `robynn_website_audit_orchestrator`
@@ -321,7 +324,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/website.ts`. **App auth today:** requireMcpApiContext (src/lib/server/mcp/api.ts:15).
 - **Hint evidence:** reserveOrShadow 'website-audit-orchestrator' (50 cr); starts a v3 scan; description wrongly says read-only.
 - **Side effects:** same as v3 start. **Charges:** reservation; released on error/estimate-only. **External access:** public-URL-guarded crawl; LangGraph/Firecrawl/LLM via v3.
-- **Object ownership:** site_id org-scoped (:159-194). **Paired with:** robynn_website_audit_orchestrator_status.
+- **Object ownership:** site_id org-scoped (:159-194). **Paired with:** `robynn_website_audit_orchestrator_status`.
 - **Gaps:** P07 — `src/lib/server/mcp/api.ts` `requireMcpApiContext`: no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin; P11 — `src/routes/api/cli/mcp/website/audit-orchestrator/+server.ts` `POST`: new billing session + scan per request; retry duplicates; P12 — `mcp:src/tools/website.ts` `registerWebsiteTools`: description says read-only; it charges and persists.
 
 ### `robynn_website_audit_orchestrator_status`
@@ -329,7 +332,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/website.ts`. **App auth today:** requireMcpApiContext (src/lib/server/mcp/api.ts:15).
 - **Hint evidence:** pure read through org-scoped getScan; POST transport only.
 - **Side effects:** none. **Charges:** none. **External access:** none.
-- **Object ownership:** getScan(run_id, organizationId). **Paired with:** robynn_website_audit_orchestrator.
+- **Object ownership:** getScan(run_id, organizationId). **Paired with:** `robynn_website_audit_orchestrator`.
 - **Gaps:** P07 — `src/lib/server/mcp/api.ts` `requireMcpApiContext`: no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin; P12 — `mcp:src/tools/website.ts` `registerWebsiteTools`: openWorldHint should be false.
 
 ### `robynn_website_strategy`
@@ -369,7 +372,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/brand-operations.ts`. **App auth today:** validateConnectorGatewayAuth (src/lib/server/auth/connector-gateway-auth.ts:42) + role==='admin'.
 - **Hint evidence:** brand_hub_docs update-or-insert keyed by idempotency_key reused as draftId/collectionId; can overwrite existing docs; no crawl started.
 - **Side effects:** brand_hub_docs website draft or ingested text upsert (non-atomic). **Charges:** none. **External access:** none.
-- **Object ownership:** org-scoped lookup, but key collides with UI-created drafts/collections. **Paired with:** robynn_brand_rebuild.
+- **Object ownership:** org-scoped lookup, but key collides with UI-created drafts/collections. **Paired with:** `robynn_brand_rebuild`.
 - **Gaps:** P07 — `src/lib/server/auth/connector-gateway-auth.ts` `validateConnectorGatewayAuth`: membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership; P11 — `src/lib/services/brand-hub-docs/brand-hub-docs-service.ts` `upsertWebsiteSourceDraft / upsertIngestedText`: dedicated atomic idempotency key instead of draftId/collectionId; P12 — `mcp:src/tools/brand-operations.ts` `registerBrandOperationTools`: openWorld false, destructive true.
 
 ### `robynn_brand_rebuild`
@@ -377,7 +380,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/brand-operations.ts`. **App auth today:** validateConnectorGatewayAuth (src/lib/server/auth/connector-gateway-auth.ts:42) + admin.
 - **Hint evidence:** overwrites the brand_context singleton from current sources (brand-hub-docs-service.ts:6420-6444); deterministic.
 - **Side effects:** brand_hub_docs brand_context overwrite; LangGraph cache invalidation. **Charges:** none. **External access:** none (internal cache invalidation).
-- **Object ownership:** no caller ids. **Paired with:** robynn_brand_source_add.
+- **Object ownership:** no caller ids. **Paired with:** `robynn_brand_source_add`.
 - **Gaps:** P07 — `src/lib/server/auth/connector-gateway-auth.ts` `validateConnectorGatewayAuth`: membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership; P12 — `mcp:src/tools/brand-operations.ts` `registerBrandOperationTools`: destructiveHint true.
 
 ### `robynn_connected_apps`
@@ -399,9 +402,11 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 ### `robynn_query_connected_app`
 
 - **Registrar:** M `src/tools/connectors.ts`. **App auth today:** validateConnectorGatewayAuth (src/lib/server/auth/connector-gateway-auth.ts:42).
-- **Hint evidence:** curated read actions executed live against third-party apps via Composio/Arcade; incidental policy/log writes.
+- **Hint evidence:** curated read actions executed live against third-party apps via Composio/Arcade; the read path persists Robynn state: getOrCreatePolicy inserts a default connector_policies row or rewrites allowed_actions (re-adding admin-removed read actions) — plan §5 keeps read-only only if the backend prevents writes; connector_action_logs is an exempt audit write.
 - **Side effects:** connector_policies insert/update (re-adds admin-removed read actions), connector_action_logs insert, connection health update. **Charges:** none. **External access:** Composio/Arcade -> HubSpot, GSC, GA, Google Ads, GitHub, ....
-- **Object ownership:** connection_id UUID, org-scoped strict. **Paired with:** robynn_connected_app_capabilities.
+- **Object ownership:** connection_id UUID, org-scoped strict. **Paired with:** `robynn_connected_app_capabilities`.
+- **† Conditional:** readOnlyHint stays false until P07 removes the getOrCreatePolicy write from the read path (connector-execution-service.ts:330 -> connector-policy-service.ts:27-33,61-99); then hintsAfterP07 applies. requiredScope stays tools:execute either way.
+- **Hints after P07 (RO/D/OW/Idem):** T/F/T/T.
 - **Gaps:** P07 — `src/lib/server/auth/connector-gateway-auth.ts` `validateConnectorGatewayAuth`: membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership; P07 — `src/lib/services/connectors/connector-policy-service.ts` `syncExistingPolicyReads`: read path silently widens an admin-restricted allow-list; P12 — `mcp:src/tools/connectors.ts` `registerConnectorTools`: openWorldHint must be true.
 
 ### `robynn_connected_app_action`
@@ -409,7 +414,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/connector-act.ts`. **App auth today:** validateConnectorGatewayAuth (src/lib/server/auth/connector-gateway-auth.ts:42).
 - **Hint evidence:** third-party writes via Composio/Arcade; replay only for completed ok rows.
 - **Side effects:** connector_action_audit upsert (overwrites prior non-ok rows) + unchecked updates; policy/log/connection writes; third-party writes. **Charges:** none. **External access:** Composio/Arcade write execution (idempotency_key forwarded).
-- **Object ownership:** connection_id org-scoped but non-strict fallback to default connection (connector-execution-service.ts:383-427); write_confirmed self-asserted. **Paired with:** robynn_connected_app_capabilities.
+- **Object ownership:** connection_id org-scoped but non-strict fallback to default connection (connector-execution-service.ts:383-427); write_confirmed self-asserted. **Paired with:** `robynn_connected_app_capabilities`.
 - **Gaps:** P07 — `src/lib/server/auth/connector-gateway-auth.ts` `validateConnectorGatewayAuth`: membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership; P11 — `src/routes/api/cli/connectors/act/+server.ts` `POST`: atomic claim, request digest, no re-run of pending rows, checked updates, strict connection_id; P07 — `src/lib/services/connectors/connector-policy-service.ts` `evaluateActionPolicy`: write gate admits every active member; P11 — `mcp:src/robynn-client.ts` `fetchWithRetry`: automatic 5xx/network retry re-runs this non-idempotent call; P12 — `mcp:src/tools/connector-act.ts` `registerConnectorActionTools`: description over-claims idempotency.
 
 ### `robynn_publish_strapi_draft`
@@ -425,7 +430,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/hermes-bridge.ts`. **App auth today:** validateApiKey (src/lib/server/auth/validate-api-key.ts:22).
 - **Hint evidence:** hermes_threads upsert on (host_id, session_id) overwrites org/user/title (hermes-bridge.ts:65-69).
 - **Side effects:** hermes_threads upsert. **Charges:** none. **External access:** none.
-- **Object ownership:** NONE: conflict key lacks organization_id -> cross-org thread takeover. **Paired with:** robynn_thread_append.
+- **Object ownership:** NONE: conflict key lacks organization_id -> cross-org thread takeover. **Paired with:** `robynn_thread_append`.
 - **Gaps:** P07 — `src/routes/api/cli/threads/+server.ts` `POST`: validateApiKey only: no membership, role or scope check; P09 — `src/lib/services/hermes-bridge.ts` `upsertThread`: tenant-scope the conflict key/constraint; refuse reassigning a foreign thread.
 
 ### `robynn_thread_append`
@@ -433,7 +438,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/hermes-bridge.ts`. **App auth today:** validateApiKey (src/lib/server/auth/validate-api-key.ts:22).
 - **Hint evidence:** hermes_messages insert, no idempotency key.
 - **Side effects:** hermes_messages insert. **Charges:** none. **External access:** none.
-- **Object ownership:** thread org check only (:28-36); no user ownership; system/assistant roles accepted. **Paired with:** robynn_thread_upsert.
+- **Object ownership:** thread org check only (:28-36); no user ownership; system/assistant roles accepted. **Paired with:** `robynn_thread_upsert`.
 - **Gaps:** P07 — `src/routes/api/cli/threads/[threadId]/messages/+server.ts` `POST`: validateApiKey only: no membership, role or scope check; P09 — `src/routes/api/cli/threads/[threadId]/messages/+server.ts` `POST`: user-level ownership + role restriction; P11 — `src/lib/services/hermes-bridge.ts` `appendMessage`: idempotency key.
 
 ### `robynn_memory_write`
@@ -441,7 +446,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/hermes-bridge.ts`. **App auth today:** validateApiKey (src/lib/server/auth/validate-api-key.ts:22).
 - **Hint evidence:** overwrites by key; unified source_key not user-qualified (agent-memory-substrate.ts:51-53,126-143); legacy NULL user_id duplicates.
 - **Side effects:** hermes_memories upsert (legacy) or org_knowledge_documents/chunks upsert+delete (unified). **Charges:** none. **External access:** OpenAI embeddings (processor).
-- **Object ownership:** user scope can overwrite another user's memory (unified); session scope unbound. **Paired with:** robynn_memory_get.
+- **Object ownership:** user scope can overwrite another user's memory (unified); session scope unbound. **Paired with:** `robynn_memory_get`.
 - **Argument policy:** `{"scope":{"session":"reject: unsupported_memory_scope (OAuth)"}}`.
 - **Gaps:** P07 — `src/routes/api/cli/memory/+server.ts` `POST`: validateApiKey only: no membership, role or scope check; P09 — `src/lib/services/agent-memory-substrate.ts` `writeMemoryUnified`: user-qualify source_key for user scope; P09 — `src/lib/services/hermes-bridge.ts` `writeMemoryLegacy`: NULLS NOT DISTINCT / correct conflict for org+session; P09 — `src/routes/api/cli/memory/+server.ts` `POST`: reject scope=session for OAuth; P12 — `mcp:src/tools/hermes-bridge.ts` `registerHermesBridgeTools`: destructiveHint true; 'session = scoped to this thread' is false.
 
@@ -450,7 +455,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/hermes-bridge.ts`. **App auth today:** validateApiKey (src/lib/server/auth/validate-api-key.ts:22).
 - **Hint evidence:** GET read.
 - **Side effects:** none. **Charges:** none. **External access:** none.
-- **Object ownership:** org filter; user filter only for scope=user; legacy org/session lookup likely broken (.eq('user_id', null)). **Paired with:** robynn_memory_write.
+- **Object ownership:** org filter; user filter only for scope=user; legacy org/session lookup likely broken (.eq('user_id', null)). **Paired with:** `robynn_memory_write`.
 - **Argument policy:** `{"scope":{"session":"reject: unsupported_memory_scope (OAuth)"}}`.
 - **Gaps:** P07 — `src/routes/api/cli/memory/+server.ts` `GET`: validateApiKey only: no membership, role or scope check; P09 — `src/lib/services/hermes-bridge.ts` `getMemoryLegacy`: .is(null) for org/session; session scoping.
 
@@ -468,7 +473,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/vault.ts`. **App auth today:** none — props.organizationId only (M src/index.ts:127-130).
 - **Hint evidence:** R2 list under the org prefix (vault-r2.ts).
 - **Side effects:** none. **Charges:** none. **External access:** Cloudflare R2 (internal).
-- **Object ownership:** prefix-scoped to props.organizationId; no current grant/membership check. **Gate:** requires VAULT binding + organizationId in props. **Paired with:** robynn_vault_read.
+- **Object ownership:** prefix-scoped to props.organizationId; no current grant/membership check. **Gate:** requires VAULT binding + organizationId in props. **Paired with:** `robynn_vault_read`.
 - **Gaps:** P10 — `mcp:src/tools/vault.ts` `registerVaultTools`: authorize (introspection) before every R2 operation; fail closed; object-size bounds.
 
 ### `robynn_vault_read`
@@ -476,7 +481,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/vault.ts`. **App auth today:** none — props.organizationId only (M src/index.ts:127-130).
 - **Hint evidence:** R2 get of one object under the org prefix.
 - **Side effects:** none. **Charges:** none. **External access:** Cloudflare R2 (internal).
-- **Object ownership:** prefix-scoped to props.organizationId; path checks in vault-r2.ts. **Gate:** requires VAULT binding + organizationId in props. **Paired with:** robynn_vault_list.
+- **Object ownership:** prefix-scoped to props.organizationId; path checks in vault-r2.ts. **Gate:** requires VAULT binding + organizationId in props. **Paired with:** `robynn_vault_list`.
 - **Gaps:** P10 — `mcp:src/tools/vault.ts` `registerVaultTools`: authorize before every R2 operation; fail closed; object-size bounds.
 
 ## 4. Starter → poller pairs
@@ -495,8 +500,8 @@ Skills (P15) must call the **exact** paired poller and preserve the returned job
 
 ## 5. Inputs for later packages
 
-- **P12** (done, §6): applied `titleProposal` as the tool-level `title`, `proposedHints` (with `idempotentHint` only where present), and rewrote descriptions to disclose `charges` / `externalAccess` / `environmentGate`. `catalog-baseline.test.ts` now expects 21/27/7/19 (25/23/7/19 after the P07 † flip) and checks the map's `currentHints` in the same change. Each P12 gap in the map carries a `resolution`.
-- **P13**: snapshot the real `tools/list` (names, titles, annotations, input schemas) and keep `contracts/tool-route-map.json` in lock-step; prove 48/46/40.
+- **P12** (done, §6): applied `titleProposal` as the tool-level `title`, `proposedHints` (never `hintsAfterP07`; `idempotentHint` only where present), and rewrote descriptions to disclose `charges` / `externalAccess` / `environmentGate`. `catalog-baseline.test.ts` now expects readOnly 20/28 plus destructive 7 / openWorld 19 (25/23 after both P07 † flips) and checks the map's `currentHints` in the same change. Each P12 gap in the map carries a `resolution`.
+- **P13**: snapshot the real `tools/list` (names, titles, annotations, input schemas, full descriptions) and keep `contracts/tool-route-map.json` in lock-step; prove 48/46/40. The snapshot is the real guard for description text: the P12 description checks are heuristics. `catalog-baseline.test.ts` already checks route coverage in both directions (map → client and client → map) at path level; P13 should add per-tool attribution (which tool reaches which client method).
 - **P10**: build the Worker `TOOL_POLICY` from `requiredScope`, `scopeByArgument`, `argumentPolicy`.
 - **P11**: disable automatic retry for every tool with `retrySafe:false`; add idempotency keys where listed.
 - **P07/P08/P09**: the `gaps` arrays name the exact app file + function; the app route matrix groups them by route.
@@ -504,7 +509,7 @@ Skills (P15) must call the **exact** paired poller and preserve the returned job
 ## 6. P12 implementation notes
 
 - **Registration.** All 48 tools register through `server.registerTool` (the SDK's `server.tool()` is deprecated) or `registerAppTool`. Both spread `toolMetadata(title, hints)` from M `src/tools/util.ts`, which sets the top-level `title`, mirrors it into `annotations.title` for hosts that only read the annotation, and declares the three safety booleans plus `idempotentHint` where the map has evidence.
-- **Input schemas.** No tool was renamed and no input schema changed shape. The map's `inputSchemaDigest` hashes each `tools/list` `inputSchema` with string `description` keys removed, so the test fails on any shape change but allows wording fixes. Parameter wording changed on 10 tools: `currently ignored` markers for inputs the app drops (`analysis_depth`; website audit `goals` / `competitors` / `analysis_depth`; v2 `mode`; brand-book export `theme` / `include_private_sections`); v2 `site_id` = Website Studio site; `dry_run` semantics for `robynn_trigger_brand_reflections` and `robynn_content_plan`; memory `session` scope; connector `idempotency_key` replay; `run_id` starters.
+- **Input schemas.** No tool was renamed and no input schema changed shape. The map's `inputSchemaDigest` hashes each `tools/list` `inputSchema` with string `description` keys removed, so the test fails on any shape change but allows wording fixes. Parameter wording changed on 13 tools: `currently ignored` markers for inputs the app drops (`analysis_depth`; website audit `goals` / `competitors` / `analysis_depth`; v2 `mode`; brand-book export `theme` / `include_private_sections`); v2 `site_id` = Website Studio site; `dry_run` semantics for `robynn_trigger_brand_reflections` and `robynn_content_plan`; memory `session` scope; connector `idempotency_key` replay; `run_id` starters; `robynn_brand_source_add` `page_limit` (saved with the draft for a later crawl); and the previously missing descriptions on `robynn_memory_get` (`scope`, `key`) and `robynn_thread_append` (`tokens_in`, `tokens_out`, `latency_ms`).
 - **Description conventions.** Each description says:
   - what the tool does;
   - what it saves or overwrites;
@@ -518,12 +523,15 @@ Skills (P15) must call the **exact** paired poller and preserve the returned job
   - `robynn-ai`-gated tools say so;
   - non-read-only tools never call themselves read-only;
   - `robynn_publish_brand_book_html` is described as an export, not a publication.
-- **D-A.** The `robynn_query_connected_app` description does not mention its scope. The single flip point is `requiredScope` in the map (see its `openDecision` note), mirrored by the P07 route scope.
+
+  These are heuristics (for example, "no Robynn credits are charged" satisfies the credit check). P13's committed `tools/list` snapshot with full descriptions is the real guard.
+- **D-A and the query tool.** The `robynn_query_connected_app` description does not mention its scope. The single scope flip point is `requiredScope` (and `requiredScopeAfterP07`) in the map (see its `openDecision` note), mirrored by the P07 route scope. Its `readOnlyHint` is a separate † flag (`CONNECTED_APP_READS_PERSIST_POLICY`): the description says the call is logged and may create or update the organization's connector policy for that app.
 - **Path-id guard.** `robynn_create_content`, `robynn_research`, `robynn_assist`, `robynn_run_status` and `robynn_thread_append` reject `thread_id` / `run_id` values outside `[A-Za-z0-9_-]{1,128}` before any request (`isSafePathId`). This closes the same-origin path-traversal gap at the tool layer. P11 should still `encodeURIComponent` path ids in M `src/robynn-client.ts`.
+- **App route matrix.** The app's `docs/plugin-v1/MCP_ROUTE_MATRIX.md` still lists the four † brand-book routes as `brand:read †`, while this map says `tools:execute` until P07. P07 must use `tools:execute` for those routes until it removes the completeness write, or update the matrix in the same change. The Worker is stricter in the meantime, so the mismatch fails closed.
 - **Unauthenticated fallback.** `registerUnauthenticatedStatusTool` (M `src/tools/status.ts`) gives the fallback `robynn_status` the same title and hints plus host-neutral copy. Wiring it into `RobynnMCP.init()` (M `src/index.ts`) is left to the owner of that file (P10); until then the old unannotated, Claude-specific fallback remains.
 - **Not done in P12** (would change input schemas or files owned elsewhere):
   - bounding the `robynn_seo_opportunities` arrays;
   - adding `confirmed_estimate_id` / `site_id` to `robynn_website_optimization_audit`;
   - returning the bound organization and granted permissions from `robynn_status` (needs P10 introspection);
-  - Worker server instructions (none exist today; they would live in M `src/index.ts`).
+  - Worker server instructions (none exist today; they would live in M `src/index.ts`). Handed to P10 together with the fallback wiring. Until P10 lands, the live fallback in `src/index.ts` is still unannotated and Claude-specific, so the plan §5 MUST for host-neutral copy stays open under P10.
 

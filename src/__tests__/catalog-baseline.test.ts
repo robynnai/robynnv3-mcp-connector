@@ -28,7 +28,7 @@ import { registerCapabilityTools } from "../tools/capabilities";
 import { registerCmoAgentTools } from "../tools/cmo-agent";
 import { registerCmoDecideTools } from "../tools/cmo-decide";
 import { registerConnectorActionTools } from "../tools/connector-act";
-import { registerConnectorTools } from "../tools/connectors";
+import { CONNECTED_APP_READS_PERSIST_POLICY, registerConnectorTools } from "../tools/connectors";
 import { registerContentPlanTools } from "../tools/content-plan";
 import { registerContentTools } from "../tools/content";
 import { registerContextTools } from "../tools/context";
@@ -125,9 +125,11 @@ interface RouteMapTool {
   hintsAfterP07?: Hints;
   requiredScope: "brand:read" | "tools:execute";
   requiredScopeAfterP07?: "brand:read" | "tools:execute";
+  conditional?: string;
   scopeByArgument?: Record<string, Record<string, string>>;
   appRoutes: Array<{ method: string; path: string; file: string | null; hop?: "internal" }>;
   titleProposal: string;
+  pairedWith: string[];
   inputSchemaDigest: string;
   charges: string;
   environmentGate: string | null;
@@ -159,13 +161,33 @@ const declaredHints = (annotations: Record<string, unknown> | undefined): Hints 
   return hints;
 };
 
-/** † tools: read-only only once P07 removes the hidden brand-book completeness write. */
-const BRAND_BOOK_CONDITIONAL_TOOLS = [
-  "robynn_brand_book_gap_analysis",
-  "robynn_brand_book_status",
-  "robynn_brand_book_strategy",
-  "robynn_publish_brand_book_html",
-];
+/**
+ * † tools: read-only only once P07 removes a hidden write from their read path.
+ * `pending` is the code flag that keeps each one conservative; when P07 lands,
+ * flip the flag and the tool's map entry (currentHints/proposedHints →
+ * hintsAfterP07, requiredScope → requiredScopeAfterP07) and these tests follow.
+ */
+const brandBookConditional = {
+  pending: BRAND_BOOK_READS_PERSIST_COMPLETENESS,
+  scopeAfterP07: "brand:read",
+  marker: "brand-completeness summary",
+} as const;
+const P07_CONDITIONAL_TOOLS: Record<
+  string,
+  { pending: boolean; scopeAfterP07: "brand:read" | "tools:execute"; marker: string }
+> = {
+  robynn_brand_book_gap_analysis: brandBookConditional,
+  robynn_brand_book_status: brandBookConditional,
+  robynn_brand_book_strategy: brandBookConditional,
+  robynn_publish_brand_book_html: brandBookConditional,
+  // D-A keeps the connected-app query on tools:execute either way.
+  robynn_query_connected_app: {
+    pending: CONNECTED_APP_READS_PERSIST_POLICY,
+    scopeAfterP07: "tools:execute",
+    marker: "connector policy",
+  },
+};
+const PENDING_P07_COUNT = Object.values(P07_CONDITIONAL_TOOLS).filter((t) => t.pending).length;
 
 /** TOOL_CONTRACT.md §4 starter → poller pairs. */
 const STARTER_POLLERS: Array<[starter: string, poller: string]> = [
@@ -219,14 +241,13 @@ describe("P01 catalog baseline (real tools/list)", () => {
     ]);
   });
 
-  it("records the P12 annotation catalog: 21/27 readOnly, 7 destructive, 19 openWorld, 26/16 idempotent, 48 titles", async () => {
+  it("records the P12 annotation catalog: 20/28 readOnly (25/23 after P07), 7 destructive, 19 openWorld, 26/16 idempotent, 48 titles", async () => {
     const worker = await listTools(workerCalls, { vault: true });
     const count = (pred: (t: (typeof worker)[number]) => boolean) => worker.filter(pred).length;
 
-    // P01 proposed 25/23; the four † brand-book tools stay non-read-only until P07 lands.
-    expect(BRAND_BOOK_READS_PERSIST_COMPLETENESS).toBe(true);
-    expect(count((t) => t.annotations?.readOnlyHint === true)).toBe(21);
-    expect(count((t) => t.annotations?.readOnlyHint === false)).toBe(27);
+    // 25/23 once P07 removes both hidden writes; as shipped all five † tools are pending (20/28).
+    expect(count((t) => t.annotations?.readOnlyHint === true)).toBe(25 - PENDING_P07_COUNT);
+    expect(count((t) => t.annotations?.readOnlyHint === false)).toBe(23 + PENDING_P07_COUNT);
     expect(count((t) => t.annotations?.destructiveHint === true)).toBe(7);
     expect(count((t) => t.annotations?.openWorldHint === true)).toBe(19);
     expect(count((t) => t.annotations?.idempotentHint === true)).toBe(26);
@@ -278,6 +299,16 @@ describe("P01 catalog baseline (real tools/list)", () => {
       // need it when they charge, generate or reach third parties — see AUTHORIZATION_CONTRACT §7).
       if (!tool.proposedHints.readOnlyHint) expect(tool.requiredScope, tool.name).toBe("tools:execute");
       if (!tool.currentHints.readOnlyHint) expect(tool.requiredScope, tool.name).toBe("tools:execute");
+      if (tool.hintsAfterP07) {
+        expect(tool.conditional, `${tool.name} hintsAfterP07 needs a conditional note`).toBeTruthy();
+        if (!tool.hintsAfterP07.readOnlyHint) {
+          expect(tool.requiredScopeAfterP07 ?? tool.requiredScope, tool.name).toBe("tools:execute");
+        }
+      }
+      expect(Array.isArray(tool.pairedWith), tool.name).toBe(true);
+      for (const peer of tool.pairedWith) {
+        expect(routeMap.tools.map((t) => t.name), `${tool.name}.pairedWith`).toContain(peer);
+      }
       expect(tool.appRoutes.length, tool.name).toBeGreaterThan(0);
       for (const route of tool.appRoutes) {
         if (tool.name.startsWith("robynn_vault_")) {
@@ -302,22 +333,42 @@ describe("P01 catalog baseline (real tools/list)", () => {
       expect(clientSource, path).toContain(prefix);
     }
   });
+
+  it("every app route the Worker client calls is mapped to at least one tool (reverse direction)", () => {
+    const clientSource = readSource("src/robynn-client.ts");
+    const normalize = (p: string) => p.replace(/\$\{[^}]+\}|\{[^}]+\}/g, "{}");
+    const clientPaths = new Set(
+      [...clientSource.matchAll(/["'`](\/api\/[^"'`?]+)["'`]/g)].map((m) => normalize(m[1])),
+    );
+    const mapped = new Set(
+      routeMap.tools.flatMap((t) => t.appRoutes.filter((r) => r.file !== null).map((r) => normalize(r.path))),
+    );
+    expect(clientPaths.size).toBeGreaterThan(35);
+    for (const path of clientPaths) expect(mapped, path).toContain(path);
+  });
 });
 
 describe("P12 tool metadata (real tools/list)", () => {
-  it("keeps the † brand-book tools conservative until P07 and records the post-P07 flip in the map", async () => {
+  it("keeps the † tools conservative until P07 and records the post-P07 flip in the map", async () => {
     const worker = await listTools(workerCalls, { vault: true });
     const conditional = routeMap.tools.filter((t) => t.hintsAfterP07).map((t) => t.name).sort();
-    expect(conditional).toEqual(BRAND_BOOK_CONDITIONAL_TOOLS);
+    expect(conditional).toEqual(Object.keys(P07_CONDITIONAL_TOOLS).sort());
 
-    for (const name of BRAND_BOOK_CONDITIONAL_TOOLS) {
+    for (const [name, expected] of Object.entries(P07_CONDITIONAL_TOOLS)) {
       const tool = worker.find((t) => t.name === name)!;
       const mapped = routeMap.tools.find((t) => t.name === name)!;
-      expect(tool.annotations?.readOnlyHint, name).toBe(!BRAND_BOOK_READS_PERSIST_COMPLETENESS);
-      expect(mapped.requiredScope, name).toBe("tools:execute");
+      expect(tool.annotations?.readOnlyHint, name).toBe(!expected.pending);
       expect(mapped.hintsAfterP07?.readOnlyHint, name).toBe(true);
-      expect(mapped.requiredScopeAfterP07, name).toBe("brand:read");
-      expect(tool.description, name).toContain("brand-completeness summary");
+      expect(mapped.requiredScopeAfterP07, name).toBe(expected.scopeAfterP07);
+      if (expected.pending) {
+        expect(mapped.requiredScope, name).toBe("tools:execute");
+        expect(mapped.currentHints, name).not.toEqual(mapped.hintsAfterP07);
+        expect(tool.description, name).toContain(expected.marker);
+      } else {
+        expect(mapped.currentHints, name).toEqual(mapped.hintsAfterP07);
+        expect(mapped.requiredScope, name).toBe(expected.scopeAfterP07);
+        expect(tool.description, name).not.toContain(expected.marker);
+      }
     }
   });
 

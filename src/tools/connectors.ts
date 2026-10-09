@@ -3,6 +3,22 @@ import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
 import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
+/**
+ * COS-PLUGIN-001 (†): the app's connected-app read path still persists the
+ * organization's connector policy before executing a read (getOrCreatePolicy
+ * inserts a default connector_policies row or rewrites allowed_actions,
+ * re-adding read actions an admin removed), so robynn_query_connected_app is
+ * not read-only yet. Flip to false once P07 removes that write, and set the
+ * tool's currentHints/proposedHints to hintsAfterP07 in
+ * contracts/tool-route-map.json in the same change. requiredScope does not
+ * depend on this flag (open decision D-A).
+ */
+export const CONNECTED_APP_READS_PERSIST_POLICY = true;
+
+const POLICY_EFFECT = CONNECTED_APP_READS_PERSIST_POLICY
+  ? " Robynn logs the call and may create or update your organization's connector policy for that app, re-enabling its curated read actions."
+  : " Read-only; Robynn logs the call.";
+
 export function registerConnectorTools(server: McpServer, client: RobynnClient) {
   server.registerTool(
     "robynn_connected_apps",
@@ -97,13 +113,13 @@ export function registerConnectorTools(server: McpServer, client: RobynnClient) 
     "robynn_query_connected_app",
     {
       ...toolMetadata("Query a Connected App", {
-        readOnlyHint: true,
+        readOnlyHint: !CONNECTED_APP_READS_PERSIST_POLICY,
         destructiveHint: false,
         openWorldHint: true,
         idempotentHint: true,
       }),
       description:
-        "Run a curated read-only action against one of your organization's connected apps (for example HubSpot, HighLevel, or GitHub) and return live data from that service; Robynn logs the call. Use robynn_connected_app_capabilities first to discover valid actions and input schema. Treat structuredContent.summary and structuredContent.highlights as the primary answer for text-only clients, and use raw_result only when deeper inspection is needed. HighLevel examples include highlevel.list_contacts, highlevel.list_email_templates, and highlevel.list_bulk_action_campaigns.",
+        `Run a curated read action against one of your organization's connected apps (for example HubSpot, HighLevel, or GitHub) and return live data from that service without changing data in the app.${POLICY_EFFECT} Use robynn_connected_app_capabilities first to discover valid actions and input schema. Treat structuredContent.summary and structuredContent.highlights as the primary answer for text-only clients, and use raw_result only when deeper inspection is needed. HighLevel examples include highlevel.list_contacts, highlevel.list_email_templates, and highlevel.list_bulk_action_campaigns.`,
       inputSchema: {
         provider_key: z
           .string()

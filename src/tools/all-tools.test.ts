@@ -16,7 +16,7 @@ import { registerCmoDecideTools } from "./cmo-decide";
 import { registerWebsiteTools } from "./website";
 import { registerContentPlanTools } from "./content-plan";
 import { registerWeeklyVisibilityTools } from "./weekly-visibility";
-import { registerConnectorTools } from "./connectors";
+import { CONNECTED_APP_READS_PERSIST_POLICY, registerConnectorTools } from "./connectors";
 import { registerCapabilityTools } from "./capabilities";
 import { registerBrandOperationTools } from "./brand-operations";
 import { registerConnectorActionTools } from "./connector-act";
@@ -797,7 +797,16 @@ describe("connector tool guidance", () => {
     ).toContain("structuredContent.highlights");
     expect(
       toolMetadata.get("robynn_query_connected_app")?.description,
-    ).toContain("read-only");
+    ).toContain("curated read action");
+    // While the read path persists connector policy (P07 †) the tool must disclose
+    // it and must not call itself read-only; after P07 it is plainly read-only.
+    const queryDescription = toolMetadata.get("robynn_query_connected_app")?.description;
+    if (CONNECTED_APP_READS_PERSIST_POLICY) {
+      expect(queryDescription).toContain("connector policy");
+      expect(queryDescription).not.toContain("read-only");
+    } else {
+      expect(queryDescription).toContain("Read-only");
+    }
     expect(
       toolMetadata.get("robynn_connected_apps")?.description,
     ).toContain("HighLevel contacts");
