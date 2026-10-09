@@ -1,0 +1,2801 @@
+{
+  "$comment": "COS-PLUGIN-001 P01 tool → app route map. Verified against real tools/list by src/__tests__/catalog-baseline.test.ts. Paths in appRoutes[].file are relative to the robynnv3 app repo unless prefixed 'mcp:' in gaps. currentHints = code at baseline; proposedHints = P12 target.",
+  "baseline": {
+    "mcpWorker": "85d7781add2914815e7fc48459645c2b4edb4095",
+    "app": "6dd04bb315f20ca53612cd0a2aa0951da020ed78",
+    "generatedOn": "2026-10-09"
+  },
+  "counts": {
+    "worker": 48,
+    "workerWithoutVault": 46,
+    "cli": 40
+  },
+  "scopes": {
+    "brand:read": "approved reads of existing org data; no charge; no third-party writes",
+    "tools:execute": "persistence, charges, generation, crawling of caller URLs, connected-app actions"
+  },
+  "tools": [
+    {
+      "name": "robynn_brand_context",
+      "titleProposal": "Get Brand Context",
+      "registrar": "src/tools/context.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "GET, no writes; 'full' may read the org's R2 vault (brand-context-service.ts:201)",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/cli/context/{scope}",
+          "file": "src/routes/api/cli/context/[scope]/+server.ts",
+          "authHelper": "validateApiKey (src/lib/server/auth/validate-api-key.ts:22)"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none",
+      "externalAccess": "Cloudflare R2 vault read when vault flag is on (internal)",
+      "objectOwnership": "org from token; scope param is a fixed enum",
+      "retrySafe": true,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/cli/context/[scope]/+server.ts",
+          "function": "GET",
+          "summary": "validateApiKey only: no membership, role or scope check"
+        },
+        {
+          "package": "P07",
+          "file": "src/lib/server/oauth/validate-token.ts",
+          "function": "validateOAuthToken",
+          "summary": "drops the JWT scope claim; return a discriminated credential with scopes"
+        }
+      ]
+    },
+    {
+      "name": "robynn_brand_context_search",
+      "titleProposal": "Search Brand Context",
+      "registrar": "src/tools/context.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "retrieval only; incidental telemetry/snapshot cache writes (persistence-service.ts:637,753-766) are not user-visible",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/brand-context/search",
+          "file": "src/routes/api/cli/mcp/brand-context/search/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "org_context_request_telemetry insert; org_context_snapshots archive+insert in v2 mode",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "organization_website_id (:137-150) and sub_brand_id (sub-brand-service.ts:149-166) checked against org",
+      "retrySafe": true,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        }
+      ]
+    },
+    {
+      "name": "robynn_status",
+      "titleProposal": "Check Robynn Connection",
+      "registrar": "src/tools/status.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "GET /api/cli/context/summary, no writes",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/cli/context/summary",
+          "file": "src/routes/api/cli/context/[scope]/+server.ts",
+          "authHelper": "validateApiKey (src/lib/server/auth/validate-api-key.ts:22)"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "org from token",
+      "retrySafe": true,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/cli/context/[scope]/+server.ts",
+          "function": "GET",
+          "summary": "validateApiKey only: no membership, role or scope check"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/status.ts",
+          "function": "registerStatusTools",
+          "summary": "setup skill needs bound org + granted permissions in the result (P10 introspection supplies them)"
+        }
+      ]
+    },
+    {
+      "name": "robynn_usage",
+      "titleProposal": "Check Credit Balance",
+      "registrar": "src/tools/status.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "reads get_token_breakdown RPC only (TokenService.ts:497-499)",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/cli/usage",
+          "file": "src/routes/api/cli/usage/+server.ts",
+          "authHelper": "validateApiKey (src/lib/server/auth/validate-api-key.ts:22) (Bearer branch)"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "reads balance only",
+      "externalAccess": "none",
+      "objectOwnership": "Bearer branch uses token org; session branch checks membership (:49-59)",
+      "retrySafe": true,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/cli/usage/+server.ts",
+          "function": "GET (Bearer branch)",
+          "summary": "validateApiKey only: no membership, role or scope check"
+        }
+      ]
+    },
+    {
+      "name": "robynn_create_content",
+      "titleProposal": "Draft Content with Robynn",
+      "registrar": "src/tools/content.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": false
+      },
+      "hintEvidence": "creates thread + run, reserves credits, LangGraph run with connectors-scoped agent token",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/agents/cmo/threads",
+          "file": "src/routes/api/agents/cmo/threads/+server.ts",
+          "authHelper": "agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39)",
+          "when": "thread_id omitted"
+        },
+        {
+          "method": "POST",
+          "path": "/api/agents/cmo/threads/{threadId}/runs",
+          "file": "src/routes/api/agents/cmo/threads/[threadId]/runs/+server.ts",
+          "authHelper": "agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39)"
+        },
+        {
+          "method": "GET",
+          "path": "/api/agents/cmo/runs/{runId}",
+          "file": "src/routes/api/agents/cmo/runs/[runId]/+server.ts",
+          "authHelper": "agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39)",
+          "when": "short in-tool poll"
+        }
+      ],
+      "sideEffects": "instant_agent_threads (org-visible) insert; instant_agent_runs, instant_agent_messages, brand_hub_docs/artifacts, interactions_history (src/lib/server/instant-agent/runs.ts startInstantAgentRun/finalizeRunIfNeeded)",
+      "charges": "checkRoryTurnCap (src/lib/server/billing/rory-cap.ts:49, fails open) + reserveOrShadow 'instant-agent-chat' (threads/[threadId]/runs/+server.ts:69-80); terminal settle via apply_instant_agent_run_terminal_billing_effect",
+      "externalAccess": "LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings",
+      "objectOwnership": "thread_id via verifyThreadAccess (org + owner-or-org-visible) before billing; no collab-project check",
+      "retrySafe": false,
+      "pairedWith": "robynn_run_status",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/agents/cmo/_compat.ts",
+          "function": "requireCmoCompatibilityContext",
+          "summary": "no membership/scope; master-key sentinel; agentsApiGuard admits any valid bearer"
+        },
+        {
+          "package": "P11",
+          "file": "mcp:src/tools/content.ts",
+          "function": "registerContentTools",
+          "summary": "send a deterministic client_request_key; startRun retry can duplicate run + charge"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/robynn-client.ts",
+          "function": "startRun/getRun",
+          "summary": "thread_id/run_id unvalidated and not URL-encoded (path traversal to other same-origin routes)"
+        },
+        {
+          "package": "P10",
+          "file": "src/lib/server/instant-agent/runs.ts",
+          "function": "startInstantAgentRun",
+          "summary": "connectors agent-run token minted for OAuth-initiated runs regardless of granted scope"
+        }
+      ]
+    },
+    {
+      "name": "robynn_research",
+      "titleProposal": "Run Market Research",
+      "registrar": "src/tools/research.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": false
+      },
+      "hintEvidence": "same run path as create_content (type=research)",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/agents/cmo/threads",
+          "file": "src/routes/api/agents/cmo/threads/+server.ts",
+          "authHelper": "agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39)",
+          "when": "thread_id omitted"
+        },
+        {
+          "method": "POST",
+          "path": "/api/agents/cmo/threads/{threadId}/runs",
+          "file": "src/routes/api/agents/cmo/threads/[threadId]/runs/+server.ts",
+          "authHelper": "agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39)"
+        },
+        {
+          "method": "GET",
+          "path": "/api/agents/cmo/runs/{runId}",
+          "file": "src/routes/api/agents/cmo/runs/[runId]/+server.ts",
+          "authHelper": "agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39)",
+          "when": "short in-tool poll"
+        }
+      ],
+      "sideEffects": "instant_agent_threads (org-visible) insert; instant_agent_runs, instant_agent_messages, brand_hub_docs/artifacts, interactions_history (src/lib/server/instant-agent/runs.ts startInstantAgentRun/finalizeRunIfNeeded)",
+      "charges": "checkRoryTurnCap (src/lib/server/billing/rory-cap.ts:49, fails open) + reserveOrShadow 'instant-agent-chat' (threads/[threadId]/runs/+server.ts:69-80); terminal settle via apply_instant_agent_run_terminal_billing_effect",
+      "externalAccess": "LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings; agent web research not verified in app code",
+      "objectOwnership": "as robynn_create_content",
+      "retrySafe": false,
+      "pairedWith": "robynn_run_status",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/agents/cmo/_compat.ts",
+          "function": "requireCmoCompatibilityContext",
+          "summary": "no membership/scope; master-key sentinel; agentsApiGuard admits any valid bearer"
+        },
+        {
+          "package": "P11",
+          "file": "mcp:src/tools/research.ts",
+          "function": "registerResearchTools",
+          "summary": "no client_request_key; unsafe retry"
+        }
+      ]
+    },
+    {
+      "name": "robynn_assist",
+      "titleProposal": "Ask the Robynn Assistant",
+      "registrar": "src/tools/assist.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": false
+      },
+      "hintEvidence": "same run path; caller-controlled claude_skill_slug/history_summary/memory_enabled forwarded to LangGraph",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/agents/cmo/threads",
+          "file": "src/routes/api/agents/cmo/threads/+server.ts",
+          "authHelper": "agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39)",
+          "when": "thread_id omitted"
+        },
+        {
+          "method": "POST",
+          "path": "/api/agents/cmo/threads/{threadId}/runs",
+          "file": "src/routes/api/agents/cmo/threads/[threadId]/runs/+server.ts",
+          "authHelper": "agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39)"
+        },
+        {
+          "method": "GET",
+          "path": "/api/agents/cmo/runs/{runId}",
+          "file": "src/routes/api/agents/cmo/runs/[runId]/+server.ts",
+          "authHelper": "agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39)",
+          "when": "short in-tool poll"
+        }
+      ],
+      "sideEffects": "instant_agent_threads (org-visible) insert; instant_agent_runs, instant_agent_messages, brand_hub_docs/artifacts, interactions_history (src/lib/server/instant-agent/runs.ts startInstantAgentRun/finalizeRunIfNeeded)",
+      "charges": "checkRoryTurnCap (src/lib/server/billing/rory-cap.ts:49, fails open) + reserveOrShadow 'instant-agent-chat' (threads/[threadId]/runs/+server.ts:69-80); terminal settle via apply_instant_agent_run_terminal_billing_effect",
+      "externalAccess": "LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings",
+      "objectOwnership": "as robynn_create_content",
+      "retrySafe": false,
+      "pairedWith": "robynn_run_status",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/agents/cmo/_compat.ts",
+          "function": "requireCmoCompatibilityContext",
+          "summary": "no membership/scope; master-key sentinel; agentsApiGuard admits any valid bearer"
+        },
+        {
+          "package": "P09",
+          "file": "src/lib/server/mcp/orchestrator-contract.ts",
+          "function": "CmoThreadRunRequestSchema",
+          "summary": "cap history_summary, allow-list claude_skill_slug, constrain memory_enabled to caller memory"
+        },
+        {
+          "package": "P11",
+          "file": "mcp:src/tools/assist.ts",
+          "function": "registerAssistTools",
+          "summary": "no client_request_key; unsafe retry"
+        }
+      ]
+    },
+    {
+      "name": "robynn_conversations",
+      "titleProposal": "List or Start Conversations",
+      "registrar": "src/tools/conversations.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "scopeByArgument": {
+        "action": {
+          "list": "brand:read",
+          "create": "tools:execute"
+        }
+      },
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": false
+      },
+      "hintEvidence": "action=create inserts an org-visible instant_agent_threads row (threads/+server.ts:82-93); list is a pure read",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/agents/cmo/threads",
+          "file": "src/routes/api/agents/cmo/threads/+server.ts",
+          "authHelper": "agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39)",
+          "when": "action=list"
+        },
+        {
+          "method": "POST",
+          "path": "/api/agents/cmo/threads",
+          "file": "src/routes/api/agents/cmo/threads/+server.ts",
+          "authHelper": "agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39)",
+          "when": "action=create"
+        }
+      ],
+      "sideEffects": "create: instant_agent_threads insert (visibility=organization)",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "list filtered to org + own/org-visible (:30-36); master-key subject sees private threads",
+      "retrySafe": false,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/agents/cmo/_compat.ts",
+          "function": "requireCmoCompatibilityContext",
+          "summary": "no membership/scope; master-key sentinel; agentsApiGuard admits any valid bearer"
+        },
+        {
+          "package": "P09",
+          "file": "src/routes/api/agents/cmo/threads/+server.ts",
+          "function": "POST",
+          "summary": "MCP-created threads default to org visibility"
+        }
+      ]
+    },
+    {
+      "name": "robynn_run_status",
+      "titleProposal": "Check Run Status",
+      "registrar": "src/tools/runs.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "GET syncInstantAgentRun can finalize the run: writes messages, brand_hub_docs, threads, settles billing (runs.ts:11612-11638,12010-12077); CAS + deterministic ids make repeats idempotent",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/agents/cmo/runs/{runId}",
+          "file": "src/routes/api/agents/cmo/runs/[runId]/+server.ts",
+          "authHelper": "agentsApiGuard + requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39)"
+        }
+      ],
+      "sideEffects": "finalization writes on first terminal poll",
+      "charges": "settles/releases the run's existing reservation only",
+      "externalAccess": "LangGraph state read; OpenAI embeddings via recordInteraction",
+      "objectOwnership": "getRunById unscoped, then org check (:16-19) + verifyThreadAccess (:21-30) before sync; no run.user_id check",
+      "retrySafe": true,
+      "pairedWith": "robynn_create_content|robynn_research|robynn_assist|robynn_cmo_agent",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/agents/cmo/_compat.ts",
+          "function": "requireCmoCompatibilityContext",
+          "summary": "no membership/scope; master-key sentinel; agentsApiGuard admits any valid bearer"
+        },
+        {
+          "package": "P11",
+          "file": "src/routes/api/agents/cmo/runs/[runId]/+server.ts",
+          "function": "GET",
+          "summary": "failed/cancelled runs return HTTP 500 -> client retry, status=failed never surfaced"
+        },
+        {
+          "package": "P09",
+          "file": "src/routes/api/agents/cmo/_compat.ts",
+          "function": "verifyThreadAccess",
+          "summary": "org members can read others' runs in org-visible threads"
+        }
+      ]
+    },
+    {
+      "name": "robynn_cmo_agent",
+      "titleProposal": "Run the Robynn CMO Agent",
+      "registrar": "src/tools/cmo-agent.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": false
+      },
+      "hintEvidence": "creates thread/run, reserves credits, LangGraph CMO with connectors token",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/cmo/run",
+          "file": "src/routes/api/cli/mcp/cmo/run/+server.ts",
+          "authHelper": "requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39)"
+        }
+      ],
+      "sideEffects": "instant_agent_threads (org-visible) insert; instant_agent_runs, instant_agent_messages, brand_hub_docs/artifacts, interactions_history (src/lib/server/instant-agent/runs.ts startInstantAgentRun/finalizeRunIfNeeded); up to 8s in-request sync (cmo-agent-runner.ts:217-230)",
+      "charges": "reserveOrShadow 'instant-agent-chat' (cmo/run/+server.ts:44-55); no Rory turn cap",
+      "externalAccess": "LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings",
+      "objectOwnership": "optional thread_id via verifyThreadAccess after the billing reserve (cmo-agent-runner.ts:158-169)",
+      "retrySafe": false,
+      "pairedWith": "robynn_run_status, robynn_cmo_decide",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/agents/cmo/_compat.ts",
+          "function": "requireCmoCompatibilityContext",
+          "summary": "no membership/scope; master-key sentinel; agentsApiGuard admits any valid bearer"
+        },
+        {
+          "package": "P11",
+          "file": "src/routes/api/cli/mcp/cmo/run/+server.ts",
+          "function": "POST",
+          "summary": "failed run returns 500 -> client retry -> duplicate thread/run/reservation; tool sends no idempotency key"
+        },
+        {
+          "package": "P07",
+          "file": "src/routes/api/cli/mcp/cmo/run/+server.ts",
+          "function": "POST",
+          "summary": "add checkRoryTurnCap parity with threads/[threadId]/runs"
+        }
+      ]
+    },
+    {
+      "name": "robynn_cmo_decide",
+      "titleProposal": "Answer a CMO Decision",
+      "registrar": "src/tools/cmo-decide.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": true
+      },
+      "hintEvidence": "claims the decision gate (CAS) and starts a continuation run; gate-scoped continuation key collapses retries (conversation-decision.ts:245-314)",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/cmo/decide",
+          "file": "src/routes/api/cli/mcp/cmo/decide/+server.ts",
+          "authHelper": "requireCmoCompatibilityContext (src/routes/api/agents/cmo/_compat.ts:39)"
+        }
+      ],
+      "sideEffects": "instant_agent_runs.metadata gate claim/close + continuation run effects",
+      "charges": "reserveOrShadow (decide/+server.ts:64-75); released on no-new-run/failure",
+      "externalAccess": "LangGraph CMO run; mints robynn_agent_run_token scope=connectors (runs.ts:11173-11178) usable at /api/cli/connectors/{read,act,execute}; Creative Engine workload token; OpenAI embeddings",
+      "objectOwnership": "thread verifyThreadAccess; run org+thread match; decision/option validated against run blocks (conversation-decision.ts:170-209); no run.user_id check",
+      "retrySafe": true,
+      "pairedWith": "robynn_cmo_agent",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/agents/cmo/_compat.ts",
+          "function": "requireCmoCompatibilityContext",
+          "summary": "no membership/scope; master-key sentinel; agentsApiGuard admits any valid bearer"
+        },
+        {
+          "package": "P11",
+          "file": "src/routes/api/cli/mcp/cmo/decide/+server.ts",
+          "function": "POST",
+          "summary": "catch releases the reservation even after a continuation was admitted"
+        },
+        {
+          "package": "P09",
+          "file": "src/lib/server/instant-agent/conversation-decision.ts",
+          "function": "runConversationDecision",
+          "summary": "any org member can resolve another member's gate"
+        }
+      ]
+    },
+    {
+      "name": "robynn_geo_analysis",
+      "titleProposal": "Analyze AI Search Visibility (GEO)",
+      "registrar": "src/tools/geo.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "hintEvidence": "no Robynn persistence; multi-LLM fan-out incl. Perplexity web search (agents multi_llm_query.py); generative cost",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/geo-analysis",
+          "file": "src/routes/api/cli/mcp/geo-analysis/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        },
+        {
+          "method": "POST",
+          "path": "/api/agents/geo/execute",
+          "file": "src/routes/api/agents/geo/execute/+server.ts",
+          "authHelper": "agentsApiGuard via signed internalFetch",
+          "hop": "internal"
+        }
+      ],
+      "sideEffects": "LangGraph thread+run (no org metadata); no Supabase writes",
+      "charges": "none on the MCP path (dashboard bills 'geo-scan')",
+      "externalAccess": "ChatGPT/Claude/Gemini/Perplexity sonar-pro web search; Anthropic",
+      "objectOwnership": "no caller ids; downstream execute route trusts body organization_id",
+      "retrySafe": false,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P07",
+          "file": "src/routes/api/agents/geo/execute/+server.ts",
+          "function": "POST",
+          "summary": "organization_id taken from the body; agentsApiGuard admits any org's bearer -> cross-tenant brand-context read"
+        },
+        {
+          "package": "P11",
+          "file": "src/routes/api/cli/mcp/geo-analysis/+server.ts",
+          "function": "POST",
+          "summary": "500s mirrored -> client re-runs a full multi-LLM analysis; no billing reservation"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/geo.ts",
+          "function": "registerGeoTools",
+          "summary": "openWorldHint must be true; analysis_depth is dropped; disclose LLM fan-out"
+        }
+      ]
+    },
+    {
+      "name": "robynn_competitive_battlecard",
+      "titleProposal": "Build a Competitive Battlecard",
+      "registrar": "src/tools/battlecard.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true,
+        "idempotentHint": false
+      },
+      "hintEvidence": "may insert competitor_intel_profiles (weekly schedule); agent inserts battlecards/recommendations and overwrites profile threat score/metadata; paid vendors + competitor site fetch",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/competitive-battlecard",
+          "file": "src/routes/api/cli/mcp/competitive-battlecard/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "competitor_intel_profiles insert (api.ts:248-258); competitor_battlecards/competitor_recommendations inserts and profile overwrite (agents)",
+      "charges": "none (bypasses intel-dispatcher reserveOrShadow 'competitor-intel-run')",
+      "externalAccess": "Serper, DataForSEO, Ahrefs, Semrush, direct fetch of competitor domain, Anthropic",
+      "objectOwnership": "competitor resolved by name within org; agent re-verifies competitor_id",
+      "retrySafe": false,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P11",
+          "file": "src/routes/api/cli/mcp/competitive-battlecard/+server.ts",
+          "function": "POST",
+          "summary": "bypasses dispatchCompetitorIntelRun (no CAS lock, billing or run row); retry writes a second battlecard"
+        },
+        {
+          "package": "P08",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "findOrCreateCompetitorProfile",
+          "summary": "creates a durable scheduled object as a side effect; null-domain race duplicates"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/battlecard.ts",
+          "function": "registerBattlecardTools",
+          "summary": "readOnly/openWorld wrong; dropped inputs; local-disk report paths"
+        }
+      ]
+    },
+    {
+      "name": "robynn_seo_opportunities",
+      "titleProposal": "Find SEO Opportunities",
+      "registrar": "src/tools/seo.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "hintEvidence": "no writes found; scrapes caller company_url via Serper and queries Exa/Firecrawl/Semrush",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/seo-opportunities",
+          "file": "src/routes/api/cli/mcp/seo-opportunities/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        },
+        {
+          "method": "POST",
+          "path": "/api/agents/seo/execute",
+          "file": "src/routes/api/agents/seo/execute/+server.ts",
+          "authHelper": "agentsApiGuard via signed internalFetch",
+          "hop": "internal"
+        }
+      ],
+      "sideEffects": "none found",
+      "charges": "none on the MCP path (dashboard bills 'seo-scan')",
+      "externalAccess": "Serper scrape/search, Exa, Firecrawl, Semrush, Anthropic",
+      "objectOwnership": "no caller ids",
+      "retrySafe": false,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P11",
+          "file": "src/routes/api/cli/mcp/seo-opportunities/+server.ts",
+          "function": "POST",
+          "summary": "500/504 mirrored -> client re-runs a paid run"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/seo.ts",
+          "function": "registerSeoTools",
+          "summary": "openWorldHint must be true; unbounded keyword/competitor arrays"
+        }
+      ]
+    },
+    {
+      "name": "robynn_brand_book_status",
+      "titleProposal": "Check Brand Book Completeness",
+      "registrar": "src/tools/brand-book.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "conditional": "readOnly/brand:read assumes P07 removes the completeness write; otherwise readOnlyHint:false + tools:execute",
+      "hintEvidence": "intended read; currently upserts the derived 'Brand Completeness' doc (brand-book-v2-service.ts:181-196,1871)",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/cli/mcp/brand-book/status",
+          "file": "src/routes/api/cli/mcp/brand-book/status/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "brand_hub_docs 'Brand Completeness' upsert + brand-context cache invalidation (to be removed)",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "no caller ids",
+      "retrySafe": true,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P07",
+          "file": "src/lib/services/brand-hub-docs/brand-book-v2-service.ts",
+          "function": "calculateBrandCompleteness (via aggregateBrandBookData)",
+          "summary": "read path upserts the 'Brand Completeness' brand_hub_docs row; remove the write or P12 must mark the tool readOnlyHint:false + tools:execute"
+        }
+      ]
+    },
+    {
+      "name": "robynn_brand_book_gap_analysis",
+      "titleProposal": "Analyze Brand Book Gaps",
+      "registrar": "src/tools/brand-book.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "conditional": "as robynn_brand_book_status",
+      "hintEvidence": "deterministic, no LLM (brand-book-adapters.ts:255-372); same hidden completeness write",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/brand-book/gap-analysis",
+          "file": "src/routes/api/cli/mcp/brand-book/gap-analysis/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "completeness upsert (to be removed)",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "no caller ids",
+      "retrySafe": true,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P07",
+          "file": "src/lib/services/brand-hub-docs/brand-book-v2-service.ts",
+          "function": "calculateBrandCompleteness (via aggregateBrandBookData)",
+          "summary": "read path upserts the 'Brand Completeness' brand_hub_docs row; remove the write or P12 must mark the tool readOnlyHint:false + tools:execute"
+        }
+      ]
+    },
+    {
+      "name": "robynn_brand_book_strategy",
+      "titleProposal": "Plan Brand Book Improvements",
+      "registrar": "src/tools/brand-book.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "conditional": "as robynn_brand_book_status",
+      "hintEvidence": "deterministic templates (brand-book-adapters.ts:374-485); same hidden completeness write",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/brand-book/strategy",
+          "file": "src/routes/api/cli/mcp/brand-book/strategy/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "completeness upsert (to be removed)",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "no caller ids",
+      "retrySafe": true,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P07",
+          "file": "src/lib/services/brand-hub-docs/brand-book-v2-service.ts",
+          "function": "calculateBrandCompleteness (via aggregateBrandBookData)",
+          "summary": "read path upserts the 'Brand Completeness' brand_hub_docs row; remove the write or P12 must mark the tool readOnlyHint:false + tools:execute"
+        }
+      ]
+    },
+    {
+      "name": "robynn_brand_reflections",
+      "titleProposal": "List Brand Reflections",
+      "registrar": "src/tools/brand-book.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "org-filtered changelog reads only (changelog-service.ts:254,805)",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/cli/mcp/brand-book/reflections",
+          "file": "src/routes/api/cli/mcp/brand-book/reflections/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "no caller ids",
+      "retrySafe": true,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        }
+      ]
+    },
+    {
+      "name": "robynn_trigger_brand_reflections",
+      "titleProposal": "Generate Brand Reflections",
+      "registrar": "src/tools/brand-book.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": false
+      },
+      "hintEvidence": "processes the pending changelog queue: inserts/updates brand_hub_docs_changelog and brand_reflection_clusters; LLM synthesis",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/brand-book/trigger-reflections",
+          "file": "src/routes/api/cli/mcp/brand-book/trigger-reflections/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "rate-limit upsert; changelog + reflection cluster writes",
+      "charges": "none (LLM spend unmetered)",
+      "externalAccess": "LangGraph brand_reflection -> Anthropic (no web)",
+      "objectOwnership": "no caller ids; reads org-wide conversation_memories",
+      "retrySafe": false,
+      "pairedWith": "robynn_brand_reflections",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P11",
+          "file": "src/lib/server/mcp/brand-book-adapters.ts",
+          "function": "assertTriggerReflectionsCooldown/armTriggerReflectionsCooldown",
+          "summary": "non-atomic cooldown armed only on success; retry/concurrency reprocesses the queue"
+        },
+        {
+          "package": "P09",
+          "file": "src/lib/services/brand-hub-docs-changelog/aggregate-pattern-analyser.ts",
+          "function": "gatherCorpus",
+          "summary": "reads all users' conversation_memories into org-visible evidence"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/brand-book.ts",
+          "function": "registerBrandBookTools",
+          "summary": "dry_run description inaccurate (synthesis skipped)"
+        }
+      ]
+    },
+    {
+      "name": "robynn_publish_brand_book_html",
+      "titleProposal": "Export Brand Book as HTML",
+      "registrar": "src/tools/brand-book.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": true
+      },
+      "conditional": "as robynn_brand_book_status; tool does NOT publish — returns HTML inline",
+      "hintEvidence": "inline HTML export, no storage/public URL (brand-book-adapters.ts:612-656); server fetches the stored logo URL (brand-book-export-service.ts:404)",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/brand-book/publish-html",
+          "file": "src/routes/api/cli/mcp/brand-book/publish-html/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "completeness upsert (to be removed)",
+      "charges": "none",
+      "externalAccess": "fetch of stored logo previewUrl with no allow-list (possible SSRF)",
+      "objectOwnership": "no caller ids",
+      "retrySafe": true,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P07",
+          "file": "src/lib/services/brand-hub-docs/brand-book-v2-service.ts",
+          "function": "calculateBrandCompleteness (via aggregateBrandBookData)",
+          "summary": "read path upserts the 'Brand Completeness' brand_hub_docs row; remove the write or P12 must mark the tool readOnlyHint:false + tools:execute"
+        },
+        {
+          "package": "P07",
+          "file": "src/lib/services/brand-book-export-service.ts",
+          "function": "imageUrlToBase64",
+          "summary": "possible full-read SSRF via stored logo URL; allow-list/validate"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/brand-book.ts",
+          "function": "registerBrandBookTools",
+          "summary": "description must say export, not publish; theme/include_private_sections ignored"
+        }
+      ]
+    },
+    {
+      "name": "robynn_campaign_creator",
+      "titleProposal": "Create a Marketing Campaign",
+      "registrar": "src/tools/campaign.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": false
+      },
+      "hintEvidence": "LangGraph marketing_campaign_builder run; persists thread, brand_hub_docs, messages and a tokenized report",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/marketing-campaign",
+          "file": "src/routes/api/cli/mcp/marketing-campaign/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "persistCampaignArtifact: instant_agent_threads, brand_hub_docs, create_doc_version, instant_agent_messages, storage upsert + tokenized report URL",
+      "charges": "none found",
+      "externalAccess": "LangGraph marketing_campaign_builder (web use not verified)",
+      "objectOwnership": "no caller ids",
+      "retrySafe": false,
+      "pairedWith": "robynn_campaign_status",
+      "environmentGate": "robynn-ai environment slug only",
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P11",
+          "file": "src/routes/api/cli/mcp/marketing-campaign/+server.ts",
+          "function": "POST",
+          "summary": "502/500 -> client retry -> new LangGraph run + duplicate artifact"
+        },
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "resolveMcpEnvironment",
+          "summary": "unordered limit(1) environment selection"
+        }
+      ]
+    },
+    {
+      "name": "robynn_campaign_status",
+      "titleProposal": "Check Campaign Status",
+      "registrar": "src/tools/campaign.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "hintEvidence": "GET persists the campaign artifact on success and re-uploads/updates on every repeat poll (campaign-artifact-persistence.ts:143-173)",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/cli/mcp/marketing-campaign/status",
+          "file": "src/routes/api/cli/mcp/marketing-campaign/status/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)",
+          "query": [
+            "threadId",
+            "runId",
+            "company_name",
+            "company_url"
+          ]
+        }
+      ],
+      "sideEffects": "persistCampaignArtifact writes (as creator); concurrent first polls can duplicate",
+      "charges": "none",
+      "externalAccess": "LangGraph reads",
+      "objectOwnership": "NONE: caller-supplied LangGraph thread/run ids read directly with no org/assistant metadata check",
+      "retrySafe": false,
+      "pairedWith": "robynn_campaign_creator",
+      "environmentGate": "robynn-ai environment slug only",
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P08",
+          "file": "src/lib/server/mcp/marketing-campaign-runner.ts",
+          "function": "getMarketingCampaignRunStatus",
+          "summary": "verify LangGraph thread metadata.organization_id and assistant_id before reading state (cross-tenant read + persist)"
+        },
+        {
+          "package": "P08",
+          "file": "src/lib/server/mcp/campaign-artifact-persistence.ts",
+          "function": "persistCampaignArtifact",
+          "summary": "unique (org, thread, run) + skip re-store when already persisted"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/campaign.ts",
+          "function": "registerCampaignTools",
+          "summary": "readOnlyHint true is wrong"
+        }
+      ]
+    },
+    {
+      "name": "robynn_website_audit",
+      "titleProposal": "Start a Website Audit",
+      "registrar": "src/tools/website.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": false
+      },
+      "hintEvidence": "BillingService.charge 'website-audit-report' (50 cr) before dispatch; inserts prospect_audits; public audit_url",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/website/audit",
+          "file": "src/routes/api/cli/mcp/website/audit/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "prospect_audits insert/updates; LangGraph cmo_audit_v1 thread+run; public tokenized audit page",
+      "charges": "direct non-refundable charge before validation (+server.ts:88-105)",
+      "externalAccess": "agent crawls caller website_url (no app-side SSRF guard)",
+      "objectOwnership": "no caller object ids",
+      "retrySafe": false,
+      "pairedWith": "robynn_website_audit_status",
+      "environmentGate": "robynn-ai environment slug only",
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P11",
+          "file": "src/routes/api/cli/mcp/website/audit/+server.ts",
+          "function": "POST",
+          "summary": "charges before runner failures; 500 without refund + client retry = double charge"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/website.ts",
+          "function": "registerWebsiteTools",
+          "summary": "readOnlyHint true is wrong; disclose charge and robynn-ai restriction; goals/competitors/analysis_depth ignored"
+        }
+      ]
+    },
+    {
+      "name": "robynn_website_audit_status",
+      "titleProposal": "Check Website Audit Status",
+      "registrar": "src/tools/website.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "status GET advances the audit: LangGraph poll, LLM extraction, prospect_audits updates (prospect-audit-runner.ts:421-429,510-514); converges once complete",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/cli/mcp/website/audit/status",
+          "file": "src/routes/api/cli/mcp/website/audit/status/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)",
+          "query": [
+            "prospect_audit_id"
+          ]
+        }
+      ],
+      "sideEffects": "prospect_audits updates; storage read; Anthropic extraction",
+      "charges": "none",
+      "externalAccess": "LangGraph + Anthropic (processors)",
+      "objectOwnership": "NONE: fetchProspectAudit selects by id only (prospect-audit-runner.ts:164-179)",
+      "retrySafe": true,
+      "pairedWith": "robynn_website_audit",
+      "environmentGate": "robynn-ai environment slug only",
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P08",
+          "file": "src/lib/server/mcp/prospect-audit-runner.ts",
+          "function": "fetchProspectAudit / pollMcpProspectAuditStatus",
+          "summary": "no organization_id filter: reads/advances other orgs' audits and returns their audit_url + LangGraph ids"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/website.ts",
+          "function": "registerWebsiteTools",
+          "summary": "readOnlyHint true is wrong"
+        }
+      ]
+    },
+    {
+      "name": "robynn_website_audit_v2",
+      "titleProposal": "Start a Website Audit (v2)",
+      "registrar": "src/tools/website.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": false
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": false
+      },
+      "hintEvidence": "reserveOrShadow 'website-audit-v2' (50 cr); creates scans/pages/recommendations/heal findings; crawls",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/website/audit-v2",
+          "file": "src/routes/api/cli/mcp/website/audit-v2/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "design_studio_optimization_scans/_scan_pages/_recommendations, design_studio_heal_findings, design_studio_sites platform detection",
+      "charges": "reservation; released on dispatch failure or active-scan reuse",
+      "externalAccess": "public-URL-guarded crawl (Firecrawl/native fetch), LangGraph website_optimization_v2",
+      "objectOwnership": "site_id org-scoped; goal_id unvalidated when site_id absent (scan-runner.ts:480)",
+      "retrySafe": false,
+      "pairedWith": "robynn_website_audit_v2_status",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P08",
+          "file": "src/lib/server/design-studio/seo-geo/v2/scan-runner.ts",
+          "function": "startCliWebsiteAuditV2",
+          "summary": "validate goal_id against org when site_id is absent"
+        },
+        {
+          "package": "P11",
+          "file": "src/lib/server/design-studio/seo-geo/v2/scan-runner.ts",
+          "function": "findReusableActiveV2Scan",
+          "summary": "30-min reuse is only partial retry protection"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/website.ts",
+          "function": "registerWebsiteTools",
+          "summary": "readOnlyHint true is wrong; mode ignored; site_id description"
+        }
+      ]
+    },
+    {
+      "name": "robynn_website_audit_v2_status",
+      "titleProposal": "Check Website Audit (v2) Status",
+      "registrar": "src/tools/website.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": false
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "pure read via org-scoped getScan (v2/scan-runner.ts:549-556)",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/cli/mcp/website/audit-v2/status",
+          "file": "src/routes/api/cli/mcp/website/audit-v2/status/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)",
+          "query": [
+            "scan_id"
+          ]
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "getScan(scanId, organizationId)",
+      "retrySafe": true,
+      "pairedWith": "robynn_website_audit_v2",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/website.ts",
+          "function": "registerWebsiteTools",
+          "summary": "openWorldHint should be false"
+        }
+      ]
+    },
+    {
+      "name": "robynn_website_optimization_audit",
+      "titleProposal": "Start a Website Optimization Audit",
+      "registrar": "src/tools/website.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": false
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": false
+      },
+      "hintEvidence": "reserveOrShadow 'website-optimization-v3'; fresh scan id per call; crawls + LLM",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/website/optimization-audit",
+          "file": "src/routes/api/cli/mcp/website/optimization-audit/+server.ts",
+          "authHelper": "requireAgentMcpApiContext (src/lib/server/mcp/api.ts:57) -> validateConnectorGatewayAuth"
+        }
+      ],
+      "sideEffects": "scans/pages/recommendations; evidence_graph.start_request for cron replay",
+      "charges": "reservation (units = estimate), settled by runner",
+      "externalAccess": "public-URL-guarded crawl; LangGraph v3 or local v3 Firecrawl/LLM",
+      "objectOwnership": "site_id org-scoped; goal_id unvalidated (contracts.ts:507)",
+      "retrySafe": false,
+      "pairedWith": "robynn_website_optimization_audit_status",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/auth/connector-gateway-auth.ts",
+          "function": "validateConnectorGatewayAuth",
+          "summary": "membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership"
+        },
+        {
+          "package": "P11",
+          "file": "src/lib/server/design-studio/seo-geo/v3/scan-runner.ts",
+          "function": "startCliWebsiteOptimizationAuditV3",
+          "summary": "fresh randomUUID per call; idempotency_scan_id stripped by the MCP schema"
+        },
+        {
+          "package": "P08",
+          "file": "src/lib/server/design-studio/seo-geo/v3/scan-runner.ts",
+          "function": "startCliWebsiteOptimizationAuditV3",
+          "summary": "goal_id persisted without org/site validation"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/website.ts",
+          "function": "registerWebsiteTools",
+          "summary": "readOnlyHint true is wrong; no confirmed_estimate_id/site_id inputs"
+        }
+      ]
+    },
+    {
+      "name": "robynn_website_optimization_audit_status",
+      "titleProposal": "Check Website Optimization Audit Status",
+      "registrar": "src/tools/website.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": false
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "pure read via org-scoped getScan (v3/scan-runner.ts:560-567)",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/cli/mcp/website/optimization-audit/status",
+          "file": "src/routes/api/cli/mcp/website/optimization-audit/status/+server.ts",
+          "authHelper": "requireAgentMcpApiContext (src/lib/server/mcp/api.ts:57) -> validateConnectorGatewayAuth",
+          "query": [
+            "run_id"
+          ]
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "getScan(run_id, organizationId)",
+      "retrySafe": true,
+      "pairedWith": "robynn_website_optimization_audit",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/auth/connector-gateway-auth.ts",
+          "function": "validateConnectorGatewayAuth",
+          "summary": "membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/website.ts",
+          "function": "registerWebsiteTools",
+          "summary": "openWorldHint should be false"
+        }
+      ]
+    },
+    {
+      "name": "robynn_website_audit_orchestrator",
+      "titleProposal": "Start a Multi-Agent Website Audit",
+      "registrar": "src/tools/website.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": false
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": false
+      },
+      "hintEvidence": "reserveOrShadow 'website-audit-orchestrator' (50 cr); starts a v3 scan; description wrongly says read-only",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/website/audit-orchestrator",
+          "file": "src/routes/api/cli/mcp/website/audit-orchestrator/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "same as v3 start",
+      "charges": "reservation; released on error/estimate-only",
+      "externalAccess": "public-URL-guarded crawl; LangGraph/Firecrawl/LLM via v3",
+      "objectOwnership": "site_id org-scoped (:159-194)",
+      "retrySafe": false,
+      "pairedWith": "robynn_website_audit_orchestrator_status",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P11",
+          "file": "src/routes/api/cli/mcp/website/audit-orchestrator/+server.ts",
+          "function": "POST",
+          "summary": "new billing session + scan per request; retry duplicates"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/website.ts",
+          "function": "registerWebsiteTools",
+          "summary": "description says read-only; it charges and persists"
+        }
+      ]
+    },
+    {
+      "name": "robynn_website_audit_orchestrator_status",
+      "titleProposal": "Check Multi-Agent Website Audit Status",
+      "registrar": "src/tools/website.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": false
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "pure read through org-scoped getScan; POST transport only",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/website/audit-orchestrator/status",
+          "file": "src/routes/api/cli/mcp/website/audit-orchestrator/status/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "getScan(run_id, organizationId)",
+      "retrySafe": true,
+      "pairedWith": "robynn_website_audit_orchestrator",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/website.ts",
+          "function": "registerWebsiteTools",
+          "summary": "openWorldHint should be false"
+        }
+      ]
+    },
+    {
+      "name": "robynn_website_strategy",
+      "titleProposal": "Build a Website Strategy",
+      "registrar": "src/tools/website.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "hintEvidence": "no DB writes (persist_artifacts:false); synchronous LangGraph website_report_v1 that crawls the caller URL; uncharged LLM-heavy run",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/website/strategy",
+          "file": "src/routes/api/cli/mcp/website/strategy/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "none found",
+      "charges": "none (uncharged LLM run)",
+      "externalAccess": "LangGraph crawl of caller website_url without app-side SSRF guard",
+      "objectOwnership": "no caller ids",
+      "retrySafe": false,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P11",
+          "file": "mcp:src/robynn-client.ts",
+          "function": "fetchWithRetry",
+          "summary": "automatic 5xx/network retry re-runs this non-idempotent call"
+        }
+      ]
+    },
+    {
+      "name": "robynn_content_plan",
+      "titleProposal": "Plan Content",
+      "registrar": "src/tools/content-plan.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "hintEvidence": "no app writes found (dry_run is only forwarded); LangGraph planner /runs/wait, LLM cost",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/content-plan",
+          "file": "src/routes/api/cli/mcp/content-plan/+server.ts",
+          "authHelper": "requireMcpApiContext (src/lib/server/mcp/api.ts:15)"
+        }
+      ],
+      "sideEffects": "none found",
+      "charges": "none (LLM spend unmetered)",
+      "externalAccess": "LangGraph content planner (no web)",
+      "objectOwnership": "research_artifact_id and project_id org-scoped; research_packet unbounded",
+      "retrySafe": false,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/mcp/api.ts",
+          "function": "requireMcpApiContext",
+          "summary": "no active-membership, role or OAuth scope check; OAuth sub 'organization_master_key' would impersonate first admin"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/content-plan.ts",
+          "function": "registerContentPlanTools",
+          "summary": "dry_run text implies calendar writes the app never performs"
+        },
+        {
+          "package": "P09",
+          "file": "src/lib/server/mcp/contracts.ts",
+          "function": "ContentPlanRequestSchema",
+          "summary": "bound research_packet size"
+        }
+      ]
+    },
+    {
+      "name": "robynn_weekly_visibility_report",
+      "titleProposal": "Get Weekly Visibility Report",
+      "registrar": "src/tools/weekly-visibility.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": true
+      },
+      "hintEvidence": "no writes found; live GSC/GA4 reads via Composio for the org's own connected properties",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/weekly-visibility-report",
+          "file": "src/routes/api/cli/mcp/weekly-visibility-report/+server.ts",
+          "authHelper": "requireAgentMcpApiContext (src/lib/server/mcp/api.ts:57) -> validateConnectorGatewayAuth"
+        }
+      ],
+      "sideEffects": "none found",
+      "charges": "none",
+      "externalAccess": "Google Search Console + GA4 via Composio (read)",
+      "objectOwnership": "website and GSC connection resolved within org",
+      "retrySafe": true,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/auth/connector-gateway-auth.ts",
+          "function": "validateConnectorGatewayAuth",
+          "summary": "membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/weekly-visibility.ts",
+          "function": "registerWeeklyVisibilityTools",
+          "summary": "openWorldHint must be true (live Google API reads)"
+        }
+      ]
+    },
+    {
+      "name": "robynn_capabilities",
+      "titleProposal": "List Robynn Capabilities",
+      "registrar": "src/tools/capabilities.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "static catalog + org connection summaries",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/cli/mcp/capabilities",
+          "file": "src/routes/api/cli/mcp/capabilities/+server.ts",
+          "authHelper": "validateConnectorGatewayAuth (src/lib/server/auth/connector-gateway-auth.ts:42)"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "org-scoped summaries",
+      "retrySafe": true,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/auth/connector-gateway-auth.ts",
+          "function": "validateConnectorGatewayAuth",
+          "summary": "membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership"
+        }
+      ]
+    },
+    {
+      "name": "robynn_brand_source_add",
+      "titleProposal": "Add a Brand Source",
+      "registrar": "src/tools/brand-operations.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "hintEvidence": "brand_hub_docs update-or-insert keyed by idempotency_key reused as draftId/collectionId; can overwrite existing docs; no crawl started",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/brand/sources",
+          "file": "src/routes/api/cli/brand/sources/+server.ts",
+          "authHelper": "validateConnectorGatewayAuth (src/lib/server/auth/connector-gateway-auth.ts:42) + role==='admin'"
+        }
+      ],
+      "sideEffects": "brand_hub_docs website draft or ingested text upsert (non-atomic)",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "org-scoped lookup, but key collides with UI-created drafts/collections",
+      "retrySafe": false,
+      "pairedWith": "robynn_brand_rebuild",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/auth/connector-gateway-auth.ts",
+          "function": "validateConnectorGatewayAuth",
+          "summary": "membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership"
+        },
+        {
+          "package": "P11",
+          "file": "src/lib/services/brand-hub-docs/brand-hub-docs-service.ts",
+          "function": "upsertWebsiteSourceDraft / upsertIngestedText",
+          "summary": "dedicated atomic idempotency key instead of draftId/collectionId"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/brand-operations.ts",
+          "function": "registerBrandOperationTools",
+          "summary": "openWorld false, destructive true"
+        }
+      ]
+    },
+    {
+      "name": "robynn_brand_rebuild",
+      "titleProposal": "Rebuild Brand Context",
+      "registrar": "src/tools/brand-operations.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "overwrites the brand_context singleton from current sources (brand-hub-docs-service.ts:6420-6444); deterministic",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/brand/rebuild",
+          "file": "src/routes/api/cli/brand/rebuild/+server.ts",
+          "authHelper": "validateConnectorGatewayAuth (src/lib/server/auth/connector-gateway-auth.ts:42) + admin"
+        }
+      ],
+      "sideEffects": "brand_hub_docs brand_context overwrite; LangGraph cache invalidation",
+      "charges": "none",
+      "externalAccess": "none (internal cache invalidation)",
+      "objectOwnership": "no caller ids",
+      "retrySafe": true,
+      "pairedWith": "robynn_brand_source_add",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/auth/connector-gateway-auth.ts",
+          "function": "validateConnectorGatewayAuth",
+          "summary": "membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/brand-operations.ts",
+          "function": "registerBrandOperationTools",
+          "summary": "destructiveHint true"
+        }
+      ]
+    },
+    {
+      "name": "robynn_connected_apps",
+      "titleProposal": "List Connected Apps",
+      "registrar": "src/tools/connectors.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "local catalog + org connection metadata only",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/cli/connectors/capabilities",
+          "file": "src/routes/api/cli/connectors/capabilities/+server.ts",
+          "authHelper": "validateConnectorGatewayAuth (src/lib/server/auth/connector-gateway-auth.ts:42)"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "org-scoped connections",
+      "retrySafe": true,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/auth/connector-gateway-auth.ts",
+          "function": "validateConnectorGatewayAuth",
+          "summary": "membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership"
+        }
+      ]
+    },
+    {
+      "name": "robynn_connected_app_capabilities",
+      "titleProposal": "Get Connected App Capabilities",
+      "registrar": "src/tools/connectors.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "same route filtered by provider_key",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/cli/connectors/capabilities",
+          "file": "src/routes/api/cli/connectors/capabilities/+server.ts",
+          "authHelper": "validateConnectorGatewayAuth (src/lib/server/auth/connector-gateway-auth.ts:42)",
+          "query": [
+            "provider_key"
+          ]
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "org-scoped connections",
+      "retrySafe": true,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/auth/connector-gateway-auth.ts",
+          "function": "validateConnectorGatewayAuth",
+          "summary": "membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership"
+        }
+      ]
+    },
+    {
+      "name": "robynn_query_connected_app",
+      "titleProposal": "Query a Connected App",
+      "registrar": "src/tools/connectors.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": true
+      },
+      "hintEvidence": "curated read actions executed live against third-party apps via Composio/Arcade; incidental policy/log writes",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/connectors/read",
+          "file": "src/routes/api/cli/connectors/read/+server.ts",
+          "authHelper": "validateConnectorGatewayAuth (src/lib/server/auth/connector-gateway-auth.ts:42)"
+        }
+      ],
+      "sideEffects": "connector_policies insert/update (re-adds admin-removed read actions), connector_action_logs insert, connection health update",
+      "charges": "none",
+      "externalAccess": "Composio/Arcade -> HubSpot, GSC, GA, Google Ads, GitHub, ...",
+      "objectOwnership": "connection_id UUID, org-scoped strict",
+      "retrySafe": true,
+      "pairedWith": "robynn_connected_app_capabilities",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/auth/connector-gateway-auth.ts",
+          "function": "validateConnectorGatewayAuth",
+          "summary": "membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership"
+        },
+        {
+          "package": "P07",
+          "file": "src/lib/services/connectors/connector-policy-service.ts",
+          "function": "syncExistingPolicyReads",
+          "summary": "read path silently widens an admin-restricted allow-list"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/connectors.ts",
+          "function": "registerConnectorTools",
+          "summary": "openWorldHint must be true"
+        }
+      ]
+    },
+    {
+      "name": "robynn_connected_app_action",
+      "titleProposal": "Act in a Connected App",
+      "registrar": "src/tools/connector-act.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true,
+        "idempotentHint": false
+      },
+      "hintEvidence": "third-party writes via Composio/Arcade; replay only for completed ok rows",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/connectors/act",
+          "file": "src/routes/api/cli/connectors/act/+server.ts",
+          "authHelper": "validateConnectorGatewayAuth (src/lib/server/auth/connector-gateway-auth.ts:42)"
+        }
+      ],
+      "sideEffects": "connector_action_audit upsert (overwrites prior non-ok rows) + unchecked updates; policy/log/connection writes; third-party writes",
+      "charges": "none",
+      "externalAccess": "Composio/Arcade write execution (idempotency_key forwarded)",
+      "objectOwnership": "connection_id org-scoped but non-strict fallback to default connection (connector-execution-service.ts:383-427); write_confirmed self-asserted",
+      "retrySafe": false,
+      "pairedWith": "robynn_connected_app_capabilities",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/lib/server/auth/connector-gateway-auth.ts",
+          "function": "validateConnectorGatewayAuth",
+          "summary": "membership checked but no scope; owner mapped to collaborator (:83); master key -> admin without membership"
+        },
+        {
+          "package": "P11",
+          "file": "src/routes/api/cli/connectors/act/+server.ts",
+          "function": "POST",
+          "summary": "atomic claim, request digest, no re-run of pending rows, checked updates, strict connection_id"
+        },
+        {
+          "package": "P07",
+          "file": "src/lib/services/connectors/connector-policy-service.ts",
+          "function": "evaluateActionPolicy",
+          "summary": "write gate admits every active member"
+        },
+        {
+          "package": "P11",
+          "file": "mcp:src/robynn-client.ts",
+          "function": "fetchWithRetry",
+          "summary": "automatic 5xx/network retry re-runs this non-idempotent call"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/connector-act.ts",
+          "function": "registerConnectorActionTools",
+          "summary": "description over-claims idempotency"
+        }
+      ]
+    },
+    {
+      "name": "robynn_publish_strapi_draft",
+      "titleProposal": "Save a Strapi Draft",
+      "registrar": "src/tools/strapi.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true,
+        "idempotentHint": false
+      },
+      "hintEvidence": "creates or updates a document in the org's connected Strapi; random source id per call without artifact_id",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/strapi-draft",
+          "file": "src/routes/api/cli/mcp/strapi-draft/+server.ts",
+          "authHelper": "validateApiKey (src/lib/server/auth/validate-api-key.ts:22)"
+        },
+        {
+          "method": "POST",
+          "path": "/api/publish",
+          "file": "src/routes/api/publish/+server.ts",
+          "authHelper": "validateApiKey (src/lib/server/auth/validate-api-key.ts:22) (forwarded bearer)",
+          "hop": "internal"
+        }
+      ],
+      "sideEffects": "publishing_logs, rory_artifacts update, brand_hub_docs metadata merge, audit event; Strapi create/update",
+      "charges": "none",
+      "externalAccess": "Strapi API; PostHog",
+      "objectOwnership": "artifact_id org-checked but any brand_hub_docs type; /api/publish updates at :1035/:1054 lack org filters",
+      "retrySafe": false,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/cli/mcp/strapi-draft/+server.ts",
+          "function": "POST",
+          "summary": "validateApiKey only: no membership, role or scope check"
+        },
+        {
+          "package": "P08",
+          "file": "src/routes/api/publish/+server.ts",
+          "function": "POST",
+          "summary": "org filters on rory_artifacts update and merge_doc_metadata; restrict artifact_id doc types"
+        },
+        {
+          "package": "P11",
+          "file": "src/routes/api/cli/mcp/strapi-draft/+server.ts",
+          "function": "POST",
+          "summary": "stable source id / idempotency key; no client retry"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/strapi.ts",
+          "function": "registerStrapiTools",
+          "summary": "destructiveHint true"
+        }
+      ]
+    },
+    {
+      "name": "robynn_thread_upsert",
+      "titleProposal": "Save a Conversation Thread",
+      "registrar": "src/tools/hermes-bridge.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "hermes_threads upsert on (host_id, session_id) overwrites org/user/title (hermes-bridge.ts:65-69)",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/threads",
+          "file": "src/routes/api/cli/threads/+server.ts",
+          "authHelper": "validateApiKey (src/lib/server/auth/validate-api-key.ts:22)"
+        }
+      ],
+      "sideEffects": "hermes_threads upsert",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "NONE: conflict key lacks organization_id -> cross-org thread takeover",
+      "retrySafe": true,
+      "pairedWith": "robynn_thread_append",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/cli/threads/+server.ts",
+          "function": "POST",
+          "summary": "validateApiKey only: no membership, role or scope check"
+        },
+        {
+          "package": "P09",
+          "file": "src/lib/services/hermes-bridge.ts",
+          "function": "upsertThread",
+          "summary": "tenant-scope the conflict key/constraint; refuse reassigning a foreign thread"
+        }
+      ]
+    },
+    {
+      "name": "robynn_thread_append",
+      "titleProposal": "Append to a Conversation Thread",
+      "registrar": "src/tools/hermes-bridge.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": false
+      },
+      "hintEvidence": "hermes_messages insert, no idempotency key",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/threads/{threadId}/messages",
+          "file": "src/routes/api/cli/threads/[threadId]/messages/+server.ts",
+          "authHelper": "validateApiKey (src/lib/server/auth/validate-api-key.ts:22)"
+        }
+      ],
+      "sideEffects": "hermes_messages insert",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "thread org check only (:28-36); no user ownership; system/assistant roles accepted",
+      "retrySafe": false,
+      "pairedWith": "robynn_thread_upsert",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/cli/threads/[threadId]/messages/+server.ts",
+          "function": "POST",
+          "summary": "validateApiKey only: no membership, role or scope check"
+        },
+        {
+          "package": "P09",
+          "file": "src/routes/api/cli/threads/[threadId]/messages/+server.ts",
+          "function": "POST",
+          "summary": "user-level ownership + role restriction"
+        },
+        {
+          "package": "P11",
+          "file": "src/lib/services/hermes-bridge.ts",
+          "function": "appendMessage",
+          "summary": "idempotency key"
+        }
+      ]
+    },
+    {
+      "name": "robynn_memory_write",
+      "titleProposal": "Save a Memory",
+      "registrar": "src/tools/hermes-bridge.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "argumentPolicy": {
+        "scope": {
+          "session": "reject: unsupported_memory_scope (OAuth)"
+        }
+      },
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "idempotentHint": false
+      },
+      "hintEvidence": "overwrites by key; unified source_key not user-qualified (agent-memory-substrate.ts:51-53,126-143); legacy NULL user_id duplicates",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/memory",
+          "file": "src/routes/api/cli/memory/+server.ts",
+          "authHelper": "validateApiKey (src/lib/server/auth/validate-api-key.ts:22)"
+        }
+      ],
+      "sideEffects": "hermes_memories upsert (legacy) or org_knowledge_documents/chunks upsert+delete (unified)",
+      "charges": "none",
+      "externalAccess": "OpenAI embeddings (processor)",
+      "objectOwnership": "user scope can overwrite another user's memory (unified); session scope unbound",
+      "retrySafe": false,
+      "pairedWith": "robynn_memory_get",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/cli/memory/+server.ts",
+          "function": "POST",
+          "summary": "validateApiKey only: no membership, role or scope check"
+        },
+        {
+          "package": "P09",
+          "file": "src/lib/services/agent-memory-substrate.ts",
+          "function": "writeMemoryUnified",
+          "summary": "user-qualify source_key for user scope"
+        },
+        {
+          "package": "P09",
+          "file": "src/lib/services/hermes-bridge.ts",
+          "function": "writeMemoryLegacy",
+          "summary": "NULLS NOT DISTINCT / correct conflict for org+session"
+        },
+        {
+          "package": "P09",
+          "file": "src/routes/api/cli/memory/+server.ts",
+          "function": "POST",
+          "summary": "reject scope=session for OAuth"
+        },
+        {
+          "package": "P12",
+          "file": "mcp:src/tools/hermes-bridge.ts",
+          "function": "registerHermesBridgeTools",
+          "summary": "destructiveHint true; 'session = scoped to this thread' is false"
+        }
+      ]
+    },
+    {
+      "name": "robynn_memory_get",
+      "titleProposal": "Get a Memory",
+      "registrar": "src/tools/hermes-bridge.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "argumentPolicy": {
+        "scope": {
+          "session": "reject: unsupported_memory_scope (OAuth)"
+        }
+      },
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "GET read",
+      "appRoutes": [
+        {
+          "method": "GET",
+          "path": "/api/cli/memory",
+          "file": "src/routes/api/cli/memory/+server.ts",
+          "authHelper": "validateApiKey (src/lib/server/auth/validate-api-key.ts:22)",
+          "query": [
+            "scope",
+            "key"
+          ]
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none",
+      "externalAccess": "none",
+      "objectOwnership": "org filter; user filter only for scope=user; legacy org/session lookup likely broken (.eq('user_id', null))",
+      "retrySafe": true,
+      "pairedWith": "robynn_memory_write",
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/cli/memory/+server.ts",
+          "function": "GET",
+          "summary": "validateApiKey only: no membership, role or scope check"
+        },
+        {
+          "package": "P09",
+          "file": "src/lib/services/hermes-bridge.ts",
+          "function": "getMemoryLegacy",
+          "summary": ".is(null) for org/session; session scoping"
+        }
+      ]
+    },
+    {
+      "name": "robynn_memory_search",
+      "titleProposal": "Search Memories",
+      "registrar": "src/tools/hermes-bridge.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "argumentPolicy": {
+        "scope": {
+          "session": "reject: unsupported_memory_scope (OAuth)"
+        }
+      },
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "hybrid search, no writes",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/memory/search",
+          "file": "src/routes/api/cli/memory/search/+server.ts",
+          "authHelper": "validateApiKey (src/lib/server/auth/validate-api-key.ts:22)"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none",
+      "externalAccess": "OpenAI query embedding (processor)",
+      "objectOwnership": "legacy: omitted scope returns other users' user-scoped rows; unified: omits caller's own rows",
+      "retrySafe": true,
+      "pairedWith": null,
+      "environmentGate": null,
+      "gaps": [
+        {
+          "package": "P07",
+          "file": "src/routes/api/cli/memory/search/+server.ts",
+          "function": "POST",
+          "summary": "validateApiKey only: no membership, role or scope check"
+        },
+        {
+          "package": "P09",
+          "file": "src/lib/services/hermes-bridge.ts",
+          "function": "searchMemory / searchMemoryLegacy (+ hermes_memory_search RPC)",
+          "summary": "always pass caller userId; only org-visible + caller-private rows"
+        }
+      ]
+    },
+    {
+      "name": "robynn_vault_list",
+      "titleProposal": "List Vault Files",
+      "registrar": "src/tools/vault.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": false,
+        "cli": false
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "R2 list under the org prefix (vault-r2.ts)",
+      "appRoutes": [
+        {
+          "method": "R2",
+          "path": "VAULT binding: list {organizationId}/…",
+          "file": null,
+          "authHelper": "none — props.organizationId only (M src/index.ts:127-130)"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none",
+      "externalAccess": "Cloudflare R2 (internal)",
+      "objectOwnership": "prefix-scoped to props.organizationId; no current grant/membership check",
+      "retrySafe": true,
+      "pairedWith": "robynn_vault_read",
+      "environmentGate": "requires VAULT binding + organizationId in props",
+      "gaps": [
+        {
+          "package": "P10",
+          "file": "mcp:src/tools/vault.ts",
+          "function": "registerVaultTools",
+          "summary": "authorize (introspection) before every R2 operation; fail closed; object-size bounds"
+        }
+      ]
+    },
+    {
+      "name": "robynn_vault_read",
+      "titleProposal": "Read a Vault File",
+      "registrar": "src/tools/vault.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": false,
+        "cli": false
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintEvidence": "R2 get of one object under the org prefix",
+      "appRoutes": [
+        {
+          "method": "R2",
+          "path": "VAULT binding: get {organizationId}/{path}",
+          "file": null,
+          "authHelper": "none — props.organizationId only (M src/index.ts:127-130)"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none",
+      "externalAccess": "Cloudflare R2 (internal)",
+      "objectOwnership": "prefix-scoped to props.organizationId; path checks in vault-r2.ts",
+      "retrySafe": true,
+      "pairedWith": "robynn_vault_list",
+      "environmentGate": "requires VAULT binding + organizationId in props",
+      "gaps": [
+        {
+          "package": "P10",
+          "file": "mcp:src/tools/vault.ts",
+          "function": "registerVaultTools",
+          "summary": "authorize before every R2 operation; fail closed; object-size bounds"
+        }
+      ]
+    }
+  ]
+}
