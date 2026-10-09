@@ -11,7 +11,7 @@ P03 is the only owner of this contract. P10 reuses the same primitives for `POST
 
 | Name | Where | Purpose | Fallback |
 |---|---|---|---|
-| `MCP_INTERNAL_AUTH_SECRET` | Worker secret **and** app env, same value | Worker authentication on internal app calls | **None.** If it is unset, the Worker refuses to call the app (503 at `/callback`, no refresh), and the app rejects every Worker request with `401 invalid_client`. |
+| `MCP_INTERNAL_AUTH_SECRET` | Worker secret **and** app env, same value | Worker authentication on internal app calls | **None.** If it is unset, the Worker never sends an unsigned request: `/callback` returns 503 and no upstream refresh is attempted. The app rejects every Worker request with `401 invalid_client`. **Caveat (P10):** the provider's refresh callback still fails open (contract F12), so a host refresh "succeeds" with stale upstream props until those upstream credentials expire. That is not an authentication bypass, because the app rejects the stale upstream JWT. |
 | `OAUTH_JWT_SECRET` | App env only | Signs upstream access JWTs and Instant Agent run tokens | **None.** If it is unset, issuance throws, validation rejects, and `tryCreateAgentRunToken` returns `null`. |
 | `CONNECTOR_STATE_SECRET` | App only, for connector state | Never used for JWTs or internal auth | Not read by the Worker. Removed from `wrangler.toml`. |
 
@@ -89,7 +89,13 @@ The scope vocabulary depends on `cid`:
 | `robynn-mcp-worker` | `brand:read`, `tools:execute` |
 | `robynn-cli` | the two above plus `cli:session` |
 
-`robynn-cli` is an existing app client that P01's contract did not list. A Worker-issued token can no longer be exchanged for a CLI session.
+`robynn-cli` is an existing app client that P01's contract did not list.
+
+CLI-session minting (`requireCliUser`, `POST /api/cli/auth/exchange`) is an allow-list:
+
+- The `Authorization` header must be exactly `Bearer <credential>`. Anything else is 401 before any lookup, so the guard and `validateApiKey` always see the same credential.
+- Only a user API key or an existing `robynn-cli` JWT that carries the full CLI scope is accepted. A JWT for any other client, including every Worker-issued token whether read-only or not, is 403.
+- A `robynn-cli` JWT may mint a session only for its own organization. A user API key may still select any active membership.
 
 Agent-run tokens use `aud=robynn-api:agent-run`, so neither token type validates as the other.
 
@@ -111,3 +117,18 @@ Agent-run tokens use `aud=robynn-api:agent-run`, so neither token type validates
   - The CLI renews through `/api/cli/auth/refresh`.
   - Instant Agent runs already in flight lose connector authority for at most their TTL.
 - DB-backed refresh tokens are unaffected.
+
+### Pre-deploy checks (release owner, read-only)
+
+1. **Signed target in a deployed app.** Before production, run one signed code exchange and one signed refresh against a Vercel preview or staging deployment. This confirms that the path and query the app sees (`request.url`) equal what the Worker signs (`/api/oauth/token`). The local proof used `vite dev`.
+2. **Stored scopes parse.** Every live refresh row must parse under the strict per-client vocabulary, or those users get `invalid_grant` at their next refresh:
+
+   ```sql
+   SELECT client_id, scope, count(*) FROM oauth_refresh_tokens
+   WHERE NOT revoked AND expires_at > now()
+   GROUP BY client_id, scope;
+   ```
+
+3. **Expect reconnects.** App deploy invalidates every upstream JWT at once. That triggers the pre-existing DO/provider refresh split-brain (contract D6, F13, F18) for all active sessions together, so some users may need to reconnect unless P10 ships alongside.
+4. **Keep the Worker-first window short.** Between the Worker and app deploys, code exchanges lose the token-endpoint rate-limit bypass (`mcpTokenRateLimiter`, 60/h per IP+UA).
+5. **In-flight Instant Agent runs.** Completion webhooks for runs in flight at deploy return 401, because their tokens lack the new `aud`. Those runs finish through the poll and recovery finalization paths.
