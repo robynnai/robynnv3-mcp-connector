@@ -1,0 +1,60 @@
+# Local-only Wrangler configuration for the COS-PLUGIN-001 `plugin-local`
+# environment. Never deploy with this file.
+#
+#   pnpm exec wrangler dev --local \
+#     --config wrangler.local.toml \
+#     --ip 127.0.0.1 --port 8787 \
+#     --env-file <generated mode-600 vars file> \
+#     --persist-to .wrangler/state/cos-plugin-001
+#
+# The workspace script `scripts/plugin-dev-up.sh` runs exactly that after
+# validating every target. Rules enforced by `src/wrangler-local-config.test.ts`:
+#   - same entry point, Durable Object class and migrations as wrangler.toml;
+#   - loopback-only URL vars;
+#   - no routes, custom domains, account IDs or remote bindings;
+#   - no secret values (secrets come from a generated, gitignored env file;
+#     see .dev.vars.example for the names).
+
+name = "robynn-mcp-server-plugin-local"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+# Same flags as production. Verified locally: with `--local`, workerd still
+# reaches the app at http://localhost:5173 under global_fetch_strictly_public.
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+workers_dev = false
+
+[dev]
+ip = "127.0.0.1"
+port = 8787
+local_protocol = "http"
+
+[vars]
+ROBYNN_API_BASE_URL = "http://localhost:5173"
+MCP_PUBLIC_BASE_URL = "http://localhost:8787"
+MCP_SERVER_NAME = "Robynn (plugin-local)"
+MCP_SERVER_VERSION = "0.1.5-plugin-local"
+
+# Local Miniflare emulation only. Production binds OAUTH_KEY and OAUTH_KV to
+# the same namespace, so the local IDs match each other too.
+[[kv_namespaces]]
+binding = "OAUTH_KEY"
+id = "cos-plugin-001-oauth-local"
+
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "cos-plugin-001-oauth-local"
+
+[durable_objects]
+bindings = [
+  { name = "MCP_OBJECT", class_name = "RobynnMCP" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RobynnMCP"]
+
+# Local R2 emulation for the Vault tools. Populate it with synthetic objects
+# only (`wrangler r2 object put --local --persist-to ...`).
+[[r2_buckets]]
+binding = "VAULT"
+bucket_name = "robynn-materialized-plugin-local"

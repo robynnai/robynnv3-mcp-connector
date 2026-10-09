@@ -1,0 +1,16 @@
+# Names only. Never commit values.
+#
+# For the COS-PLUGIN-001 `plugin-local` environment, do not create .dev.vars
+# by hand: run `./scripts/plugin-dev-up.sh` from the workspace root. It
+# generates local-only random values into a gitignored mode-600 file and passes
+# it to `wrangler dev --env-file`. It refuses to start while a .dev.vars file
+# exists here, so production-shaped values cannot leak into the local Worker.
+#
+# For any other non-production use, write the file with mode 0600 from an
+# approved non-production secret store; never reuse production values.
+
+# Shared with the Robynn app; signs Worker -> app internal requests.
+MCP_INTERNAL_AUTH_SECRET=
+
+# CONNECTOR_STATE_SECRET is an app-side secret. It is not read by this Worker
+# (COS-PLUGIN-001 P03) and must not be set here.
