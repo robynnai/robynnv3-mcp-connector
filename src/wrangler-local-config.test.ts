@@ -126,10 +126,9 @@ describe(".dev.vars.example", () => {
     }
   });
 
-  it("covers the Worker's secret env names", () => {
-    expect(assignments).toEqual(
-      expect.arrayContaining(["MCP_INTERNAL_AUTH_SECRET=", "CONNECTOR_STATE_SECRET="]),
-    );
+  it("lists exactly the Worker's secret env names", () => {
+    // CONNECTOR_STATE_SECRET is app-only; the Worker must not receive it.
+    expect(assignments).toEqual(["MCP_INTERNAL_AUTH_SECRET="]);
   });
 
   it("is the only committed dev-vars file", () => {

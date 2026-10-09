@@ -12,6 +12,5 @@
 # Shared with the Robynn app; signs Worker -> app internal requests.
 MCP_INTERNAL_AUTH_SECRET=
 
-# Fresh non-production value, only where connector-state code still needs it.
-# Never a JWT or internal-auth fallback.
-CONNECTOR_STATE_SECRET=
+# CONNECTOR_STATE_SECRET is an app-side secret. It is not read by this Worker
+# (COS-PLUGIN-001 P03) and must not be set here.
