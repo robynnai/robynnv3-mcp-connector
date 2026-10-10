@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { RobynnClient } from "../robynn-client";
 import { REPORT_RESOURCE_URIS } from "../ui/report-app";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 function appendReportLinks(
   summary: string | undefined,
@@ -153,8 +153,14 @@ export function registerWebsiteTools(
     server,
     "robynn_website_audit",
     {
+      ...toolMetadata("Start a Website Audit", {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: false,
+      }),
       description:
-        "Create a Robynn prospect audit that renders on the public designed audit page.",
+        "Start a prospect website audit that renders on a public, link-shareable audit page. Charges Robynn credits up front, and the charge is not refunded if the audit then fails. An external agent crawls the website. Only available to organizations in Robynn's prospecting (robynn-ai) environment. Each call starts and charges a new audit. Poll with robynn_website_audit_status. goals, competitors, and analysis_depth are currently ignored.",
       inputSchema: {
         website_url: z
           .string()
@@ -171,20 +177,15 @@ export function registerWebsiteTools(
         goals: z
           .array(z.string())
           .optional()
-          .describe("Business goals to keep in view during the audit"),
+          .describe("Business goals to keep in view during the audit (currently ignored)"),
         competitors: z
           .array(z.string())
           .optional()
-          .describe("Competitors to emphasize during the website audit"),
+          .describe("Competitors to emphasize during the website audit (currently ignored)"),
         analysis_depth: z
           .enum(["standard", "deep"])
           .optional()
-          .describe("Standard or deeper website audit mode"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: true,
+          .describe("Standard or deeper website audit mode (currently ignored)"),
       },
       _meta: {
         ui: {
@@ -225,17 +226,18 @@ export function registerWebsiteTools(
     server,
     "robynn_website_audit_status",
     {
+      ...toolMetadata("Check Website Audit Status", {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
       description:
-        "Poll a Robynn prospect audit created by robynn_website_audit and return its designed audit page plus artifacts when ready.",
+        "Check a prospect audit started by robynn_website_audit and return its audit page link and artifacts when ready. Polling advances the audit and saves its progress (including an AI extraction step); repeat polls are safe and do not charge. Only available in Robynn's prospecting (robynn-ai) environment.",
       inputSchema: {
         prospect_audit_id: z
           .string()
           .describe("UUID returned by robynn_website_audit"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: true,
       },
       _meta: {
         ui: {
@@ -272,8 +274,14 @@ export function registerWebsiteTools(
     server,
     "robynn_website_audit_v2",
     {
+      ...toolMetadata("Start a Website Audit (v2)", {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: false,
+      }),
       description:
-        "Start a Website Auto-Healer v2 audit for an owned or external site.",
+        "Start a Website Auto-Healer v2 audit for a Website Studio site or a public URL. Reserves Robynn credits, crawls the site's public pages, and saves the scan with its recommendations. A repeat call within 30 minutes may reuse an active scan; otherwise each call starts a new one. Poll with robynn_website_audit_v2_status.",
       inputSchema: {
         website_url: z
           .string()
@@ -282,7 +290,7 @@ export function registerWebsiteTools(
         site_id: z
           .string()
           .optional()
-          .describe("Optional Robynn organization website ID"),
+          .describe("Optional Robynn Website Studio site ID"),
         goal_id: z
           .string()
           .optional()
@@ -295,12 +303,7 @@ export function registerWebsiteTools(
         mode: z
           .enum(["owned", "external"])
           .optional()
-          .describe("Audit mode for owned Robynn sites or external URLs"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: true,
+          .describe("Audit mode for owned Robynn sites or external URLs (currently ignored)"),
       },
       _meta: {
         ui: {
@@ -341,15 +344,16 @@ export function registerWebsiteTools(
     server,
     "robynn_website_audit_v2_status",
     {
-      description:
-        "Poll a Website Auto-Healer v2 audit created by robynn_website_audit_v2.",
-      inputSchema: {
-        scan_id: z.string().describe("Scan ID returned by robynn_website_audit_v2"),
-      },
-      annotations: {
+      ...toolMetadata("Check Website Audit (v2) Status", {
         readOnlyHint: true,
         destructiveHint: false,
-        openWorldHint: true,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
+      description:
+        "Check a Website Auto-Healer v2 scan started by robynn_website_audit_v2. Read-only.",
+      inputSchema: {
+        scan_id: z.string().describe("Scan ID returned by robynn_website_audit_v2"),
       },
       _meta: {
         ui: {
@@ -383,8 +387,14 @@ export function registerWebsiteTools(
     server,
     "robynn_website_optimization_audit",
     {
+      ...toolMetadata("Start a Website Optimization Audit", {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: false,
+      }),
       description:
-        "Start a Website Optimization V3 audit for a website, with a concise prospecting-ready report by default.",
+        "Start a Website Optimization V3 audit, with a concise prospecting-ready report by default. Reserves Robynn credits based on the crawl estimate, crawls the site's public pages, and saves the scan with its recommendations. Each call starts a new scan. Poll with robynn_website_optimization_audit_status.",
       inputSchema: {
         website_url: z.string().describe("Website URL to audit"),
         audit_depth: z
@@ -407,11 +417,6 @@ export function registerWebsiteTools(
           .string()
           .optional()
           .describe("Optional sales or prospecting goal to emphasize in the audit"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: true,
       },
       _meta: {
         ui: {
@@ -458,17 +463,18 @@ export function registerWebsiteTools(
     server,
     "robynn_website_optimization_audit_status",
     {
+      ...toolMetadata("Check Website Optimization Audit Status", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
       description:
-        "Poll a Website Optimization V3 audit run created by robynn_website_optimization_audit.",
+        "Check a Website Optimization V3 audit started by robynn_website_optimization_audit. Read-only.",
       inputSchema: {
         run_id: z
           .string()
           .describe("Run ID returned by robynn_website_optimization_audit"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: true,
       },
       _meta: {
         ui: {
@@ -504,8 +510,14 @@ export function registerWebsiteTools(
     server,
     "robynn_website_audit_orchestrator",
     {
+      ...toolMetadata("Start a Multi-Agent Website Audit", {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: false,
+      }),
       description:
-        "Start a read-only multi-agent website audit orchestrator run that returns full-site and page-level recommendations as structured JSON.",
+        "Start a multi-agent website audit that returns site- and page-level recommendations as structured JSON. Reserves Robynn credits, crawls the site's public pages with external data sources, and saves the scan. Full-depth scans need a confirmed estimate; estimate_only returns the estimate without starting or charging. Each call starts a new scan. Poll with robynn_website_audit_orchestrator_status.",
       inputSchema: {
         website_url: z
           .string()
@@ -569,11 +581,6 @@ export function registerWebsiteTools(
           .optional()
           .describe("Optional page cap"),
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: true,
-      },
       _meta: {
         ui: {
           resourceUri: REPORT_RESOURCE_URIS.websiteAudit,
@@ -603,8 +610,14 @@ export function registerWebsiteTools(
     server,
     "robynn_website_audit_orchestrator_status",
     {
+      ...toolMetadata("Check Multi-Agent Website Audit Status", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
       description:
-        "Poll a Website Audit Orchestrator run and return structured JSON with paginated site/page recommendations.",
+        "Check a multi-agent website audit started by robynn_website_audit_orchestrator and return paginated JSON site and page recommendations. Read-only.",
       inputSchema: {
         run_id: z.string().describe("Run ID returned by robynn_website_audit_orchestrator"),
         page_limit: z
@@ -628,11 +641,6 @@ export function registerWebsiteTools(
           .array(websiteAuditOrchestratorSectionSchema)
           .optional()
           .describe("Optional status sections to include"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: true,
       },
       _meta: {
         ui: {
@@ -666,8 +674,13 @@ export function registerWebsiteTools(
     server,
     "robynn_website_strategy",
     {
+      ...toolMetadata("Build a Website Strategy", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+      }),
       description:
-        "Turn website findings into a prioritized improvement strategy tied to goals, pages, and measurement.",
+        "Turn website findings into a prioritized improvement strategy tied to goals, pages, and measurement. Runs an AI agent that crawls the website. Nothing is saved and no Robynn credits are charged, but each call runs the full analysis again.",
       inputSchema: {
         website_url: z
           .string()
@@ -685,11 +698,6 @@ export function registerWebsiteTools(
           .array(z.string())
           .optional()
           .describe("Pages or templates to prioritize first"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: true,
       },
       _meta: {
         ui: {

@@ -11,7 +11,7 @@ describe("registerCapabilityTools", () => {
   beforeEach(() => {
     registered = {};
     server = {
-      tool: (name: string, _desc: string, _anno: any, handler: any) => {
+      registerTool: (name: string, _config: any, handler: any) => {
         registered[name] = handler;
       },
     } as unknown as McpServer;

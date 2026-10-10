@@ -8,11 +8,11 @@ When the user provides a tool name and description, create it following these st
 
 1. **Create/edit file** in `src/tools/` — one file per tool or group of related tools
 2. **Zod param schemas** — every parameter uses `z.string().describe("...")` (or appropriate type)
-3. **Safety annotations** — every tool must have `readOnlyHint`, `destructiveHint`, and `openWorldHint`
+3. **Title + safety annotations** — spread `...toolMetadata("Title", { readOnlyHint, destructiveHint, openWorldHint })` from `./util` into the config (add `idempotentHint` only with evidence), describe side effects, charges, external access and the poller in the description, and add the tool to `contracts/tool-route-map.json` (see `docs/plugin-v1/TOOL_CONTRACT.md`)
 4. **Return format** — always return both `content` (text for LLM) and `structuredContent` (cast to `Record<string, unknown>`)
 5. **Error handling** — wrap handler in try/catch, return `isError: true` on failure
 6. **Choose tool type**:
-   - Read-only / CMO tools: use `server.tool()`
+   - Read-only / CMO tools: use `server.registerTool(name, { ...toolMetadata(...), description, inputSchema }, handler)`
    - Intelligence tools with HTML reports: use `registerAppTool()` from `@modelcontextprotocol/ext-apps/server`
 7. **Register** — import and call `registerXTools(server, client)` in `src/index.ts` `init()`
 8. **Create test** — add a matching `.test.ts` file next to the tool file

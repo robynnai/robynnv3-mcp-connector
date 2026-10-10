@@ -9,15 +9,14 @@ function createServerHarness() {
   const handlers = new Map<string, Handler>();
   const toolMetadata = new Map<string, { description: string }>();
 
-  const tool = vi.fn((...args: unknown[]) => {
-    const name = args[0] as string;
-    const description = args[1] as string;
-    const handler = args[args.length - 1] as Handler;
-    handlers.set(name, handler);
-    toolMetadata.set(name, { description });
-  });
+  const registerTool = vi.fn(
+    (name: string, config: { description: string }, handler: Handler) => {
+      handlers.set(name, handler);
+      toolMetadata.set(name, { description: config.description });
+    },
+  );
 
-  const server = { tool } as never;
+  const server = { registerTool } as never;
   return { server, handlers, toolMetadata };
 }
 

@@ -104,16 +104,23 @@ Poll timeout is 280s to stay under Claude's 300s limit.
 
 ## Tool Implementation Patterns
 
-### Standard tools (`server.tool`)
+### Standard tools (`server.registerTool`)
 
-Used by read-only and CMO-based tools:
+Used by read-only and CMO-based tools (`server.tool()` is deprecated in the SDK):
 
 ```typescript
-server.tool(
+server.registerTool(
   "tool_name",
-  "Description for the LLM",
-  { param: z.string().describe("...") },
-  { readOnlyHint: true, destructiveHint: false },
+  {
+    ...toolMetadata("Tool Title", {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+      idempotentHint: true, // only with evidence
+    }),
+    description: "What it does, plus side effects, charges, external access and its poller",
+    inputSchema: { param: z.string().describe("...") },
+  },
   async ({ param }) => {
     const result = await client.someMethod(param);
     return {
@@ -135,7 +142,7 @@ registerAppTool(server, {
   name: "tool_name",
   description: "Description for the LLM",
   inputSchema: { param: z.string().describe("...") },
-  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+  ...toolMetadata("Tool Title", { readOnlyHint: true, destructiveHint: false, openWorldHint: true }),
   outputResource: { uri: REPORT_RESOURCE_URIS.reportName, ... },
   execute: async ({ param }) => { ... },
 });
@@ -146,7 +153,7 @@ registerAppTool(server, {
 - **Always return both `content` and `structuredContent`** — text fallback for LLM + structured data for UI
 - **Cast `structuredContent`** to `Record<string, unknown>` (SDK type requirement)
 - **Wrap in try/catch** — return `isError: true` on failure
-- **Safety annotations required** — `readOnlyHint`, `destructiveHint`, `openWorldHint` on every tool
+- **Title and safety annotations required** — `toolMetadata(title, hints)` from `src/tools/util.ts` sets the title (top-level and `annotations.title`) and explicit `readOnlyHint`, `destructiveHint`, `openWorldHint` on every tool. Hints follow actual backend behaviour, not the HTTP method; keep `contracts/tool-route-map.json` in lock-step (`src/__tests__/catalog-baseline.test.ts` enforces titles, hints and input-schema digests). See `docs/plugin-v1/TOOL_CONTRACT.md`.
 - **App tools link a report resource** — `outputResource.uri` points to a `ui://reports/*.html` resource registered in `report-app.ts`
 
 ## Tools Reference

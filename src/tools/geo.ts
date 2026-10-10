@@ -3,15 +3,20 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
 import { REPORT_RESOURCE_URIS } from "../ui/report-app";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 export function registerGeoTools(server: McpServer, client: RobynnClient) {
   registerAppTool(
     server,
     "robynn_geo_analysis",
     {
+      ...toolMetadata("Analyze AI Search Visibility (GEO)", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+      }),
       description:
-        "Measure your brand's visibility across AI answer engines for a category or set of strategic questions. Returns citation breakdowns, query gaps, and recommended follow-up actions.",
+        "Measure how visible your brand is in AI answer engines for a category or a set of questions; returns citation breakdowns, query gaps, and recommended follow-up actions. Sends your questions to external AI engines (ChatGPT, Claude, Gemini, and Perplexity web search). Nothing is saved and no Robynn credits are charged, but each call runs a full multi-engine analysis. analysis_depth is currently ignored.",
       inputSchema: {
         company_name: z.string().describe("Your company or brand name"),
         category: z
@@ -29,12 +34,7 @@ export function registerGeoTools(server: McpServer, client: RobynnClient) {
         analysis_depth: z
           .enum(["standard", "deep"])
           .optional()
-          .describe("Standard or deeper analysis depth"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: false,
+          .describe("Standard or deeper analysis depth (currently ignored)"),
       },
       _meta: {
         ui: {

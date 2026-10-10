@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { RobynnClient } from "../robynn-client";
-import { toErrorResult, toSuccessResult } from "./util";
+import { isSafePathId, toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 const PLATFORM_ENUM = z.enum([
   "cli",
@@ -26,17 +26,25 @@ const SCOPE_ENUM = z.enum(["org", "user", "session"]);
  * Rory UI.
  */
 export function registerHermesBridgeTools(server: McpServer, client: RobynnClient) {
-  server.tool(
+  server.registerTool(
     "robynn_thread_upsert",
-    "Create or update a Hermes-originated thread in Robynn. Call this once per conversation (and re-call if the title improves). Returns { id } — keep it and pass to robynn_thread_append.",
     {
-      hermes_host_id: z.string().describe("Stable identifier for the Hermes host (hostname, Fly app id, etc.)"),
-      hermes_session_id: z.string().describe("Stable identifier for the current Hermes session."),
-      platform: PLATFORM_ENUM.describe("Originating surface."),
-      platform_user: z.string().optional().describe("Platform-native handle, e.g. '@madhukar'."),
-      title: z.string().optional().describe("Short human-readable title for the thread."),
+      ...toolMetadata("Save a Conversation Thread", {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
+      description:
+        "Create or update a Robynn thread for an external agent (Hermes) conversation so teammates can see it in Robynn. Keyed by hermes_host_id + hermes_session_id: calling again with the same ids updates that thread's title and owner. Call once per conversation (again if the title improves). Returns { id } — keep it and pass it to robynn_thread_append.",
+      inputSchema: {
+        hermes_host_id: z.string().describe("Stable identifier for the Hermes host (hostname, Fly app id, etc.)"),
+        hermes_session_id: z.string().describe("Stable identifier for the current Hermes session."),
+        platform: PLATFORM_ENUM.describe("Originating surface."),
+        platform_user: z.string().optional().describe("Platform-native handle, e.g. '@madhukar'."),
+        title: z.string().optional().describe("Short human-readable title for the thread."),
+      },
     },
-    { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     async (args) => {
       try {
         const result = await client.upsertHermesThread(args);
@@ -49,21 +57,33 @@ export function registerHermesBridgeTools(server: McpServer, client: RobynnClien
     },
   );
 
-  server.tool(
+  server.registerTool(
     "robynn_thread_append",
-    "Append a single message turn to a Hermes thread so teammates see it in Rory UI. Call after each turn (user, assistant, or tool).",
     {
-      thread_id: z.string().describe("Thread id returned by robynn_thread_upsert."),
-      role: ROLE_ENUM.describe("Message origin."),
-      content: z.string().describe("Message body. Plain text."),
-      tool_calls: z.array(z.record(z.unknown())).optional().describe("Optional raw tool calls made during this turn."),
-      tool_name: z.string().optional().describe("If role=tool, the tool name."),
-      tokens_in: z.number().int().optional(),
-      tokens_out: z.number().int().optional(),
-      latency_ms: z.number().int().optional(),
+      ...toolMetadata("Append to a Conversation Thread", {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: false,
+      }),
+      description:
+        "Append one message turn (user, assistant, tool, or system) to a thread from robynn_thread_upsert so teammates see it in Robynn. Call after each turn; every call adds a new message, so retries create duplicates.",
+      inputSchema: {
+        thread_id: z.string().describe("Thread id returned by robynn_thread_upsert."),
+        role: ROLE_ENUM.describe("Message origin."),
+        content: z.string().describe("Message body. Plain text."),
+        tool_calls: z.array(z.record(z.unknown())).optional().describe("Optional raw tool calls made during this turn."),
+        tool_name: z.string().optional().describe("If role=tool, the tool name."),
+        tokens_in: z.number().int().optional().describe("Optional input token count for this turn."),
+        tokens_out: z.number().int().optional().describe("Optional output token count for this turn."),
+        latency_ms: z.number().int().optional().describe("Optional turn latency in milliseconds."),
+      },
     },
-    { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     async (args) => {
+      if (!isSafePathId(args.thread_id)) {
+        return toErrorResult("Invalid thread_id.");
+      }
+
       try {
         const { thread_id, ...rest } = args;
         const result = await client.appendHermesMessage(thread_id, rest);
@@ -76,15 +96,23 @@ export function registerHermesBridgeTools(server: McpServer, client: RobynnClien
     },
   );
 
-  server.tool(
+  server.registerTool(
     "robynn_memory_write",
-    "Persist a durable memory to Robynn (org/user/session scope). Use for facts the agent should recall across sessions and hosts. Do NOT use for operating rules.",
     {
-      scope: SCOPE_ENUM.describe("org = visible to all org members; user = tied to caller; session = scoped to this thread."),
-      key: z.string().describe("Stable memory key, e.g. 'h2_theme', 'favourite_voice_example'."),
-      value: z.string().describe("Memory body (plain text)."),
+      ...toolMetadata("Save a Memory", {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: false,
+        idempotentHint: false,
+      }),
+      description:
+        "Save a durable memory to Robynn under scope + key for recall across sessions and hosts. Overwrites any existing memory with the same scope and key. Do NOT use for operating rules.",
+      inputSchema: {
+        scope: SCOPE_ENUM.describe("org = visible to all org members; user = tied to the caller; session = not isolated per conversation and unsupported for plugin (OAuth) connections."),
+        key: z.string().describe("Stable memory key, e.g. 'h2_theme', 'favourite_voice_example'."),
+        value: z.string().describe("Memory body (plain text)."),
+      },
     },
-    { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     async (args) => {
       try {
         const result = await client.writeHermesMemory(args);
@@ -97,14 +125,22 @@ export function registerHermesBridgeTools(server: McpServer, client: RobynnClien
     },
   );
 
-  server.tool(
+  server.registerTool(
     "robynn_memory_get",
-    "Fetch a durable memory by scope + key. Returns null if no such memory exists.",
     {
-      scope: SCOPE_ENUM,
-      key: z.string(),
+      ...toolMetadata("Get a Memory", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
+      description:
+        "Fetch a durable memory by scope + key. Returns null if no such memory exists. Read-only.",
+      inputSchema: {
+        scope: SCOPE_ENUM.describe("Scope the memory was saved under: org, user, or session (session is unsupported for plugin connections)."),
+        key: z.string().describe("Memory key used when it was saved."),
+      },
     },
-    { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     async ({ scope, key }) => {
       try {
         const result = await client.getHermesMemory(scope, key);
@@ -117,15 +153,23 @@ export function registerHermesBridgeTools(server: McpServer, client: RobynnClien
     },
   );
 
-  server.tool(
+  server.registerTool(
     "robynn_memory_search",
-    "Find Robynn memories by intent using hybrid vector + keyword search. Use when you don't know the exact memory key — e.g. 'what did we decide about Q2 go-to-market?'. Returns up to `limit` ranked rows.",
     {
-      query: z.string().describe("Natural-language search query."),
-      scope: SCOPE_ENUM.optional().describe("Restrict to org|user|session scope; omit to search all scopes."),
-      limit: z.number().int().min(1).max(50).optional().describe("Max results (default 10, cap 50)."),
+      ...toolMetadata("Search Memories", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
+      description:
+        "Find Robynn memories by intent using hybrid vector + keyword search. Use when you don't know the exact memory key — e.g. 'what did we decide about Q2 go-to-market?'. Returns up to `limit` ranked rows. Read-only.",
+      inputSchema: {
+        query: z.string().describe("Natural-language search query."),
+        scope: SCOPE_ENUM.optional().describe("Restrict to org|user|session scope (session is unsupported for plugin connections); omit to search all scopes."),
+        limit: z.number().int().min(1).max(50).optional().describe("Max results (default 10, cap 50)."),
+      },
     },
-    { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     async (args) => {
       try {
         const result = await client.searchHermesMemory(args);

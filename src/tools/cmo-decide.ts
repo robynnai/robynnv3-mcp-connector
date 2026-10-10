@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { ResponseBlock } from "../types";
 import type { RobynnClient } from "../robynn-client";
 import { buildCmoAguiTextFallback } from "./cmo-text";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 function extractAguiFields(data: Record<string, unknown>) {
   const responseBlocks = Array.isArray(data.response_blocks)
@@ -30,17 +30,25 @@ function buildPendingText(threadId: string | undefined, runId: string | undefine
 }
 
 export function registerCmoDecideTools(server: McpServer, client: RobynnClient) {
-  server.tool(
+  server.registerTool(
     "robynn_cmo_decide",
-    "Continue a CMO clarify turn by selecting an option from a decision_card returned by robynn_cmo_agent or robynn_run_status.",
     {
-      thread_id: z.string().describe("The conversation thread_id from the prior CMO response"),
-      run_id: z.string().describe("The run_id from the prior CMO response that presented the decision_card"),
-      decision_id: z.string().describe("The decision_id from the decision_card block"),
-      option_id: z.string().describe("The option id selected from the decision_card"),
-      note: z.string().optional().describe("Optional free-text note to accompany the selection"),
+      ...toolMetadata("Answer a CMO Decision", {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      }),
+      description:
+        "Continue a CMO clarify turn by selecting an option from a decision_card returned by robynn_cmo_agent or robynn_run_status. Records the choice and starts a continuation run that uses Robynn credits and may use your organization's connected apps; repeating the same selection does not start a second run.",
+      inputSchema: {
+        thread_id: z.string().describe("The conversation thread_id from the prior CMO response"),
+        run_id: z.string().describe("The run_id from the prior CMO response that presented the decision_card"),
+        decision_id: z.string().describe("The decision_id from the decision_card block"),
+        option_id: z.string().describe("The option id selected from the decision_card"),
+        note: z.string().optional().describe("Optional free-text note to accompany the selection"),
+      },
     },
-    { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     async ({ thread_id, run_id, decision_id, option_id, note }) => {
       try {
         const result = await client.cmoDecide({
