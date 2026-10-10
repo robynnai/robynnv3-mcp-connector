@@ -1308,7 +1308,9 @@ describe("RobynnClient retry logic", () => {
     });
 
     const client = new RobynnClient("https://robynn.test", "tok");
-    await expect(client.getStatus()).rejects.toThrow("fetch failed");
+    await expect(client.getStatus()).rejects.toThrow(
+      "The Robynn API could not be reached.",
+    );
     expect(callCount).toBe(2);
   });
 });
