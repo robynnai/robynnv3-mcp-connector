@@ -72,3 +72,13 @@ P13 (Beads `robynn_mcp_server-b1o`, branch `plugin-v1/p13-catalog-contract`, sta
 - **Behaviour change:** `VaultR2` hides and refuses `sources/agent-memory/user-…` and `session-…` paths (`VAULT_HIDES_PRIVATE_MEMORY_PATHS`, a one-line flip).
 - **Merge note:** P13's catalog harness now activates the DO with P10-shaped (authVersion 2) props and a preflight stamp. Props without `organizationId` are refused by the session binding; `contracts/mcp-tools.json` was regenerated (P10 instructions and the fallback tool).
 - **Full handoff:** `cos-share/reports/plugin/P16-handoff.md`.
+
+## COS-PLUGIN-001 P17: tool and backend integration (2026-10-10)
+
+- **Branch:** `plugin-v1/p17-tool-integration`, stacked on `plugin-v1/p16-oauth-integration`. Pairs with robynnv3 `plugin-v1/p17-tool-integration`. Beads `robynn_mcp_server-af8`.
+- **Live suite:** `src/__tests__/plugin-local/tool-backend.live.test.ts` runs all 48 tools through real OAuth, the real Worker, the real app and local Supabase, for success, error and permission denied. The only stand-in is `backend-fixture.ts` (fake LangGraph, Composio, Strapi and an egress proxy, all on loopback). How to run and the per-tool matrix: `docs/plugin-v1/TOOL_BACKEND_INTEGRATION_TESTS.md`.
+- **Behaviour changes:**
+  - The four brand-book † tools are now `brand:read` and read-only (`BRAND_BOOK_READS_PERSIST_COMPLETENESS = false`, map flipped). P07 had already removed the write app-side.
+  - `robynn_status` adds `connection: { organization, permissions, can_execute }` from the preflight stamp (`src/authorization/preflight-stamp.ts`, which also feeds the Vault gate).
+- **Test hardening:** `PLUGIN_LOCAL_LIVE=1` never skips silently (`PLUGIN_LOCAL_SKIP=vault` to opt out); per-tool error canaries; `catalog-baseline` denies all network.
+- **Full handoff:** `cos-share/reports/plugin/P17-handoff.md`.
