@@ -153,7 +153,7 @@
     }
   ],
   "server": {
-    "instructions": null,
+    "instructions": "Robynn tools act on the one organization chosen when this connection was made.\nRead-only connections can use tools that read existing Robynn data. Tools that save, generate, charge Robynn credits or act on connected apps need execution access; if a tool reports insufficient_scope, ask the user to reconnect Robynn and allow execution.\nLong-running tools return an id: poll with the status tool their description names instead of starting the work again.\nIf a tool reports authorization_expired or authorization_unavailable, retry once; if it persists, ask the user to reconnect Robynn.",
     "name": "Robynn"
   },
   "surfaces": {
@@ -2624,16 +2624,23 @@
   "unauthenticatedFallback": {
     "tools": [
       {
-        "description": "Check Robynn connection status.",
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true,
+          "title": "Check Robynn Connection"
+        },
+        "description": "Check the Robynn connection. This session is not authenticated; reconnect Robynn to use its tools.",
         "execution": {
           "taskSupport": "forbidden"
         },
         "inputSchema": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
           "properties": {},
           "type": "object"
         },
-        "name": "robynn_status"
+        "name": "robynn_status",
+        "title": "Check Robynn Connection"
       }
     ]
   }

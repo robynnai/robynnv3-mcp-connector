@@ -27,6 +27,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { vi } from "vitest";
+import { PREFLIGHT_HEADER } from "../authorization/session-binding";
 
 export const APP_BASE_URL = "http://app.robynn.test";
 export const MCP_PUBLIC_BASE_URL = "http://mcp.robynn.test";
@@ -34,6 +35,9 @@ export const TEST_ORG_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 export const TEST_USER_ID = "11111111-1111-4111-8111-111111111111";
 /** Synthetic bearer; never a real credential. */
 export const TEST_ACCESS_TOKEN = "p13-synthetic-access-token";
+/** Synthetic app grant (JWT `gid`) and provider grant ids for the P10 session binding. */
+export const TEST_APP_GRANT_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+export const TEST_HOST_GRANT_ID = "p13-host-grant";
 
 // ---------------------------------------------------------------------------
 // Fake app (stubbed global fetch)
@@ -168,6 +172,42 @@ export interface WorkerSessionOptions {
   /** Props accessToken; without it init() registers only the unauthenticated fallback. */
   accessToken?: string | null;
   bucket?: MemoryR2Bucket;
+  /**
+   * Stamp every incoming message with the Worker preflight's
+   * `x-robynn-preflight` header for this grant (P10), as `withMcpPreflight`
+   * does after a successful introspection. Default true. The real preflight
+   * path (provider → preflight → DO) is proven in
+   * `worker-session-authorization.test.ts` and P16's `oauth-chain` suites.
+   */
+  preflightStamp?: boolean;
+}
+
+/** Every tool name a stamp may authorize (the Vault gate checks membership). */
+const STAMPED_TOOLS = ["robynn_vault_list", "robynn_vault_read"];
+
+/**
+ * Adds the preflight stamp to each message the server transport receives, the
+ * way the stateless handler forwards `requestInfo.headers` to the session.
+ */
+function stampPreflight(transport: Transport) {
+  let handler: Transport["onmessage"];
+  Object.defineProperty(transport, "onmessage", {
+    configurable: true,
+    get: () => handler,
+    set: (next: Transport["onmessage"]) => {
+      handler = next
+        ? (message, extra) =>
+            next(message, {
+              ...extra,
+              requestInfo: {
+                headers: {
+                  [PREFLIGHT_HEADER]: JSON.stringify({ appGrantId: TEST_APP_GRANT_ID, tools: STAMPED_TOOLS }),
+                },
+              },
+            })
+        : next;
+    },
+  });
 }
 
 export interface McpSession {
@@ -186,11 +226,21 @@ export async function startWorkerSession(options: WorkerSessionOptions = {}) {
     MCP_SERVER_VERSION: "test",
     ...(options.vault === false ? {} : { VAULT: bucket }),
   };
-  const props: Record<string, unknown> = { userId: TEST_USER_ID };
+  // Hardened (authVersion 2) props as the P06 /callback and P10 preflight
+  // produce them; without them init() registers only the fallback tool.
+  const props: Record<string, unknown> = {
+    userId: TEST_USER_ID,
+    appGrantId: TEST_APP_GRANT_ID,
+    hostGrantId: TEST_HOST_GRANT_ID,
+    credentialVersion: 1,
+    scopes: ["brand:read", "tools:execute"],
+    authVersion: 2,
+  };
   if (options.organizationId !== null) props.organizationId = options.organizationId ?? TEST_ORG_ID;
   if (options.accessToken !== null) props.accessToken = options.accessToken ?? TEST_ACCESS_TOKEN;
 
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  if (options.preflightStamp !== false) stampPreflight(serverTransport);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const agent = new RobynnMCP(ctx as never, env as never) as any;
   // The only substitution: the runtime transport (WebSocket bridge) → in-memory pair.

@@ -172,15 +172,22 @@ describe("P13 catalog through the real RobynnMCP and CLI registration paths", ()
     await session.close();
   });
 
-  it("Worker without Vault: 46 tools when VAULT is unbound and when props carry no organizationId", async () => {
+  it("Worker without Vault: 46 tools when VAULT is unbound", async () => {
     const expected = MAPPED_TOOLS.filter((name) => !VAULT_TOOLS.includes(name));
-    for (const options of [{ vault: false }, { organizationId: null }]) {
-      const session = await workerSession(undefined, options);
-      const { tools } = await session.client.listTools();
-      expect(tools.map((t) => t.name).sort(), JSON.stringify(options)).toEqual(expected.sort());
-      await session.close();
-    }
+    const session = await workerSession(undefined, { vault: false });
+    const { tools } = await session.client.listTools();
+    expect(tools.map((t) => t.name).sort()).toEqual(expected.sort());
+    await session.close();
     expect(routeMap.counts.workerWithoutVault).toBe(46);
+  });
+
+  it("props without organizationId are refused by the P10 session binding: only the fallback robynn_status", async () => {
+    // P10: a session binds {hostGrantId, userId, organizationId, appGrantId};
+    // incomplete props are never adopted, so no app-backed or Vault tool registers.
+    const session = await workerSession(undefined, { organizationId: null });
+    const { tools } = await session.client.listTools();
+    expect(tools.map((t) => t.name)).toEqual(["robynn_status"]);
+    await session.close();
   });
 
   it("unauthenticated session (no access token): only the fallback robynn_status, which fails without calling the app", async () => {
