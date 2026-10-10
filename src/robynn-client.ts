@@ -63,9 +63,29 @@ import type {
   StrapiDraftPublishResult,
 } from './types';
 
+import { errorKind, redactLogString, safeLog } from './safe-log';
+
 const READ_TIMEOUT_MS = 10_000;
 const POLL_TIMEOUT_MS = 280_000; // Under Claude's 300s timeout
 const POLL_INTERVAL_MS = 2_000;
+const RETRY_DELAY_MS = 1_000;
+
+/**
+ * Whether an app operation may be sent again automatically after a 5xx or a
+ * network failure (COS-PLUGIN-001 P11, plan §5 "Unsafe automatic retry of
+ * writes").
+ *
+ * A failed response does not prove the app did nothing: it may already have
+ * charged credits, started a run or written to a connected app. Only
+ * operations that `contracts/tool-route-map.json` marks `retrySafe: true` are
+ * retried; everything else, including every operation added later, defaults
+ * to `NO_RETRY`. The HTTP method is not evidence either way (several GETs
+ * persist state). `robynn-client.retry.test.ts` checks every call against the
+ * map.
+ */
+export type RetryPolicy = 'retry_safe' | 'no_retry';
+const RETRY_SAFE: RetryPolicy = 'retry_safe';
+const NO_RETRY: RetryPolicy = 'no_retry';
 
 /**
  * HTTP client for the Robynn API (robynn.ai).
@@ -74,6 +94,159 @@ const POLL_INTERVAL_MS = 2_000;
 export interface RobynnClientOptions {
   refreshAccessToken?: () => Promise<string | null | undefined>;
   authLogContext?: string;
+  /** Delay before the single automatic retry of a retry-safe operation. */
+  retryDelayMs?: number;
+}
+
+const SAFE_CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
+const MAX_DETAIL_LENGTH = 160;
+
+const STATUS_FALLBACK_DETAIL: Record<number, string> = {
+  400: 'The request was rejected.',
+  401: 'Authorization expired or was revoked. Reconnect Robynn.',
+  402: 'Not enough credits for this action.',
+  403: 'This action is not permitted for this connection.',
+  404: 'Not found.',
+  409: 'The request conflicts with an earlier request.',
+  413: 'The request is too large.',
+  422: 'The request was rejected.',
+  429: 'Too many requests. Try again later.',
+};
+
+/**
+ * Error thrown for every failed Robynn API call.
+ *
+ * The message is safe to show to the model: it carries the HTTP status, the
+ * app's machine-readable `code` when it has one, and at most a short,
+ * redacted human message from a JSON error body. Raw response bodies, request
+ * URLs, query strings and tokens never reach it (plan §5 "OAuth codes and
+ * upstream errors can reach logs/model errors").
+ */
+export class RobynnApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | null,
+    detail: string,
+    readonly retryable = false,
+    readonly requiredScope: string | null = null,
+  ) {
+    super(
+      status > 0
+        ? `API error ${status}${code ? ` (${code})` : ''}: ${detail}`
+        : detail,
+    );
+    this.name = 'RobynnApiError';
+  }
+}
+
+/**
+ * Upstream 401 with no refresh hook: the hosted Worker never refreshes inside
+ * a session (P10); the host's own refresh renews both token layers. The
+ * message is fixed and never echoes the upstream body. Names and message match
+ * P10 (`plugin-v1/p10-worker-session-vault`) so the two branches converge.
+ */
+export const AUTHORIZATION_EXPIRED_MESSAGE =
+  "authorization_expired: Robynn did not accept this connection's current credentials. Retry the request; if it keeps failing, reconnect Robynn.";
+
+export class UpstreamAuthorizationExpiredError extends RobynnApiError {
+  constructor(
+    /** The app's own 401 code (e.g. `grant_revoked`), kept for transports that map it. */
+    readonly upstreamCode: string | null = null,
+  ) {
+    super(401, 'authorization_expired', AUTHORIZATION_EXPIRED_MESSAGE, true);
+    this.name = 'UpstreamAuthorizationExpiredError';
+    this.message = AUTHORIZATION_EXPIRED_MESSAGE;
+  }
+}
+
+const MAX_RUN_FAILURE_LENGTH = 200;
+
+/**
+ * A polled run ended failed or cancelled. pollRun rejects with this so every
+ * caller (starter tools, CLI) reports an error, not a successful result
+ * (P11 review B3). The reason is the app's short summary, re-scrubbed here.
+ */
+export class RobynnRunFailedError extends RobynnApiError {
+  constructor(
+    readonly runId: string,
+    readonly cancelled: boolean,
+    reason: string | undefined,
+  ) {
+    const fallback = cancelled ? 'Run was cancelled.' : 'Run failed.';
+    const detail = redactLogString(reason?.trim() || fallback)
+      .slice(0, MAX_RUN_FAILURE_LENGTH)
+      // Callers detect a poll timeout by this phrase; a failure must never
+      // be mistaken for "still running".
+      .replace(/run timed out/gi, 'run hit a timeout');
+    super(0, cancelled ? 'run_cancelled' : 'run_failed', detail, false);
+    this.name = 'RobynnRunFailedError';
+  }
+}
+
+function pickString(record: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+/** Build a model-safe error from an upstream error response body. */
+function toApiError(status: number, bodyText: string): RobynnApiError {
+  let record: Record<string, unknown> | null = null;
+  try {
+    const parsed: unknown = JSON.parse(bodyText);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      record = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Not JSON (HTML error page, plain text): never echoed.
+  }
+
+  const rawCode = record ? pickString(record, 'code', 'error_code') : null;
+  const code = rawCode && SAFE_CODE_PATTERN.test(rawCode) ? rawCode : null;
+  const rawScope = record ? pickString(record, 'required_scope') : null;
+  const requiredScope =
+    rawScope && /^[a-z]+:[a-z]+$/.test(rawScope) ? rawScope : null;
+  const rawMessage = record ? pickString(record, 'message', 'error') : null;
+  const message =
+    rawMessage && status < 500
+      ? redactLogString(rawMessage).slice(0, MAX_DETAIL_LENGTH)
+      : null;
+  const detail =
+    message ??
+    STATUS_FALLBACK_DETAIL[status] ??
+    (status >= 500
+      ? 'The Robynn service failed to complete the request.'
+      : 'The request failed.');
+  const retryable = record?.retryable === true || status === 429;
+
+  return new RobynnApiError(status, code, detail, retryable, requiredScope);
+}
+
+/**
+ * Encode a caller-supplied id as exactly one path segment. `encodeURIComponent`
+ * leaves `.` and `..` intact, and URL parsing would resolve them as dot
+ * segments, so they are refused outright (no request is sent).
+ */
+export function pathSegment(id: string): string {
+  if (typeof id !== 'string' || id === '' || id === '.' || id === '..') {
+    throw new RobynnApiError(0, 'invalid_argument', 'Invalid identifier.', false);
+  }
+  return encodeURIComponent(id);
+}
+
+/**
+ * Log label for a request: the pathname without query or fragment, as
+ * dot-joined segments (`api.cli.context.summary`). safe-log scrubs long
+ * slash-containing runs whole, so a raw pathname would log as `[redacted]`;
+ * the dotted form keeps static segments readable while id-like segments
+ * (UUIDs, tokens) are still scrubbed.
+ */
+function routeLabel(path: string) {
+  const end = path.search(/[?#]/);
+  const pathname = end === -1 ? path : path.slice(0, end);
+  return pathname.split('/').filter(Boolean).join('.');
 }
 
 export class RobynnClient {
@@ -98,11 +271,28 @@ export class RobynnClient {
   private async fetch<T>(
     path: string,
     options: RequestInit = {},
-    timeoutMs = READ_TIMEOUT_MS
+    timeoutMs = READ_TIMEOUT_MS,
+    retry: RetryPolicy = NO_RETRY,
   ): Promise<T> {
-    return this.fetchWithRetry(path, options, timeoutMs, 1);
+    return this.fetchWithRetry(path, options, timeoutMs, retry === RETRY_SAFE ? 1 : 0);
   }
 
+  private logContext() {
+    return this.options.authLogContext ?? 'robynn-client';
+  }
+
+  private async retryAfterDelay() {
+    const delayMs = this.options.retryDelayMs ?? RETRY_DELAY_MS;
+    if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
+  }
+
+  /**
+   * One request plus, at most, one 401 refresh replay and (for retry-safe
+   * operations only) one 5xx/network retry.
+   *
+   * The 401 replay applies to every operation: the app authorizes before any
+   * business work, so a 401 means nothing ran.
+   */
   private async fetchWithRetry<T>(
     path: string,
     options: RequestInit,
@@ -112,9 +302,11 @@ export class RobynnClient {
   ): Promise<T> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const route = routeLabel(path);
 
+    let response: Response;
     try {
-      const response = await fetch(`${this.baseUrl}${path}`, {
+      response = await fetch(`${this.baseUrl}${path}`, {
         ...options,
         signal: controller.signal,
         headers: {
@@ -123,84 +315,90 @@ export class RobynnClient {
           ...options.headers,
         },
       });
+    } catch (err) {
+      clearTimeout(timeout);
+      const timedOut = err instanceof Error && err.name === 'AbortError';
+      // A timeout is never retried: the app may still be working.
+      if (!timedOut && retriesLeft > 0) {
+        safeLog.warn('robynn_api.retry', {
+          route,
+          context: this.logContext(),
+          reason: 'network_error',
+          error_kind: errorKind(err),
+        });
+        await this.retryAfterDelay();
+        return this.fetchWithRetry(path, options, timeoutMs, retriesLeft - 1, hasRefreshedAuth);
+      }
+      throw timedOut
+        ? new RobynnApiError(0, 'timeout', 'The Robynn API request timed out.', false)
+        : new RobynnApiError(0, 'network_error', 'The Robynn API could not be reached.', false);
+    }
 
-      if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        const status = response.status;
-
-        if (status === 401) {
-          console.warn("[RobynnApi401] upstream Robynn API returned 401", {
-            path,
-            context: this.options.authLogContext ?? "robynn-client",
-            refreshAvailable: Boolean(this.options.refreshAccessToken),
-            alreadyRefreshed: hasRefreshedAuth,
-          });
-        }
-
-        if (
-          status === 401 &&
-          !hasRefreshedAuth &&
-          this.options.refreshAccessToken
-        ) {
-          clearTimeout(timeout);
-          const refreshedToken = await this.options.refreshAccessToken();
-          if (refreshedToken) {
-            console.log("[RobynnApi401] refreshed upstream token; retrying", {
-              path,
-              context: this.options.authLogContext ?? "robynn-client",
-            });
-            this.accessToken = refreshedToken;
-            return this.fetchWithRetry(
-              path,
-              options,
-              timeoutMs,
-              retriesLeft,
-              true,
-            );
+    try {
+      if (response.ok) {
+        try {
+          return (await response.json()) as T;
+        } catch (err) {
+          // Parser messages quote the body; never surface them.
+          if (err instanceof Error && err.name === 'AbortError') {
+            throw new RobynnApiError(0, 'timeout', 'The Robynn API request timed out.', false);
           }
-
-          console.warn("[RobynnApi401] upstream token refresh unavailable", {
-            path,
-            context: this.options.authLogContext ?? "robynn-client",
-          });
-        }
-
-        // Retry on 5xx server errors only
-        if (status >= 500 && retriesLeft > 0) {
-          clearTimeout(timeout);
-          await new Promise((r) => setTimeout(r, 1_000));
-          return this.fetchWithRetry(
-            path,
-            options,
-            timeoutMs,
-            retriesLeft - 1,
-            hasRefreshedAuth,
+          throw new RobynnApiError(
+            0,
+            'invalid_response',
+            'The Robynn API returned an unreadable response.',
+            false,
           );
         }
-
-        throw new Error(`API error ${status}: ${text}`);
       }
 
-      return response.json() as Promise<T>;
-    } catch (err) {
-      // Retry on network errors (not aborts, not 4xx)
-      if (
-        retriesLeft > 0 &&
-        err instanceof Error &&
-        !err.message.startsWith('API error') &&
-        err.name !== 'AbortError'
-      ) {
+      const text = await response.text().catch(() => '');
+      const status = response.status;
+
+      if (status === 401) {
+        safeLog.warn('robynn_api.unauthorized', {
+          route,
+          context: this.logContext(),
+          refresh_available: Boolean(this.options.refreshAccessToken),
+          already_refreshed: hasRefreshedAuth,
+        });
+      }
+
+      if (status === 401 && !this.options.refreshAccessToken) {
+        throw new UpstreamAuthorizationExpiredError(toApiError(status, text).code);
+      }
+
+      if (status === 401 && !hasRefreshedAuth && this.options.refreshAccessToken) {
         clearTimeout(timeout);
-        await new Promise((r) => setTimeout(r, 1_000));
-        return this.fetchWithRetry(
-          path,
-          options,
-          timeoutMs,
-          retriesLeft - 1,
-          hasRefreshedAuth,
-        );
+        const refreshedToken = await this.options.refreshAccessToken();
+        if (refreshedToken) {
+          safeLog.info('robynn_api.token_refreshed', {
+            route,
+            context: this.logContext(),
+          });
+          this.accessToken = refreshedToken;
+          return this.fetchWithRetry(path, options, timeoutMs, retriesLeft, true);
+        }
+
+        safeLog.warn('robynn_api.refresh_unavailable', {
+          route,
+          context: this.logContext(),
+        });
       }
-      throw err;
+
+      if (status >= 500 && retriesLeft > 0) {
+        clearTimeout(timeout);
+        safeLog.warn('robynn_api.retry', {
+          route,
+          context: this.logContext(),
+          reason: 'server_error',
+          status,
+        });
+        await this.retryAfterDelay();
+        return this.fetchWithRetry(path, options, timeoutMs, retriesLeft - 1, hasRefreshedAuth);
+      }
+
+      throw toApiError(status, text);
     } finally {
       clearTimeout(timeout);
     }
@@ -208,17 +406,22 @@ export class RobynnClient {
 
   /** Get brand context by scope */
   async getBrandContext(scope: BrandScope): Promise<RobynnApiResponse<BrandContextData>> {
-    return this.fetch(`/api/cli/context/${scope}`);
+    return this.fetch(
+      `/api/cli/context/${pathSegment(scope)}`,
+      {},
+      READ_TIMEOUT_MS,
+      RETRY_SAFE,
+    );
   }
 
   /** Get token usage */
   async getUsage(): Promise<RobynnApiResponse<UsageData>> {
-    return this.fetch('/api/cli/usage');
+    return this.fetch('/api/cli/usage', {}, READ_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** Get organization status/info */
   async getStatus(): Promise<RobynnApiResponse> {
-    return this.fetch('/api/cli/context/summary');
+    return this.fetch('/api/cli/context/summary', {}, READ_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** Get connected app capabilities for the org or a single provider */
@@ -229,6 +432,9 @@ export class RobynnClient {
       this.withQuery('/api/cli/connectors/capabilities', {
         provider_key: providerKey,
       }),
+      {},
+      READ_TIMEOUT_MS,
+      RETRY_SAFE,
     );
   }
 
@@ -242,12 +448,12 @@ export class RobynnClient {
     return this.fetch('/api/cli/connectors/read', {
       method: 'POST',
       body: JSON.stringify(payload),
-    });
+    }, READ_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** Get semantic bridge capability metadata for Hermes and other MCP clients */
   async getBridgeCapabilities(): Promise<RobynnApiResponse<BridgeCapabilitiesResult>> {
-    return this.fetch('/api/cli/mcp/capabilities');
+    return this.fetch('/api/cli/mcp/capabilities', {}, READ_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** Add a Brand Hub website draft or text source through robynnv3 */
@@ -267,7 +473,7 @@ export class RobynnClient {
     return this.fetch('/api/cli/brand/rebuild', {
       method: 'POST',
       body: JSON.stringify(payload),
-    }, POLL_TIMEOUT_MS);
+    }, POLL_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** List conversation threads */
@@ -312,7 +518,7 @@ export class RobynnClient {
     return this.fetch('/api/cli/mcp/brand-context/search', {
       method: 'POST',
       body: JSON.stringify(payload),
-    });
+    }, READ_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** Get the current brand-book completeness snapshot */
@@ -322,7 +528,10 @@ export class RobynnClient {
     return this.fetch(
       this.withQuery("/api/cli/mcp/brand-book/status", {
         include_recent_reflections: payload.include_recent_reflections,
-      })
+      }),
+      {},
+      READ_TIMEOUT_MS,
+      RETRY_SAFE,
     );
   }
 
@@ -333,7 +542,7 @@ export class RobynnClient {
     return this.fetch("/api/cli/mcp/brand-book/gap-analysis", {
       method: "POST",
       body: JSON.stringify(payload),
-    }, POLL_TIMEOUT_MS);
+    }, POLL_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** Convert current brand context into a deterministic improvement strategy */
@@ -343,7 +552,7 @@ export class RobynnClient {
     return this.fetch("/api/cli/mcp/brand-book/strategy", {
       method: "POST",
       body: JSON.stringify(payload),
-    }, POLL_TIMEOUT_MS);
+    }, POLL_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** List current brand reflections and pending changelog items */
@@ -354,7 +563,10 @@ export class RobynnClient {
       this.withQuery("/api/cli/mcp/brand-book/reflections", {
         status_filter: payload.status_filter,
         limit: payload.limit,
-      })
+      }),
+      {},
+      READ_TIMEOUT_MS,
+      RETRY_SAFE,
     );
   }
 
@@ -375,7 +587,7 @@ export class RobynnClient {
     return this.fetch("/api/cli/mcp/brand-book/publish-html", {
       method: "POST",
       body: JSON.stringify(payload),
-    }, POLL_TIMEOUT_MS);
+    }, POLL_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** Create or update a draft in a connected self-hosted Strapi instance */
@@ -407,7 +619,8 @@ export class RobynnClient {
         prospect_audit_id: payload.prospect_audit_id,
       }),
       {},
-      POLL_TIMEOUT_MS
+      POLL_TIMEOUT_MS,
+      RETRY_SAFE,
     );
   }
 
@@ -430,7 +643,8 @@ export class RobynnClient {
         scan_id: payload.scan_id,
       }),
       {},
-      POLL_TIMEOUT_MS
+      POLL_TIMEOUT_MS,
+      RETRY_SAFE,
     );
   }
 
@@ -453,7 +667,8 @@ export class RobynnClient {
         run_id: payload.run_id,
       }),
       {},
-      POLL_TIMEOUT_MS
+      POLL_TIMEOUT_MS,
+      RETRY_SAFE,
     );
   }
 
@@ -474,7 +689,7 @@ export class RobynnClient {
     return this.fetch("/api/cli/mcp/website/audit-orchestrator/status", {
       method: "POST",
       body: JSON.stringify(payload),
-    }, POLL_TIMEOUT_MS);
+    }, POLL_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** Translate website audit findings into a prioritized website strategy */
@@ -504,7 +719,7 @@ export class RobynnClient {
     return this.fetch("/api/cli/mcp/weekly-visibility-report", {
       method: "POST",
       body: JSON.stringify(payload),
-    }, POLL_TIMEOUT_MS);
+    }, POLL_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** Create a new conversation thread */
@@ -520,7 +735,7 @@ export class RobynnClient {
     threadId: string,
     payload: CmoThreadRunRequest
   ): Promise<RobynnApiResponse<{ run_id: string }>> {
-    return this.fetch(`/api/agents/cmo/threads/${threadId}/runs`, {
+    return this.fetch(`/api/agents/cmo/threads/${pathSegment(threadId)}/runs`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }, POLL_TIMEOUT_MS);
@@ -528,7 +743,12 @@ export class RobynnClient {
 
   /** Fetch the latest state for a CMO run */
   async getRun(runId: string): Promise<RobynnApiResponse<RunResult>> {
-    return this.fetch(`/api/agents/cmo/runs/${runId}`);
+    return this.fetch(
+      `/api/agents/cmo/runs/${pathSegment(runId)}`,
+      {},
+      READ_TIMEOUT_MS,
+      RETRY_SAFE,
+    );
   }
 
   /** Execute a top-level CMO agent request through the MCP-safe API route */
@@ -548,7 +768,7 @@ export class RobynnClient {
     return this.fetch("/api/cli/mcp/cmo/decide", {
       method: "POST",
       body: JSON.stringify(payload),
-    }, POLL_TIMEOUT_MS);
+    }, POLL_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** Execute the marketing campaign creator through the MCP-safe API route */
@@ -598,7 +818,7 @@ export class RobynnClient {
     return this.fetch("/api/cli/threads", {
       method: "POST",
       body: JSON.stringify(payload),
-    });
+    }, READ_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** Append a single message turn to a Hermes thread */
@@ -614,7 +834,7 @@ export class RobynnClient {
       latency_ms?: number;
     }
   ): Promise<{ id: string }> {
-    return this.fetch(`/api/cli/threads/${threadId}/messages`, {
+    return this.fetch(`/api/cli/threads/${pathSegment(threadId)}/messages`, {
       method: "POST",
       body: JSON.stringify(payload),
     });
@@ -638,7 +858,10 @@ export class RobynnClient {
     key: string
   ): Promise<{ key: string; value: string; updated_at?: string } | null> {
     return this.fetch(
-      this.withQuery("/api/cli/memory", { scope, key })
+      this.withQuery("/api/cli/memory", { scope, key }),
+      {},
+      READ_TIMEOUT_MS,
+      RETRY_SAFE,
     );
   }
 
@@ -660,12 +883,13 @@ export class RobynnClient {
     return this.fetch("/api/cli/memory/search", {
       method: "POST",
       body: JSON.stringify(payload),
-    });
+    }, READ_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /**
    * Execute a write action against a connected app (HubSpot/Salesforce/...).
-   * Audit-logged server-side; idempotent by idempotency_key.
+   * Audit-logged server-side; idempotent by idempotency_key. Never retried
+   * automatically: a resend with the same key is the caller's decision.
    */
   async actOnConnectedApp(payload: ConnectedAppActionRequest): Promise<{
     ok: boolean;
@@ -681,7 +905,11 @@ export class RobynnClient {
     });
   }
 
-  /** Poll a run until completion */
+  /**
+   * Poll a run until it finishes. Resolves only for a completed run; a failed
+   * or cancelled run rejects with RobynnRunFailedError (callers report it as
+   * an error), and running past `timeoutMs` rejects with "Run timed out".
+   */
   async pollRun(
     runId: string,
     timeoutMs = POLL_TIMEOUT_MS,
@@ -692,8 +920,19 @@ export class RobynnClient {
     while (Date.now() - start < effectiveTimeoutMs) {
       const result = await this.getRun(runId);
 
-      if (result.data?.status === 'completed' || result.data?.status === 'failed') {
+      // The app reports failed and cancelled runs as a terminal 200
+      // (`status: "failed"` plus `cancelled`, P11 review B2); a raw
+      // `cancelled` status is accepted too.
+      const data = result.data as (RunResult & { cancelled?: boolean }) | undefined;
+      if (data?.status === 'completed') {
         return result;
+      }
+      if (data?.status === 'failed' || data?.status === 'cancelled') {
+        throw new RobynnRunFailedError(
+          data.id ?? runId,
+          data.status === 'cancelled' || data.cancelled === true,
+          data.output,
+        );
       }
 
       await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
