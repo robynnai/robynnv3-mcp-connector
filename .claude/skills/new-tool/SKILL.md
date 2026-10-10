@@ -15,7 +15,7 @@ When the user provides a tool name and description, create it following these st
    - Read-only / CMO tools: use `server.registerTool(name, { ...toolMetadata(...), description, inputSchema }, handler)`
    - Intelligence tools with HTML reports: use `registerAppTool()` from `@modelcontextprotocol/ext-apps/server`
 7. **Register** — import and call `registerXTools(server, client)` in `src/index.ts` `init()`
-8. **Create test** — add a matching `.test.ts` file next to the tool file
+8. **Create test** — add a matching `.test.ts` file next to the tool file, plus a fixture in `src/__tests__/catalog-contract.fixtures.ts` (the catalog contract suite fails without one), then regenerate the `tools/list` snapshot with `UPDATE_MCP_TOOLS_SNAPSHOT=1 pnpm exec vitest run src/__tests__/catalog-contract.test.ts` and review the diff of `contracts/mcp-tools.json`
 9. **Type-check** — run `npx tsc --noEmit` to verify
 
 Refer to existing tools in `src/tools/` for concrete examples of both patterns.

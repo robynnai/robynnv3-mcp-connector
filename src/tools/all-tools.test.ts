@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { registerContextTools } from "./context";
 import { registerStatusTools } from "./status";
@@ -712,12 +714,37 @@ function registerAllTools(
   registerStrapiTools(server, client as never);
 }
 
-describe("all tools registration", () => {
-  it("registers exactly 41 tools", () => {
+// This is a PARTIAL handler harness (mocked RobynnClient, no MCP transport). It
+// registers 22 of the Worker's 24 registrars: the 5 Hermes bridge tools are
+// covered by hermes-bridge.test.ts and the 2 Vault tools by vault.test.ts. It
+// does not establish the remote inventory: the real 48 (Vault) / 46 (no Vault) /
+// 40 (CLI) catalog is proven through tools/list in
+// src/__tests__/catalog-contract.test.ts (COS-PLUGIN-001 P13).
+const PARTIAL_HARNESS_EXCLUDED_REGISTRARS = ["src/tools/hermes-bridge.ts", "src/tools/vault.ts"];
+
+describe("all tools registration (partial handler harness)", () => {
+  it("registers the 41 handler-harness tools: the 48-tool Worker catalog minus 5 Hermes bridge and 2 Vault tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
-    expect(handlers.size).toBe(41);
+
+    const routeMap = JSON.parse(
+      readFileSync(join(process.cwd(), "contracts/tool-route-map.json"), "utf8"),
+    ) as { tools: Array<{ name: string; registrar: string }> };
+    const excluded = routeMap.tools.filter((t) => PARTIAL_HARNESS_EXCLUDED_REGISTRARS.includes(t.registrar));
+    expect(excluded.map((t) => t.name).sort()).toEqual([
+      "robynn_memory_get",
+      "robynn_memory_search",
+      "robynn_memory_write",
+      "robynn_thread_append",
+      "robynn_thread_upsert",
+      "robynn_vault_list",
+      "robynn_vault_read",
+    ]);
+    expect([...handlers.keys()].sort()).toEqual(
+      routeMap.tools.filter((t) => !excluded.includes(t)).map((t) => t.name).sort(),
+    );
+    expect(handlers.size).toBe(48 - excluded.length);
   });
 
   it("registers the expected tool names", () => {
