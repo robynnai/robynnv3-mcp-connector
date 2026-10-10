@@ -305,6 +305,19 @@ describe.skipIf(!LIVE)("plugin-local: host OAuth chain end to end (real app, Wor
       expect((await ping(real.body.access_token, session)).status).toBe(401);
     });
 
+    it("D-C: SSE is neither served nor advertised, even with a valid token", async () => {
+      const conn = await connectHost({ clientId, user: ALPHA, organizationId: ORG_A, scope: "brand:read" });
+      for (const path of ["/sse", "/sse/message?sessionId=p16"]) {
+        const res = await fetch(`${WORKER}${path}`, { headers: { authorization: `Bearer ${conn.access}` } });
+        await res.body?.cancel();
+        expect(res.status, path).toBe(404);
+      }
+      const landing = (await (await fetch(`${WORKER}/`)).json()) as { endpoints: Record<string, string> };
+      expect(landing.endpoints).not.toHaveProperty("sse");
+      expect((await fetch(`${WORKER}/.well-known/oauth-protected-resource/sse`)).status).toBe(404);
+      expect((await fetch(`${WORKER}/.well-known/oauth-protected-resource/mcp`)).status).toBe(200);
+    });
+
     it("/callback state is single use and bound to the browser that started /authorize", async () => {
       const { browser, appUrl } = await atConsent(clientId, ALPHA, "brand:read");
       const consent = await consentAtApp(browser, appUrl, { organizationId: ORG_A });

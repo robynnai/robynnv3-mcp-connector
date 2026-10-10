@@ -27,7 +27,7 @@ to end, at two levels:
 | `src/__tests__/vault-private-memory.test.ts` | `robynn_vault_list` / `robynn_vault_read` through the real Worker path, checked with P09b's output contract (post-P09b vault, pre-P09b leaky vault, spelling tricks). |
 | `src/__tests__/harness/private-memory-vault-contract.ts`, `src/__tests__/fixtures/private-memory-vault.contract.json` | Byte-identical copy of robynnv3's P09b contract v2 (`plugin-v1/p09b-vault-private-memory` @ `dd56744b8`), plus a port of `findPrivateMemoryExposure`. |
 | `src/__tests__/plugin-local/live-stack.ts` | Live helpers: a cookie-jar browser, the real sign-in and consent posts, the host client, MCP over HTTP, local-DB access (isolated container only), Worker-signed app calls, and the log canary scan. |
-| `src/__tests__/plugin-local/oauth-chain.live.test.ts` | The live chain and its negatives (25 tests). |
+| `src/__tests__/plugin-local/oauth-chain.live.test.ts` | The live chain and its negatives (26 tests). |
 | `src/__tests__/plugin-local/vault-private-memory.live.test.ts` | The real materializer's vault in the Worker's local R2, read back over real OAuth as two org members (3 tests). |
 
 Paired robynnv3 suites (branch `plugin-v1/p16-oauth-integration`):
@@ -111,6 +111,7 @@ registered for the log canary scan.
 | Another user's session id | POST, GET and DELETE ⇒ 404 `-32001`. The owner's session keeps working | `oauth-chain.test`; P10 (eviction, reconnect) |
 | Credential-version bump | 401 without revocation; refresh renews. App suite: stale ⇒ `credential_version_stale` | P10 |
 | Legacy grants | A pre-P05 upstream refresh token ⇒ `invalid_grant`, not consumed. A grant-less access JWT ⇒ 401 at the app | P10: legacy Worker grants (no `authVersion: 2`) are revoked and never reach a session |
+| D-C: SSE not served or advertised | `/sse` and `/sse/message` ⇒ 404 even with a valid token; the landing JSON and protected-resource metadata do not list SSE | P06 worker-options |
 | Error and log canaries | Every code, state, cookie, token, password and local secret the suites saw is absent from the app, Worker and stack logs | P06/P10 redaction tests |
 | Vault never returns another user's private memory | Real materializer export plus pre-P09b leftovers in local R2; alpha and beta each list and read everything ⇒ no exposure | `vault-private-memory.test` |
 
