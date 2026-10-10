@@ -36,3 +36,12 @@ P01 (Beads `robynn_mcp_server-1fs`, branch `plugin-v1/p01-baseline-contracts`, d
   - `props.authVersion === 2` marks hardened grants.
   - `props.appGrantId` and `props.credentialVersion` are set at `/callback`.
 - **Full handoff:** `cos-share/reports/plugin/P06-handoff.md`.
+
+## COS-PLUGIN-001 P10: Worker session binding, per-call reauthorization, Vault, refresh (2026-10-09)
+
+- **Branch:** `plugin-v1/p10-worker-session-vault`, stacked on `plugin-v1/p06-worker-auth`, with `plugin-v1/p12-tool-metadata` merged in. It pairs with robynnv3 `plugin-v1/p10-introspect`. Deploy the app first.
+- **What changed:** see `docs/plugin-v1/WORKER_SESSION_AUTHORIZATION.md`.
+- **For P16/P18:** host OAuth now completes end to end on plugin-local (P05 + P10 app). `cos-share/reports/plugin/P10-evidence/live.mjs` is a template. `wrangler.local.toml` needs the `REFRESH_COORDINATOR` binding and migration `v2`.
+- **For P11:** `robynn-client.ts` changes are minimal: `setAccessToken` and a typed `authorization_expired` on an upstream 401 with no refresh hook. The retry and replay work is unchanged.
+- **Full handoff:** `cos-share/reports/plugin/P10-handoff.md`.
+

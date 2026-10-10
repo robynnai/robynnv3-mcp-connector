@@ -7,9 +7,8 @@
  * used to address the grant. The app's introspection endpoint is the
  * authority: the Worker completes authorization only when introspection says
  * the grant is active and returns the same user, organization, grant, client
- * and credential version. Anything else fails closed — including the
- * endpoint not existing yet (P10 owns `POST /api/oauth/introspect`) and app
- * tokens without a `gid` claim (P05 owns grant ids).
+ * and credential version. Anything else fails closed. P10 reuses
+ * `introspectUpstreamGrant` for the per-call preflight and at refresh.
  */
 import { internalMcpRequestHeaders, TRUSTED_MCP_CLIENT_ID } from "../internal-mcp-auth";
 import { canonicalScopes, isOAuthScope, type OAuthScope } from "./oauth-policy";
@@ -206,6 +205,10 @@ export async function introspectUpstreamGrant(params: {
   apiBaseUrl: string;
   secret: string;
   candidate: UpstreamGrantCandidate;
+  /** Provider grant id, for the app's audit trail only (contract §5). */
+  hostGrantId?: string;
+  /** The tool call being authorized, for the app's audit trail only. */
+  operation?: { tool: string; requiredScope: OAuthScope };
   timeoutMs?: number;
 }): Promise<IntrospectionOutcome> {
   const url = `${params.apiBaseUrl.replace(/\/+$/, "")}${INTROSPECTION_PATH}`;
@@ -215,6 +218,10 @@ export async function introspectUpstreamGrant(params: {
     organization_id: params.candidate.organizationId,
     client_id: TRUSTED_MCP_CLIENT_ID,
     credential_version: params.candidate.credentialVersion,
+    ...(params.hostGrantId ? { host_grant_id: params.hostGrantId } : {}),
+    ...(params.operation
+      ? { operation: { tool: params.operation.tool, required_scope: params.operation.requiredScope } }
+      : {}),
   });
 
   const controller = new AbortController();

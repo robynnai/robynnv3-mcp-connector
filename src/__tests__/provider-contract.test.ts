@@ -545,7 +545,7 @@ describe("workers-oauth-provider 0.3.0: tokenExchangeCallback (refresh) semantic
     expect(opts).toMatchObject({ clientId, userId: USER_A, scope: ["brand:read", "tools:execute"], requestedScope: ["brand:read"] });
   });
 
-  it("FAILS OPEN when the callback returns nothing: refresh succeeds and keeps the stale props (current src/index.ts behaviour)", async () => {
+  it("FAILS OPEN when the callback returns nothing: refresh succeeds and keeps the stale props (baseline src/index.ts behaviour; closed by P10's throwing callback)", async () => {
     const { clientId, refreshToken } = await connect(h);
     callback.mockResolvedValue(undefined);
     const refreshed = await token(h, { grant_type: "refresh_token", client_id: clientId, refresh_token: refreshToken });
@@ -835,7 +835,8 @@ describe("agents 0.7.5 SSE: what the Worker actually serves under /sse (F19, F20
     expect(options.apiRoute).toEqual(["/mcp"]);
     expect(options.allowPlainPKCE).toBe(false);
     const index = readFileSync(join(process.cwd(), "src", "index.ts"), "utf8");
-    expect(index).toContain("apiHandler: RobynnMCP.serve(MCP_API_PATH)");
+    // P10 wraps the same handler in the per-request preflight.
+    expect(index).toContain("apiHandler: withMcpPreflight(RobynnMCP.serve(MCP_API_PATH)");
     expect(index).not.toMatch(/serveSSE|transport:\s*"sse"/);
   });
 

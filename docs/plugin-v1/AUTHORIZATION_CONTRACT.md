@@ -202,6 +202,8 @@ Around `oauthProvider.fetch` for `POST /token`:
 4. Wrapper catch: `UpstreamGrantRevoked` ⇒ `revokeGrant(grantId, userId)` then `400 {"error":"invalid_grant"}`; `UpstreamUnavailable` ⇒ `503 {"error":"temporarily_unavailable"}` (grant un-rotated, F12). Any other throw ⇒ `500 {"error":"server_error"}` with a redacted log.
 5. Legacy grants (`props.authVersion !== 2`) ⇒ revoke + `invalid_grant` (forces reconnect; plan §6 "legacy credentials").
 
+**P10 update** (implemented; details in [`WORKER_SESSION_AUTHORIZATION.md`](./WORKER_SESSION_AUTHORIZATION.md) §5): the coordinator is `RefreshCoordinator` (binding `REFRESH_COORDINATOR`). A `401` from the app at refresh means the Worker's own signature was refused, so it is `temporarily_unavailable`, not a revocation. A rotated answer that cannot be validated revokes. If introspection is unavailable *after* the app has rotated, the refresh completes narrowed to the token's scope, because per-call introspection still gates every tool. Failing would strand the rotated upstream token and later trip `refresh_reuse`.
+
 ### 6.4 MCP request preflight (P10) — **before every `/mcp` request reaches the DO**
 
 1. Path allow-list: exactly `/mcp`. Everything else under the API prefixes — `/mcpx`, `/mcp/*` (F14) and `/sse`, `/sse/message` (F19: already a 404 today) — ⇒ `404` before forwarding. If SSE is ever enabled (D10), it gets its own allow-list entry **and** the `?sessionId=` binding in step 4.
@@ -223,6 +225,13 @@ Around `oauthProvider.fetch` for `POST /token`:
 8. Vault (`robynn_vault_*`) is covered by step 5 because R2 is only reached via `tools/call`; the vault tools additionally require `props.authVersion === 2` and enforce object-size bounds (P10, M `src/tools/vault.ts`, `src/vault-r2.ts`).
 
 `tools/list`, `initialize`, `ping`, `resources/*` need only steps 1–4 (`resources/read` of `ui://reports/*` is static HTML).
+
+**P10 update** (implemented in `src/authorization/mcp-preflight.ts`; see [`WORKER_SESSION_AUTHORIZATION.md`](./WORKER_SESSION_AUTHORIZATION.md)):
+
+- step 4 also strips `x-partykit-*` and `cf-mcp-*`;
+- step 5.2 keeps the provider grant on `credential_version_stale` (`401` only), so the host's refresh picks up the bumped version; every other inactive reason revokes;
+- step 8's Vault requirement is a gate at the R2 call site that needs the preflight's `x-robynn-preflight` stamp for that tool and grant.
+
 
 ## 7. Scope → operation policy
 

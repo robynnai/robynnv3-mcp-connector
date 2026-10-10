@@ -76,12 +76,33 @@ export interface RobynnClientOptions {
   authLogContext?: string;
 }
 
+/**
+ * Upstream 401 with no refresh hook (the hosted Worker never refreshes inside
+ * a session, P10): the host's own refresh renews both token layers. The
+ * message is fixed and never echoes the upstream body.
+ */
+export const AUTHORIZATION_EXPIRED_MESSAGE =
+  "authorization_expired: Robynn did not accept this connection's current credentials. Retry the request; if it keeps failing, reconnect Robynn.";
+
+export class UpstreamAuthorizationExpiredError extends Error {
+  readonly code = "authorization_expired";
+  constructor() {
+    super(AUTHORIZATION_EXPIRED_MESSAGE);
+    this.name = "UpstreamAuthorizationExpiredError";
+  }
+}
+
 export class RobynnClient {
   constructor(
     private readonly baseUrl: string,
     private accessToken: string,
     private readonly options: RobynnClientOptions = {},
   ) {}
+
+  /** Adopt a newer upstream access token for the same session binding (P10). */
+  setAccessToken(accessToken: string) {
+    this.accessToken = accessToken;
+  }
 
   private withQuery(
     path: string,
@@ -165,6 +186,10 @@ export class RobynnClient {
           });
         }
 
+        if (status === 401 && !this.options.refreshAccessToken) {
+          throw new UpstreamAuthorizationExpiredError();
+        }
+
         // Retry on 5xx server errors only
         if (status >= 500 && retriesLeft > 0) {
           clearTimeout(timeout);
@@ -188,6 +213,7 @@ export class RobynnClient {
         retriesLeft > 0 &&
         err instanceof Error &&
         !err.message.startsWith('API error') &&
+        !(err instanceof UpstreamAuthorizationExpiredError) &&
         err.name !== 'AbortError'
       ) {
         clearTimeout(timeout);

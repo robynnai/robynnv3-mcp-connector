@@ -20,10 +20,20 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
+import { DENY_ALL_VAULT_CALLS, vaultDeniedResult, type VaultGate } from "../authorization/vault-gate";
 import type { VaultR2 } from "../vault-r2";
 import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
-export function registerVaultTools(server: McpServer, vault: VaultR2): void {
+/**
+ * `authorize` runs before every R2 operation (P10): without the Worker
+ * preflight's stamp for this tool and grant, nothing is read. The default
+ * denies everything.
+ */
+export function registerVaultTools(
+  server: McpServer,
+  vault: VaultR2,
+  authorize: VaultGate = DENY_ALL_VAULT_CALLS,
+): void {
   server.registerTool(
     "robynn_vault_list",
     {
@@ -67,7 +77,8 @@ export function registerVaultTools(server: McpServer, vault: VaultR2): void {
           .describe("Continuation cursor returned by a previous list call."),
       },
     },
-    async ({ prefix, limit, cursor }) => {
+    async ({ prefix, limit, cursor }, extra) => {
+      if (!authorize("robynn_vault_list", extra)) return vaultDeniedResult();
       try {
         const result = await vault.list({ prefix, limit, cursor });
         return toSuccessResult(
@@ -120,7 +131,8 @@ export function registerVaultTools(server: McpServer, vault: VaultR2): void {
           ),
       },
     },
-    async ({ path }) => {
+    async ({ path }, extra) => {
+      if (!authorize("robynn_vault_read", extra)) return vaultDeniedResult();
       try {
         const obj = await vault.read(path);
         if (!obj) {

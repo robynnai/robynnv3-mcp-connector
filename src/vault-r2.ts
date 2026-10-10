@@ -58,6 +58,13 @@ export interface VaultReadResult {
   uploaded: string;
 }
 
+/** Largest vault object returned as text; larger objects are refused unread. */
+export const MAX_VAULT_OBJECT_BYTES = 1024 * 1024;
+/** Longest accepted vault path or prefix. */
+export const MAX_VAULT_PATH_LENGTH = 1024;
+/** Longest accepted list cursor. */
+export const MAX_VAULT_CURSOR_LENGTH = 1024;
+
 /**
  * Reject paths that try to escape the per-org prefix. Same rules as the
  * robynnv3-side LocalFilesystemStorage / R2Storage / R2Reader so a mistake
@@ -66,6 +73,9 @@ export interface VaultReadResult {
 function assertSafePath(path: string): void {
   if (!path || path.length === 0) {
     throw new Error("Vault path is required");
+  }
+  if (path.length > MAX_VAULT_PATH_LENGTH) {
+    throw new Error(`Vault path must be at most ${MAX_VAULT_PATH_LENGTH} characters`);
   }
   if (path.startsWith("/")) {
     throw new Error(`Vault path must not be absolute: ${path}`);
@@ -121,6 +131,9 @@ export class VaultR2 {
   }): Promise<VaultListResult> {
     const prefix = opts.prefix ?? "";
     if (prefix) assertSafePath(prefix);
+    if (opts.cursor !== undefined && opts.cursor.length > MAX_VAULT_CURSOR_LENGTH) {
+      throw new Error("Vault cursor is invalid");
+    }
     const limit = Math.min(Math.max(opts.limit ?? 100, 1), 1000);
 
     const fullPrefix = joinKey(this.orgRoot, prefix);
@@ -156,6 +169,13 @@ export class VaultR2 {
     const key = joinKey(this.orgRoot, path);
     const obj = await this.bucket.get(key);
     if (!obj) return null;
+    if (!(obj.size <= MAX_VAULT_OBJECT_BYTES)) {
+      // Never buffer an oversized object: release the body unread.
+      await obj.body?.cancel().catch(() => undefined);
+      throw new Error(
+        `Vault object is too large to read (${obj.size} bytes; limit ${MAX_VAULT_OBJECT_BYTES})`,
+      );
+    }
     const text = await obj.text();
     return {
       path,

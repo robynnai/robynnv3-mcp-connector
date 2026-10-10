@@ -10,6 +10,12 @@ export interface Env {
   MCP_SERVER_VERSION: string;
   MCP_OBJECT: DurableObjectNamespace;
   /**
+   * Per-grant refresh serializer (`RefreshCoordinator`, P10; contract §6.3
+   * step 2). Optional only so local configs without it still start; the
+   * Worker then refreshes unserialized and logs `oauth.refresh.unserialized`.
+   */
+  REFRESH_COORDINATOR?: DurableObjectNamespace;
+  /**
    * R2 bucket binding for the vault. Bound to robynn-materialized in
    * production via wrangler.toml. Reads happen via env.VAULT.get /
    * .list — no IAM token in the Worker. Per-org gating lives in the
@@ -20,6 +26,8 @@ export interface Env {
   OAUTH_PROVIDER: {
     parseAuthRequest(request: Request): Promise<OAuthRequestInfo>;
     lookupClient(clientId: string): Promise<{ clientId: string; clientName?: string } | null>;
+    unwrapToken(token: string): Promise<HostTokenSummary | null>;
+    revokeGrant(grantId: string, userId: string): Promise<void>;
     completeAuthorization(options: {
       request: OAuthRequestInfo;
       userId: string;
@@ -29,6 +37,15 @@ export interface Env {
       revokeExistingGrants?: boolean;
     }): Promise<{ redirectTo: string }>;
   };
+}
+
+/** What the provider knows about a presented host access token (P01 F4). */
+export interface HostTokenSummary {
+  grantId: string;
+  userId: string;
+  /** Token-level scope, possibly downscoped from the grant. */
+  scope: string[];
+  grant: { clientId: string; scope: string[]; props: Props };
 }
 
 /** OAuth request info parsed by OAuthProvider */
@@ -57,6 +74,12 @@ export interface Props {
   scopes?: string[];
   /** 2 = grant created by the hardened /callback (contract §6.2 step 4). */
   authVersion?: number;
+  /**
+   * Provider grant id of the current request. Added by the Worker preflight
+   * before a request reaches the session DO (never stored in the provider
+   * grant); part of the immutable session binding (P10).
+   */
+  hostGrantId?: string;
   _apiBaseUrl?: string;
   [key: string]: unknown;
 }

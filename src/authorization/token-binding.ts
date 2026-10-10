@@ -19,6 +19,13 @@ export interface TokenRequestContext {
   grantType: string | null;
   /** The single `redirect_uri` form value, or null if absent/repeated. */
   redirectUri: string | null;
+  /**
+   * `{userId}:{grantId}` parsed from a single `refresh_token` form value (P01
+   * F1, F11), or null. The token itself is never kept. Untrusted until the
+   * provider validates the token; used to route the refresh to its
+   * per-grant coordinator and to revoke that grant on a permanent failure.
+   */
+  refreshGrant?: { userId: string; grantId: string } | null;
 }
 
 export class RedirectUriMismatchError extends Error {
@@ -56,7 +63,7 @@ export async function readTokenRequestContext(
   request: Request,
   maxBytes = MAX_TOKEN_BODY_BYTES,
 ): Promise<TokenRequestRead> {
-  const empty = { ok: true as const, context: { grantType: null, redirectUri: null } };
+  const empty = { ok: true as const, context: { grantType: null, redirectUri: null, refreshGrant: null } };
   const contentType = request.headers.get("content-type") ?? "";
   if (request.method !== "POST" || !contentType.includes("application/x-www-form-urlencoded")) {
     // The provider rejects these itself without reading the body.
@@ -79,8 +86,23 @@ export async function readTokenRequestContext(
   const params = new URLSearchParams(text);
   return {
     ok: true,
-    context: { grantType: single(params, "grant_type"), redirectUri: single(params, "redirect_uri") },
+    context: {
+      grantType: single(params, "grant_type"),
+      redirectUri: single(params, "redirect_uri"),
+      refreshGrant: parseRefreshGrant(single(params, "refresh_token")),
+    },
   };
+}
+
+const PROVIDER_ID_PART = /^[A-Za-z0-9_-]{1,128}$/;
+
+function parseRefreshGrant(token: string | null): { userId: string; grantId: string } | null {
+  if (!token) return null;
+  const parts = token.split(":");
+  if (parts.length !== 3 || !PROVIDER_ID_PART.test(parts[0]) || !PROVIDER_ID_PART.test(parts[1])) {
+    return null;
+  }
+  return { userId: parts[0], grantId: parts[1] };
 }
 
 /** Closed set for logs: never the raw, attacker-controlled form value. */

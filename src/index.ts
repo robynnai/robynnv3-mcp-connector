@@ -1,14 +1,15 @@
-import OAuthProvider, { GrantType } from "@cloudflare/workers-oauth-provider";
+import OAuthProvider, { GrantType, getOAuthApi } from "@cloudflare/workers-oauth-provider";
 import type {
   OAuthProviderOptions,
   TokenExchangeCallbackOptions,
   TokenExchangeCallbackResult,
 } from "@cloudflare/workers-oauth-provider";
+import { DurableObject } from "cloudflare:workers";
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { RobynnClient } from "./robynn-client";
-import { buildSignedTokenRequest, getInternalAuthSecret } from "./internal-mcp-auth";
 import { getProtectedResourceMetadata, robynnAuthHandler } from "./auth-handler";
+import { withMcpPreflight } from "./authorization/mcp-preflight";
 import {
   isCanonicalRequestPath,
   isUnservedApiPath,
@@ -16,15 +17,37 @@ import {
   SUPPORTED_OAUTH_SCOPES,
 } from "./authorization/oauth-policy";
 import {
+  refreshCoordinatorName,
+  refreshRequestKey,
+  SerializedRunner,
+} from "./authorization/refresh-coordinator";
+import {
+  admitStartProps,
+  admitUpgrade,
+  bindingFromProps,
+  readSessionBinding,
+  sameBinding,
+  SESSION_BINDING_HEADER,
+  shouldAdoptProps,
+  type SessionBinding,
+} from "./authorization/session-binding";
+import {
   enforceAuthorizationCodeRedirect,
   grantTypeForLog,
   readTokenRequestContext,
   RedirectUriMismatchError,
   type TokenRequestContext,
 } from "./authorization/token-binding";
+import {
+  RefreshScopeError,
+  refreshUpstreamGrant,
+  UpstreamGrantRevokedError,
+  UpstreamUnavailableError,
+} from "./authorization/upstream-refresh";
+import { createVaultGate } from "./authorization/vault-gate";
 import { errorKind, safeLog } from "./safe-log";
 import { registerContextTools } from "./tools/context";
-import { registerStatusTools } from "./tools/status";
+import { registerStatusTools, registerUnauthenticatedStatusTool } from "./tools/status";
 import { registerContentTools } from "./tools/content";
 import { registerResearchTools } from "./tools/research";
 import { registerAssistTools } from "./tools/assist";
@@ -50,69 +73,101 @@ import { registerStrapiTools } from "./tools/strapi";
 import type { Env, Props } from "./types";
 import { VaultR2 } from "./vault-r2";
 import { getPublicBaseUrl, registerReportAppResources } from "./ui/report-app";
+import { SERVER_INSTRUCTIONS } from "./server-instructions";
 import { APP_VERSION } from "./version";
 
+/** partyserver's internal naming request (carries the caller's props). */
+const PARTYSERVER_SET_NAME_PATH = "/cdn-cgi/partyserver/set-name/";
+
 /**
- * RobynnMCP — Durable Object that hosts the MCP server.
- * Each authenticated user gets their own DO instance with their
- * OAuth access token in `this.props`.
+ * RobynnMCP — Durable Object that hosts one MCP session.
+ *
+ * The session is bound, once and for good, to the identity of its
+ * `initialize` caller (P10; contract D7). The Worker preflight checks that
+ * binding before any request reaches the session; this class enforces it
+ * again: mismatching props are never adopted, and the transport upgrade is
+ * refused unless the Worker's binding header matches. It never refreshes
+ * upstream credentials itself (D6): a newer upstream token arrives with the
+ * host's next request after the host refreshed through `/token`.
  */
 export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
-  server = new McpServer({
-    name: "Robynn",
-    version: APP_VERSION,
-  });
+  server = new McpServer(
+    {
+      name: "Robynn",
+      version: APP_VERSION,
+    },
+    { instructions: SERVER_INSTRUCTIONS },
+  );
+
+  private client: RobynnClient | undefined;
+  private sessionStarted = false;
+
+  /**
+   * Read by the Worker preflight over DO RPC before `RobynnMCP.serve`
+   * addresses this session. Reads storage directly: no `onStart`, no props.
+   */
+  async getSessionBinding(): Promise<SessionBinding | null> {
+    return readSessionBinding(this.ctx.storage);
+  }
+
+  async onStart(props?: Props) {
+    const { adopt, outcome } = await admitStartProps(this.ctx.storage, props);
+    if (outcome === "refused") safeLog.warn("mcp.session.props_refused", { phase: "start" });
+    await super.onStart(adopt);
+    this.sessionStarted = true;
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname === PARTYSERVER_SET_NAME_PATH) {
+      // A warm session ignores later props (F17); adopt a newer upstream
+      // token only for the bound identity.
+      if (this.sessionStarted) await this.adoptWarmProps(request.headers.get("x-partykit-props"));
+      return super.fetch(request);
+    }
+    if (
+      request.headers.get("upgrade")?.toLowerCase() === "websocket" &&
+      !(await admitUpgrade(this.ctx.storage, request.headers.get(SESSION_BINDING_HEADER)))
+    ) {
+      safeLog.warn("mcp.session.upgrade_refused", {});
+      return new Response("Session not found", { status: 404 });
+    }
+    return super.fetch(request);
+  }
+
+  private async adoptWarmProps(raw: string | null) {
+    if (!raw) return;
+    let incoming: Partial<Props>;
+    try {
+      incoming = JSON.parse(raw) as Partial<Props>;
+    } catch {
+      return;
+    }
+    const binding = await readSessionBinding(this.ctx.storage);
+    if (!sameBinding(binding, bindingFromProps(incoming))) {
+      safeLog.warn("mcp.session.props_refused", { phase: "warm" });
+      return;
+    }
+    if (!shouldAdoptProps(this.props, incoming)) return;
+    await this.updateProps(incoming as Props);
+    this.client?.setAccessToken((incoming as Props).accessToken);
+  }
 
   async init() {
     const accessToken = this.props?.accessToken;
-    if (!accessToken) {
-      safeLog.error("mcp.session.unauthenticated", { reason: "access_token_missing" });
-      this.server.tool(
-        "robynn_status",
-        "Check Robynn connection status.",
-        {},
-        async () => ({
-          content: [
-            {
-              type: "text" as const,
-              text: "Not authenticated. Disconnect Robynn in your app's MCP or connector settings, then connect it again.",
-            },
-          ],
-          isError: true,
-        }),
-      );
+    if (!accessToken || this.props?.authVersion !== 2) {
+      safeLog.error("mcp.session.unauthenticated", {
+        reason: accessToken ? "legacy_props" : "access_token_missing",
+      });
+      registerUnauthenticatedStatusTool(this.server);
       return;
     }
 
-    const client = new RobynnClient(
-      this.env.ROBYNN_API_BASE_URL,
-      accessToken,
-      {
-        authLogContext: "hosted-mcp",
-        refreshAccessToken: async () => {
-          const refreshed = await refreshUpstreamAccessToken(
-            this.props,
-            getInternalAuthSecret(this.env),
-            this.env.ROBYNN_API_BASE_URL,
-          );
-
-          if (!refreshed) {
-            safeLog.warn("oauth.refresh.unavailable", {
-              source: "hosted-mcp-tool-call",
-              hasProps: Boolean(this.props),
-              hasRefreshToken: Boolean(this.props?.refreshToken),
-              hasApiBaseUrl: Boolean(
-                this.props?._apiBaseUrl || this.env.ROBYNN_API_BASE_URL,
-              ),
-            });
-            return undefined;
-          }
-
-          await this.updateProps(refreshed.props);
-          return refreshed.accessToken;
-        },
-      },
-    );
+    // No refresh hook: an upstream 401 surfaces as authorization_expired.
+    const client = new RobynnClient(this.env.ROBYNN_API_BASE_URL, accessToken, {
+      authLogContext: "hosted-mcp",
+    });
+    this.client = client;
     const publicBaseUrl = getPublicBaseUrl(this.env.MCP_PUBLIC_BASE_URL);
 
     registerReportAppResources(this.server, publicBaseUrl);
@@ -141,13 +196,13 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
     registerHermesBridgeTools(this.server, client);
     registerConnectorActionTools(this.server, client);
 
-    // Vault tools depend on the R2 binding + the OAuth-bound org id.
-    // Skip silently when either is missing (e.g. local dev without the
-    // binding, or a mis-issued token); other tools still work.
-    const organizationId = this.props?.organizationId;
+    // Vault tools read R2 directly: every call needs the Worker preflight's
+    // stamp for this tool and grant (createVaultGate), so a revoked or
+    // unverified connection never reaches R2. Skipped without the binding.
+    const organizationId = this.props.organizationId;
     const vaultBucket = this.env.VAULT;
     if (organizationId && vaultBucket) {
-      registerVaultTools(this.server, new VaultR2(vaultBucket, organizationId));
+      registerVaultTools(this.server, new VaultR2(vaultBucket, organizationId), createVaultGate(() => this.props));
     } else {
       safeLog.warn("mcp.vault.skipped", {
         reason: !vaultBucket ? "vault_binding_missing" : "organization_missing",
@@ -156,72 +211,15 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
   }
 }
 
-interface UpstreamTokenRefreshResult {
-  accessToken: string;
-  expiresIn?: number;
-  props: Props;
-}
-
-async function refreshUpstreamAccessToken(
-  props: Props | undefined,
-  internalAuthSecret: string | null,
-  fallbackApiBaseUrl?: string,
-): Promise<UpstreamTokenRefreshResult | undefined> {
-  const refreshToken = props?.refreshToken;
-  const apiBaseUrl = props?._apiBaseUrl || fallbackApiBaseUrl;
-  if (!props || !refreshToken || !apiBaseUrl) return undefined;
-
-  try {
-    // Signed like the code exchange; the app rejects unsigned refreshes.
-    const tokenRequest = await buildSignedTokenRequest(
-      internalAuthSecret,
-      apiBaseUrl,
-      { grant_type: "refresh_token", refresh_token: refreshToken },
-    );
-    const res = await fetch(tokenRequest.url, tokenRequest.init);
-
-    if (!res.ok) {
-      // Never read or log the body: it can echo credentials.
-      await res.body?.cancel().catch(() => undefined);
-      safeLog.warn("oauth.refresh.upstream_rejected", { upstreamStatus: res.status });
-      return undefined;
-    }
-
-    const tokens = (await res.json()) as {
-      access_token: string;
-      refresh_token?: string;
-      expires_in?: number;
-    };
-
-    safeLog.info("oauth.refresh.upstream_refreshed", {
-      rotated: Boolean(tokens.refresh_token),
-      expiresIn: tokens.expires_in,
-    });
-
-    return {
-      accessToken: tokens.access_token,
-      expiresIn: tokens.expires_in,
-      props: {
-        ...props,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token || refreshToken,
-        _apiBaseUrl: apiBaseUrl,
-      },
-    };
-  } catch (err) {
-    safeLog.error("oauth.refresh.failed", { errorKind: errorKind(err) });
-    return undefined;
-  }
-}
-
 /**
  * Provider token-exchange hook.
  *
  * - authorization_code: the host's `redirect_uri` must equal the one it used
  *   at /authorize (P01 F10, P06). Throwing here leaves the code unconsumed;
- *   the fetch wrapper answers `400 invalid_grant`.
- * - refresh_token: refresh the upstream robynn.ai JWT. Its fail-open "no
- *   result" branch (F12) is P10's to close.
+ *   the Worker answers `400 invalid_grant`.
+ * - refresh_token: refresh the upstream credential, fail-closed (P10,
+ *   contract §6.3). Every failure throws a typed error that
+ *   `handleTokenRequest` maps; nothing is ever renewed with stale props (F12).
  */
 async function tokenExchangeCallback(
   options: TokenExchangeCallbackOptions,
@@ -234,18 +232,7 @@ async function tokenExchangeCallback(
     };
   }
   if (options.grantType !== GrantType.REFRESH_TOKEN) return;
-
-  const props = options.props as Props;
-  const refreshed = await refreshUpstreamAccessToken(
-    props,
-    getInternalAuthSecret(env),
-  );
-  if (!refreshed) return;
-
-  return {
-    newProps: refreshed.props,
-    accessTokenTTL: refreshed.expiresIn,
-  };
+  return refreshUpstreamGrant(options, env);
 }
 
 /**
@@ -266,8 +253,9 @@ export function createOAuthProviderOptions(
 
   return {
     apiRoute: [MCP_API_PATH],
+    // Every /mcp request is re-authorized before it reaches a session (P10).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    apiHandler: RobynnMCP.serve(MCP_API_PATH) as any,
+    apiHandler: withMcpPreflight(RobynnMCP.serve(MCP_API_PATH) as any) as any,
     defaultHandler: robynnAuthHandler,
     authorizeEndpoint: "/authorize",
     tokenEndpoint: "/token",
@@ -325,13 +313,86 @@ function notFound() {
   });
 }
 
+/**
+ * Run a `/token` request through the provider and map the Worker's typed
+ * failures (P06 F10, P10 F12) to OAuth errors. Used in-process for code
+ * exchange and inside `RefreshCoordinator` for refresh.
+ */
+async function handleTokenRequest(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  tokenRequest: TokenRequestContext | undefined,
+): Promise<Response> {
+  const options = createOAuthProviderOptions(env, tokenRequest);
+  try {
+    return await new OAuthProvider(options).fetch(request, env, ctx);
+  } catch (err) {
+    if (err instanceof RedirectUriMismatchError) {
+      safeLog.warn("oauth.token.rejected", { reason: "redirect_uri_mismatch" });
+      return oauthErrorResponse(request, 400, "invalid_grant", "redirect_uri does not match the authorization request");
+    }
+    if (err instanceof UpstreamGrantRevokedError) {
+      // Permanent: end the provider grant so no host token outlives it.
+      const grant = tokenRequest?.refreshGrant;
+      if (grant) {
+        try {
+          await getOAuthApi(options, env).revokeGrant(grant.grantId, grant.userId);
+        } catch (revokeErr) {
+          safeLog.error("oauth.refresh.revoke_failed", { errorKind: errorKind(revokeErr) });
+        }
+      }
+      safeLog.warn("oauth.refresh.rejected", { reason: err.reason, revoked: Boolean(grant) });
+      return oauthErrorResponse(request, 400, "invalid_grant", "The grant is no longer valid");
+    }
+    if (err instanceof UpstreamUnavailableError) {
+      // Transient: the grant is not rotated; the same refresh token works later.
+      safeLog.warn("oauth.refresh.unavailable", { reason: err.reason });
+      return oauthErrorResponse(request, 503, "temporarily_unavailable", "Token service temporarily unavailable");
+    }
+    if (err instanceof RefreshScopeError) {
+      safeLog.warn("oauth.refresh.rejected", { reason: "scope_unavailable" });
+      return oauthErrorResponse(request, 400, "invalid_scope", "The requested scope is not available on this grant");
+    }
+    safeLog.error("oauth.token.failed", { errorKind: errorKind(err) });
+    return oauthErrorResponse(request, 500, "server_error", "Token request failed");
+  }
+}
+
+/**
+ * RefreshCoordinator — one Durable Object per provider grant
+ * (`refresh:{grantId}`) that runs that grant's refreshes one at a time and
+ * hands an identical in-flight request the same result (contract §6.3
+ * step 2). Strongly consistent, unlike a KV lease.
+ */
+export class RefreshCoordinator extends DurableObject<Env> {
+  private readonly runner = new SerializedRunner();
+
+  async fetch(request: Request): Promise<Response> {
+    if (request.method !== "POST" || new URL(request.url).pathname !== "/token") return notFound();
+    const read = await readTokenRequestContext(request);
+    if (!read.ok || read.context.grantType !== "refresh_token" || !read.context.refreshGrant) {
+      return oauthErrorResponse(request, 400, "invalid_request", "Unsupported token request");
+    }
+    const tokenRequest = read.context;
+    const key = await refreshRequestKey(request);
+    const ctx = {
+      waitUntil: (promise: Promise<unknown>) => this.ctx.waitUntil(promise),
+      passThroughOnException: () => undefined,
+      props: undefined,
+    } as unknown as ExecutionContext;
+    return this.runner.run(key, () => handleTokenRequest(request, this.env, ctx, tokenRequest));
+  }
+}
+
 const TRACED_PATHS = new Set(["/register", "/authorize", "/callback", "/token", MCP_API_PATH]);
 
 /**
  * Worker entry point — OAuthProvider wraps everything.
  *
- * - /mcp → routed to McpAgent Durable Object (authenticated); SSE is not served
- * - /authorize, /token, /register → handled by OAuthProvider
+ * - /mcp → preflight (P10) → McpAgent Durable Object; SSE is not served
+ * - /token → provider; refreshes go through the grant's RefreshCoordinator
+ * - /authorize, /register → handled by OAuthProvider
  * - All other paths → routed to robynnAuthHandler (Hono app)
  *
  * Every routing decision below is taken from `rewrittenUrl.pathname`, the
@@ -362,9 +423,11 @@ export default {
     if (isUnservedApiPath(path)) return notFound();
 
     const rewrittenRequest = new Request(rewrittenUrl.toString(), request);
-    const isTokenRequest = path === "/token";
+    const shouldTrace = TRACED_PATHS.has(path);
     let tokenRequest: TokenRequestContext | undefined;
-    if (isTokenRequest) {
+    let response: Response;
+
+    if (path === "/token") {
       const read = await readTokenRequestContext(rewrittenRequest);
       if (!read.ok) {
         // The body was never read: refused on the declared length alone.
@@ -374,26 +437,17 @@ export default {
           : oauthErrorResponse(request, 413, "invalid_request", "Token request body too large");
       }
       tokenRequest = read.context;
-    }
-    const oauthProvider = createOAuthProvider(env, tokenRequest);
-    const shouldTrace = TRACED_PATHS.has(path);
-
-    let response: Response;
-    try {
-      response = await oauthProvider.fetch(rewrittenRequest, env, ctx);
-    } catch (err) {
-      if (!isTokenRequest) throw err;
-      if (err instanceof RedirectUriMismatchError) {
-        safeLog.warn("oauth.token.rejected", { reason: "redirect_uri_mismatch" });
-        return oauthErrorResponse(
-          request,
-          400,
-          "invalid_grant",
-          "redirect_uri does not match the authorization request",
-        );
+      const refreshGrant = tokenRequest.grantType === "refresh_token" ? tokenRequest.refreshGrant : null;
+      const coordinators = env.REFRESH_COORDINATOR;
+      if (refreshGrant && coordinators) {
+        const stub = coordinators.get(coordinators.idFromName(refreshCoordinatorName(refreshGrant.grantId)));
+        response = await stub.fetch(rewrittenRequest);
+      } else {
+        if (refreshGrant) safeLog.warn("oauth.refresh.unserialized", { reason: "coordinator_binding_missing" });
+        response = await handleTokenRequest(rewrittenRequest, env, ctx, tokenRequest);
       }
-      safeLog.error("oauth.token.failed", { errorKind: errorKind(err) });
-      return oauthErrorResponse(request, 500, "server_error", "Token request failed");
+    } else {
+      response = await createOAuthProvider(env).fetch(rewrittenRequest, env, ctx);
     }
 
     if (shouldTrace) {
