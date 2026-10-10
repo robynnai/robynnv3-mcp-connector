@@ -6,14 +6,14 @@
  * they rely on the Worker preflight: a `tools/call` is forwarded to the
  * session only after app introspection confirmed the grant, membership and
  * scope for that request. The preflight then stamps the forwarded request
- * with `x-robynn-preflight: {"appGrantId", "tools"}` (clients cannot set
+ * with `x-robynn-preflight: {"appGrantId", "tools", ...}` (clients cannot set
  * `x-robynn-*`: the Worker strips them). This gate refuses any R2 operation
  * unless that stamp is present for this tool and this session's grant and
  * the grant is a hardened (authVersion 2) one. Missing or malformed ⇒ deny:
  * the gate fails closed, and the default gate denies everything.
  */
 import type { Props } from "../types";
-import { PREFLIGHT_HEADER } from "./session-binding";
+import { readPreflightStamp } from "./preflight-stamp";
 import { isUuid } from "./upstream-grant";
 
 export type VaultGate = (tool: string, extra: unknown) => boolean;
@@ -21,29 +21,12 @@ export type VaultGate = (tool: string, extra: unknown) => boolean;
 /** Default for registrations without a gate (e.g. catalog listing). */
 export const DENY_ALL_VAULT_CALLS: VaultGate = () => false;
 
-function preflightHeader(extra: unknown): string | null {
-  const headers = (extra as { requestInfo?: { headers?: Record<string, unknown> } } | undefined)?.requestInfo
-    ?.headers;
-  const value = headers?.[PREFLIGHT_HEADER];
-  return typeof value === "string" ? value : null;
-}
-
 export function createVaultGate(getProps: () => Partial<Props> | undefined): VaultGate {
   return (tool, extra) => {
     const props = getProps();
     if (!props || props.authVersion !== 2 || !isUuid(props.appGrantId)) return false;
-    const raw = preflightHeader(extra);
-    if (!raw) return false;
-    try {
-      const stamp = JSON.parse(raw) as { appGrantId?: unknown; tools?: unknown };
-      return (
-        stamp.appGrantId === props.appGrantId &&
-        Array.isArray(stamp.tools) &&
-        stamp.tools.includes(tool)
-      );
-    } catch {
-      return false;
-    }
+    const stamp = readPreflightStamp(extra);
+    return stamp !== null && stamp.appGrantId === props.appGrantId && stamp.tools.includes(tool);
   };
 }
 

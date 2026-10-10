@@ -37,6 +37,7 @@ import {
   type SessionBinding,
 } from "./session-binding";
 import { decideToolCall, type ToolDenialCode } from "./tool-policy";
+import { encodePreflightStamp } from "./preflight-stamp";
 import { introspectUpstreamGrant, isUuid, type IntrospectionOutcome } from "./upstream-grant";
 
 /** Same ceiling as agents 0.7.5's streamable-HTTP handler. */
@@ -292,6 +293,7 @@ export function withMcpPreflight(next: ApiHandler, options: PreflightOptions = {
           }
 
           const denials = new Map<JsonRpcLike, { code: ToolErrorCode; requiredScope?: OAuthScope }>();
+          let verified: { scopes: OAuthScope[]; organizationName: string | null } | null = null;
           if (outcome.status === "unavailable") {
             for (const call of toolCalls) denials.set(call, { code: "authorization_unavailable" });
             safeLog.warn("mcp.preflight.denied", { denial: "authorization_unavailable", reason: outcome.reason });
@@ -302,6 +304,7 @@ export function withMcpPreflight(next: ApiHandler, options: PreflightOptions = {
               scopeList(props.scopes),
               outcome.grant.scopes,
             );
+            verified = { scopes: effective, organizationName: outcome.grant.organizationName };
             for (const call of toolCalls) {
               const { name, args } = toolCallParams(call);
               const decision = decideToolCall(name, args, effective);
@@ -319,9 +322,12 @@ export function withMcpPreflight(next: ApiHandler, options: PreflightOptions = {
 
           headers.set(
             PREFLIGHT_HEADER,
-            JSON.stringify({
+            encodePreflightStamp({
               appGrantId: identity.appGrantId,
-              tools: toolCalls.map((call) => toolCallParams(call).name),
+              tools: toolCalls.map((call) => toolCallParams(call).name).filter((n): n is string => typeof n === "string"),
+              // What introspection verified for this call (robynn_status reports it; P17).
+              organization: { id: identity.organizationId, name: verified?.organizationName ?? null },
+              ...(verified ? { scopes: verified.scopes } : {}),
             }),
           );
         }

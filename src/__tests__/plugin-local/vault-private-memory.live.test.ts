@@ -14,13 +14,13 @@
  *   4. The results go through P09b's contract helper: no exposure.
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { findPrivateMemoryExposure, PRIVATE_MEMORY_VAULT_CONTRACT, type PrivateMemoryVaultContract } from "../harness/private-memory-vault-contract";
-import { ALPHA, BETA, LIVE, ORG_B, callTool, connectHost, logsContainingSensitiveValues, openSession, registerHost, toolOk } from "./live-stack";
+import { ALPHA, BETA, LIVE, ORG_B, explicitlySkipped, callTool, connectHost, logsContainingSensitiveValues, openSession, registerHost, toolOk } from "./live-stack";
 
 const EXPORT_DIR = process.env.PLUGIN_LOCAL_VAULT_EXPORT_DIR ?? "";
 const MCP_DIR = process.cwd();
@@ -54,8 +54,30 @@ function putLocal(key: string, file: string) {
   );
 }
 
-describe.skipIf(!LIVE || !EXPORT_DIR)("plugin-local: Vault tools over real OAuth never return private memory", () => {
+const SKIPPED = explicitlySkipped("vault");
+// P16 review N1: a requested live run must not skip this suite silently.
+if (LIVE && !SKIPPED && (EXPORT_DIR === "" || walkOrEmpty(EXPORT_DIR).length === 0)) {
+  throw new Error(
+    "PLUGIN_LOCAL_VAULT_EXPORT_DIR must name a non-empty robynnv3 materializer export (or set PLUGIN_LOCAL_SKIP=vault)",
+  );
+}
+
+function walkOrEmpty(dir: string): string[] {
+  try {
+    return walk(dir);
+  } catch {
+    return [];
+  }
+}
+
+describe.skipIf(!LIVE || SKIPPED)("plugin-local: Vault tools over real OAuth never return private memory", () => {
   let clientId: string;
+  let leftovers: string | undefined;
+
+  afterAll(() => {
+    // P16 review N10: no synthetic leftovers in $TMPDIR.
+    if (leftovers) rmSync(leftovers, { recursive: true, force: true });
+  });
 
   beforeAll(() => {
     const files = walk(EXPORT_DIR);
@@ -64,9 +86,9 @@ describe.skipIf(!LIVE || !EXPORT_DIR)("plugin-local: Vault tools over real OAuth
 
     // What a pre-P09b run left in R2 before the purge: user-private and
     // session memory files under sources/agent-memory/.
-    const leftovers = mkdtempSync(join(tmpdir(), "p16-leftovers-"));
+    leftovers = mkdtempSync(join(tmpdir(), "p16-leftovers-"));
     for (const path of LEFTOVER_PATHS) {
-      const file = join(leftovers, path.replaceAll("/", "_"));
+      const file = join(leftovers!, path.replaceAll("/", "_"));
       writeFileSync(file, "leftover private memory from a pre-P09b run");
       putLocal(`orgs/${ORG_B}/${path}`, file);
     }

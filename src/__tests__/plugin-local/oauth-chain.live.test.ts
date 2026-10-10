@@ -103,6 +103,8 @@ describe.skipIf(!LIVE)("plugin-local: host OAuth chain end to end (real app, Wor
   afterAll(() => {
     // Leave the seed as it was for the next suite.
     setMembershipStatus(ALPHA.id, ORG_B, "active");
+    // P16 review N10: drop the stranger org the tamper case created.
+    sql(`delete from public.organizations where id=${lit(STRANGER_ORG)}`);
   });
 
   describe("happy path: consent, exchange, tools, refresh, revocation", () => {
@@ -237,15 +239,28 @@ describe.skipIf(!LIVE)("plugin-local: host OAuth chain end to end (real app, Wor
       expect(toolErrorCode(await callTool(ro.access, session, "robynn_memory_get", { scope: "session", key: "k" }))).toBe("unsupported_memory_scope");
     });
 
-    it("a refresh can narrow a host token but never widen it; the narrowed token cannot execute", async () => {
+    it("a refresh can narrow a host token but never beyond the consented scopes; the narrowed token cannot execute", async () => {
       const full = await connectHost({ clientId, user: ALPHA, organizationId: ORG_A, scope: "brand:read tools:execute", allowExecute: true });
       const session = await openSession(full.access);
       const narrowed = await hostRefresh(clientId, full.refresh, { scope: "brand:read" });
       expect(narrowed.status).toBe(200);
       expect(narrowed.body.scope).toBe("brand:read");
       expect(toolErrorCode(await callTool(narrowed.body.access_token, session, "robynn_memory_write", { scope: "user", key: "p16", content: "x" }))).toBe("insufficient_scope");
-      const widened = await hostRefresh(clientId, narrowed.body.refresh_token, { scope: "brand:read tools:execute admin" });
-      expect(widened.body.scope ?? "").not.toContain("admin");
+      // P16 review N2: a later refresh may ask again for anything the user consented to
+      // (RFC 6749 §6), and an unconsented scope is dropped, never granted.
+      const again = await hostRefresh(clientId, narrowed.body.refresh_token, { scope: "brand:read tools:execute admin" });
+      expect(again.status).toBe(200);
+      expect(again.body.scope).toBe("brand:read tools:execute");
+    });
+
+    it("a read-only consent can never gain tools:execute by refresh", async () => {
+      const readOnlyClient = await registerHost("P16 Read-only Host");
+      const ro = await connectHost({ clientId: readOnlyClient, user: ALPHA, organizationId: ORG_A, scope: "brand:read" });
+      const session = await openSession(ro.access);
+      const asked = await hostRefresh(readOnlyClient, ro.refresh, { scope: "brand:read tools:execute" });
+      expect(asked.status).toBe(200);
+      expect(asked.body.scope).toBe("brand:read");
+      expect(toolErrorCode(await callTool(asked.body.access_token, session, "robynn_memory_write", { scope: "org", key: "p16", value: "x" }))).toBe("insufficient_scope");
     });
   });
 

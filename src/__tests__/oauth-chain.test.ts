@@ -171,6 +171,12 @@ describe("host OAuth chain through the real Worker entry points", () => {
     const { sessionId } = await initialize(h, token.body.access_token);
     const status = await callTool(h, token.body.access_token, sessionId, "robynn_status");
     expect(status.json.result.isError).toBeFalsy();
+    // P17: the organization and permissions introspection verified for this call (non-ASCII survives the header).
+    expect(status.json.result.structuredContent.connection).toEqual({
+      organization: { id: ORG_A, name: "Harness Org ✓" },
+      permissions: ["brand:read"],
+      can_execute: false,
+    });
     const summary = businessCalls(h).find((c) => c.path === "/api/cli/context/summary")!;
     expect(summary.authorization).toMatch(/^Bearer [^.]+\.[^.]+\.[^.]+$/);
     const before = businessCalls(h).length;

@@ -282,7 +282,7 @@
         "readOnlyHint": true,
         "title": "Check Robynn Connection"
       },
-      "description": "Check the Robynn connection and the connected organization's name, company info, and connection health. Read-only.",
+      "description": "Check the Robynn connection: the organization it is bound to, its permissions (brand:read; tools:execute only if granted at consent), company info and connection health. Read-only.",
       "execution": {
         "taskSupport": "forbidden"
       },
@@ -740,10 +740,10 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false,
-        "readOnlyHint": false,
+        "readOnlyHint": true,
         "title": "Check Brand Book Completeness"
       },
-      "description": "Check brand-book completeness, missing sections, and readiness for downstream marketing work. Also refreshes Robynn's stored brand-completeness summary; repeat calls are safe.",
+      "description": "Check brand-book completeness, missing sections, and readiness for downstream marketing work. Read-only.",
       "execution": {
         "taskSupport": "forbidden"
       },
@@ -775,10 +775,10 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false,
-        "readOnlyHint": false,
+        "readOnlyHint": true,
         "title": "Analyze Brand Book Gaps"
       },
-      "description": "Explain which brand-book gaps matter most, why they matter, and what inputs would improve Robynn's downstream outputs. Also refreshes Robynn's stored brand-completeness summary; repeat calls are safe.",
+      "description": "Explain which brand-book gaps matter most, why they matter, and what inputs would improve Robynn's downstream outputs. Read-only.",
       "execution": {
         "taskSupport": "forbidden"
       },
@@ -822,10 +822,10 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false,
-        "readOnlyHint": false,
+        "readOnlyHint": true,
         "title": "Plan Brand Book Improvements"
       },
-      "description": "Turn the current brand-book state into a prioritized improvement strategy for positioning, voice, competition, and proof. Also refreshes Robynn's stored brand-completeness summary; repeat calls are safe.",
+      "description": "Turn the current brand-book state into a prioritized improvement strategy for positioning, voice, competition, and proof. Read-only.",
       "execution": {
         "taskSupport": "forbidden"
       },
@@ -964,10 +964,10 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": true,
-        "readOnlyHint": false,
+        "readOnlyHint": true,
         "title": "Export Brand Book as HTML"
       },
-      "description": "Export the current brand book as a self-contained HTML document returned inline in the response. This is an export, not a publication: nothing is hosted, shared, or published and no public URL is created. Robynn fetches the organization's stored logo image to embed it. Also refreshes Robynn's stored brand-completeness summary; repeat calls are safe.",
+      "description": "Export the current brand book as a self-contained HTML document returned inline in the response. This is an export, not a publication: nothing is hosted, shared, or published and no public URL is created. Robynn fetches the organization's stored logo image to embed it. Read-only.",
       "execution": {
         "taskSupport": "forbidden"
       },

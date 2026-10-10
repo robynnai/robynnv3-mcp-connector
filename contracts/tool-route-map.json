@@ -922,16 +922,16 @@
         "workerWithoutVault": true,
         "cli": true
       },
-      "requiredScope": "tools:execute",
+      "requiredScope": "brand:read",
       "requiredScopeAfterP07": "brand:read",
       "currentHints": {
-        "readOnlyHint": false,
+        "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": false,
         "idempotentHint": true
       },
       "proposedHints": {
-        "readOnlyHint": false,
+        "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": false,
         "idempotentHint": true
@@ -943,8 +943,8 @@
         "idempotentHint": true
       },
       "inputSchemaDigest": "sha256:5df38530e82fde4a418ddfd9cdb35bb7040c42ec877b863f45b724b23258811b",
-      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change, then regenerate contracts/mcp-tools.json (the description changes).",
-      "hintEvidence": "intended read; currently upserts the derived 'Brand Completeness' doc (brand-book-v2-service.ts:181-196,1871)",
+      "conditional": "† Flipped in P17 (P07 removed the write: the app passes persistCompleteness:false and serves these routes as brand:read). P12 shipped the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change, then regenerate contracts/mcp-tools.json (the description changes).",
+      "hintEvidence": "P07 removed the completeness write (robynnv3 brand-book-adapters.ts aggregateBrandBookData({persistCompleteness:false})); was: intended read; currently upserts the derived 'Brand Completeness' doc (brand-book-v2-service.ts:181-196,1871)",
       "appRoutes": [
         {
           "method": "GET",
@@ -984,16 +984,16 @@
         "workerWithoutVault": true,
         "cli": true
       },
-      "requiredScope": "tools:execute",
+      "requiredScope": "brand:read",
       "requiredScopeAfterP07": "brand:read",
       "currentHints": {
-        "readOnlyHint": false,
+        "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": false,
         "idempotentHint": true
       },
       "proposedHints": {
-        "readOnlyHint": false,
+        "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": false,
         "idempotentHint": true
@@ -1005,8 +1005,8 @@
         "idempotentHint": true
       },
       "inputSchemaDigest": "sha256:29392f14967630c7478edf3b63c6fd4617fb2e00ea2d4dae6a4381c11a1ae5eb",
-      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change, then regenerate contracts/mcp-tools.json (the description changes).",
-      "hintEvidence": "deterministic, no LLM (brand-book-adapters.ts:255-372); same hidden completeness write",
+      "conditional": "† Flipped in P17 (P07 removed the write: the app passes persistCompleteness:false and serves these routes as brand:read). P12 shipped the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change, then regenerate contracts/mcp-tools.json (the description changes).",
+      "hintEvidence": "P07 removed the completeness write (robynnv3 brand-book-adapters.ts aggregateBrandBookData({persistCompleteness:false})); was: deterministic, no LLM (brand-book-adapters.ts:255-372); same hidden completeness write",
       "appRoutes": [
         {
           "method": "POST",
@@ -1046,16 +1046,16 @@
         "workerWithoutVault": true,
         "cli": true
       },
-      "requiredScope": "tools:execute",
+      "requiredScope": "brand:read",
       "requiredScopeAfterP07": "brand:read",
       "currentHints": {
-        "readOnlyHint": false,
+        "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": false,
         "idempotentHint": true
       },
       "proposedHints": {
-        "readOnlyHint": false,
+        "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": false,
         "idempotentHint": true
@@ -1067,8 +1067,8 @@
         "idempotentHint": true
       },
       "inputSchemaDigest": "sha256:2d51e7bf0fade09fd076f22effce7babcbdc3459b7128bbf1040a55358280fb2",
-      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change, then regenerate contracts/mcp-tools.json (the description changes).",
-      "hintEvidence": "deterministic templates (brand-book-adapters.ts:374-485); same hidden completeness write",
+      "conditional": "† Flipped in P17 (P07 removed the write: the app passes persistCompleteness:false and serves these routes as brand:read). P12 shipped the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change, then regenerate contracts/mcp-tools.json (the description changes).",
+      "hintEvidence": "P07 removed the completeness write (robynnv3 brand-book-adapters.ts aggregateBrandBookData({persistCompleteness:false})); was: deterministic templates (brand-book-adapters.ts:374-485); same hidden completeness write",
       "appRoutes": [
         {
           "method": "POST",
@@ -1225,16 +1225,16 @@
         "workerWithoutVault": true,
         "cli": true
       },
-      "requiredScope": "tools:execute",
+      "requiredScope": "brand:read",
       "requiredScopeAfterP07": "brand:read",
       "currentHints": {
-        "readOnlyHint": false,
+        "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": true,
         "idempotentHint": true
       },
       "proposedHints": {
-        "readOnlyHint": false,
+        "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": true,
         "idempotentHint": true
@@ -1246,8 +1246,8 @@
         "idempotentHint": true
       },
       "inputSchemaDigest": "sha256:e812faf489716af95305541e1f3cd71e77ba392c759e30644e567621ff2ed379",
-      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change, then regenerate contracts/mcp-tools.json (the description changes). The tool does NOT publish — it returns HTML inline.",
-      "hintEvidence": "inline HTML export, no storage/public URL (brand-book-adapters.ts:612-656); server fetches the stored logo URL (brand-book-export-service.ts:404)",
+      "conditional": "† Flipped in P17 (P07 removed the write: the app passes persistCompleteness:false and serves these routes as brand:read). P12 shipped the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change, then regenerate contracts/mcp-tools.json (the description changes). The tool does NOT publish — it returns HTML inline.",
+      "hintEvidence": "P07 removed the completeness write (robynnv3 brand-book-adapters.ts aggregateBrandBookData({persistCompleteness:false})); was: inline HTML export, no storage/public URL (brand-book-adapters.ts:612-656); server fetches the stored logo URL (brand-book-export-service.ts:404)",
       "appRoutes": [
         {
           "method": "POST",

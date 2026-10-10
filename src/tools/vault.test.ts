@@ -416,6 +416,9 @@ describe("VaultR2 — private-memory paths (P16, defense in depth behind P09b)",
     ["sources/agent-memory/users-list.md", false],
     ["sources/website/user-guide.md", false],
     ["brand/user-personas/primary.md", false],
+    // P16 review N7: only top-level sources/ holds agent memory.
+    ["brand/agent-memory/user-tone.md", false],
+    ["archive/agent-memory/session-run-1-notes.md", false],
     ["sources/agent-memory/", false],
   ])("isPrivateMemoryVaultPath(%s) = %s", (path, expected) => {
     expect(isPrivateMemoryVaultPath(path)).toBe(expected);
