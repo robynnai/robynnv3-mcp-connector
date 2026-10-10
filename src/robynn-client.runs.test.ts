@@ -1,38 +1,63 @@
 /**
- * COS-PLUGIN-001 P11 review B2: a failed or cancelled CMO run reaches the
- * model as a terminal result with its reason, not as a generic outage.
+ * COS-PLUGIN-001 P11 review B2/B3: a failed or cancelled CMO run reaches the
+ * model as an error carrying its reason, never as a generic outage and never
+ * as a successful result.
  *
- * The app now answers GET /api/agents/cmo/runs/{id} for a failed or
- * cancelled run with 200 `{ success: true, data: { status: "failed",
- * cancelled, output: "<short reason>" } }` instead of a 500 (whose message
- * the client hides and which a retry-safe GET would resend).
+ * The app answers GET /api/agents/cmo/runs/{id} for a failed or cancelled run
+ * with 200 `{ success: true, data: { status: "failed", cancelled, output:
+ * "<short reason>" } }`. getRun returns that as data (robynn_run_status
+ * reports it); pollRun rejects with RobynnRunFailedError, so the starter tools
+ * and CLI commands that poll report an error.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { RobynnClient } from "./robynn-client";
+import {
+  RobynnApiError,
+  RobynnClient,
+  RobynnRunFailedError,
+  UpstreamAuthorizationExpiredError,
+} from "./robynn-client";
+import { registerAssistTools } from "./tools/assist";
+import { registerContentTools } from "./tools/content";
+import { registerResearchTools } from "./tools/research";
 import { registerRunTools } from "./tools/runs";
 
-function failedRun(cancelled = false) {
-  return new Response(
-    JSON.stringify({
-      success: true,
-      data: {
-        id: "run-1",
-        status: "failed",
-        cancelled,
-        thread_id: "thread-1",
-        output: cancelled ? "Run was cancelled." : "Run failed: brand context missing",
-        tokens_used: null,
-      },
-    }),
-  );
+type ToolResult = { isError?: boolean; content: Array<{ text: string }> };
+type Handler = (args: Record<string, unknown>) => Promise<ToolResult>;
+
+/**
+ * Fake MCP server for both registration APIs: `server.tool(...)` (this
+ * branch) and `server.registerTool(...)` (P12 and later). The handler is the
+ * last argument in both.
+ */
+function fakeServer() {
+  const handlers = new Map<string, Handler>();
+  const register = (...args: unknown[]) => {
+    handlers.set(args[0] as string, args[args.length - 1] as Handler);
+  };
+  return { server: { tool: register, registerTool: register } as never, handlers };
 }
 
-function stub(respond: () => Response) {
+function failedRun(output: string, cancelled = false) {
+  return {
+    success: true,
+    data: { id: "run-1", status: "failed", cancelled, thread_id: "thread-1", output, tokens_used: null },
+  };
+}
+
+/** Thread create → run start → run poll, with the poll answering `run`. */
+function stubApp(run: unknown) {
   const requests: string[] = [];
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-    requests.push(new URL(String(input)).pathname);
-    return respond();
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = new URL(String(input)).pathname;
+    requests.push(`${init?.method ?? "GET"} ${path}`);
+    if (path === "/api/agents/cmo/threads") {
+      return new Response(JSON.stringify({ success: true, data: { id: "thread-1" } }));
+    }
+    if (path.endsWith("/runs")) {
+      return new Response(JSON.stringify({ success: true, data: { run_id: "run-1" } }));
+    }
+    return new Response(JSON.stringify(run));
   });
   return requests;
 }
@@ -47,68 +72,136 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-describe("failed and cancelled CMO runs", () => {
-  it("getRun returns the failed run in one request", async () => {
-    const requests = stub(() => failedRun());
+describe("getRun and robynn_run_status", () => {
+  it("getRun returns the failed run as data in one request", async () => {
+    const requests = stubApp(failedRun("Run failed: brand context missing"));
     await expect(client().getRun("run-1")).resolves.toMatchObject({
       data: { status: "failed", output: "Run failed: brand context missing" },
     });
-    expect(requests).toEqual(["/api/agents/cmo/runs/run-1"]);
+    expect(requests).toEqual(["GET /api/agents/cmo/runs/run-1"]);
   });
 
-  it("pollRun stops at the first failed or cancelled answer", async () => {
-    for (const cancelled of [false, true]) {
-      vi.restoreAllMocks();
-      const requests = stub(() => failedRun(cancelled));
-      await expect(client().pollRun("run-1", 60_000)).resolves.toMatchObject({
-        data: { status: "failed", cancelled },
-      });
-      expect(requests).toHaveLength(1);
-    }
-  });
-
-  it("pollRun also treats a raw cancelled status as terminal", async () => {
-    const requests = stub(
-      () => new Response(JSON.stringify({ success: true, data: { id: "run-1", status: "cancelled" } })),
-    );
-    await expect(client().pollRun("run-1", 60_000)).resolves.toMatchObject({
-      data: { status: "cancelled" },
-    });
-    expect(requests).toHaveLength(1);
-  });
-
-  it("robynn_run_status reports the failure reason to the model", async () => {
-    stub(() => failedRun());
-    const handlers = new Map<string, (args: unknown) => Promise<{ isError?: boolean; content: Array<{ text: string }> }>>();
-    const server = {
-      tool: (...args: unknown[]) => {
-        handlers.set(args[0] as string, args[args.length - 1] as never);
-      },
-    };
-    registerRunTools(server as never, client());
+  it("robynn_run_status reports the failure reason as an error", async () => {
+    stubApp(failedRun("Run failed: brand context missing"));
+    const { server, handlers } = fakeServer();
+    registerRunTools(server, client());
 
     const result = await handlers.get("robynn_run_status")!({ run_id: "run-1" });
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("Run failed: brand context missing");
-    expect(result.content[0].text).not.toContain("failed to complete the request");
   });
 });
 
-describe("401 without a refresh hook (P10-compatible)", () => {
-  it("throws a fixed authorization_expired RobynnApiError after one request", async () => {
-    const requests = stub(
-      () => new Response(JSON.stringify({ message: "grant revoked canary-body", code: "grant_revoked" }), { status: 401 }),
+describe("pollRun (B3)", () => {
+  it("rejects a failed run with its reason after one poll", async () => {
+    const requests = stubApp(failedRun("Run failed: brand context missing"));
+
+    const error = await client()
+      .pollRun("run-1", 60_000)
+      .catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(RobynnRunFailedError);
+    expect(error).toBeInstanceOf(RobynnApiError);
+    expect(error).toMatchObject({ code: "run_failed", cancelled: false, runId: "run-1" });
+    expect((error as Error).message).toBe("Run failed: brand context missing");
+    expect(requests).toHaveLength(1);
+  });
+
+  it("rejects a cancelled run (flag or raw status) as run_cancelled", async () => {
+    for (const run of [
+      failedRun("Run was cancelled.", true),
+      { success: true, data: { id: "run-1", status: "cancelled" } },
+    ]) {
+      vi.restoreAllMocks();
+      const requests = stubApp(run);
+      await expect(client().pollRun("run-1", 60_000)).rejects.toMatchObject({
+        code: "run_cancelled",
+        cancelled: true,
+        message: "Run was cancelled.",
+      });
+      expect(requests).toHaveLength(1);
+    }
+  });
+
+  it("still resolves a completed run", async () => {
+    stubApp({ success: true, data: { id: "run-1", status: "completed", output: "done" } });
+    await expect(client().pollRun("run-1", 60_000)).resolves.toMatchObject({
+      data: { status: "completed", output: "done" },
+    });
+  });
+
+  it("scrubs tokens from the reason and never reads as a poll timeout", async () => {
+    stubApp(
+      failedRun(
+        "Run failed: Run timed out calling eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJlLWNhbmFyeQ",
+      ),
     );
+
+    const error = (await client()
+      .pollRun("run-1", 60_000)
+      .catch((err: unknown) => err)) as Error;
+
+    expect(error.message).not.toContain("eyJ");
+    expect(error.message).not.toMatch(/run timed out/i);
+    expect(error.message).toContain("run hit a timeout");
+  });
+});
+
+describe("starter tools report a failed run as an error (B3)", () => {
+  const cases: Array<[string, (s: never, c: RobynnClient) => void, Record<string, unknown>]> = [
+    ["robynn_create_content", registerContentTools, { type: "blog_post", topic: "pricing" }],
+    ["robynn_research", registerResearchTools, { query: "competitors" }],
+    ["robynn_assist", registerAssistTools, { message: "help" }],
+  ];
+
+  for (const [name, register, args] of cases) {
+    it(`${name}: isError with the run's reason`, async () => {
+      stubApp(failedRun("Run failed: brand context missing"));
+      const { server, handlers } = fakeServer();
+      register(server, client());
+
+      const result = await handlers.get(name)!(args);
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Run failed: brand context missing");
+    });
+
+    it(`${name}: a cancelled run is an error too`, async () => {
+      stubApp(failedRun("Run was cancelled.", true));
+      const { server, handlers } = fakeServer();
+      register(server, client());
+
+      const result = await handlers.get(name)!(args);
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Run was cancelled.");
+    });
+  }
+});
+
+describe("401 without a refresh hook (P10-compatible)", () => {
+  it("throws a fixed authorization_expired RobynnApiError after one request, keeping the app code", async () => {
+    const requests: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      requests.push(String(input));
+      return new Response(
+        JSON.stringify({ message: "grant revoked canary-body", code: "grant_revoked" }),
+        { status: 401 },
+      );
+    });
 
     const error = await client()
       .getStatus()
       .catch((err: unknown) => err);
 
-    const { RobynnApiError, UpstreamAuthorizationExpiredError } = await import("./robynn-client");
     expect(error).toBeInstanceOf(UpstreamAuthorizationExpiredError);
     expect(error).toBeInstanceOf(RobynnApiError);
-    expect(error).toMatchObject({ status: 401, code: "authorization_expired" });
+    expect(error).toMatchObject({
+      status: 401,
+      code: "authorization_expired",
+      upstreamCode: "grant_revoked",
+    });
     expect((error as Error).message).toMatch(/^authorization_expired: /);
     expect((error as Error).message).not.toContain("canary-body");
     expect(requests).toHaveLength(1);

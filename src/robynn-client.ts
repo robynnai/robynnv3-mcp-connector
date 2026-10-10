@@ -149,10 +149,37 @@ export const AUTHORIZATION_EXPIRED_MESSAGE =
   "authorization_expired: Robynn did not accept this connection's current credentials. Retry the request; if it keeps failing, reconnect Robynn.";
 
 export class UpstreamAuthorizationExpiredError extends RobynnApiError {
-  constructor() {
+  constructor(
+    /** The app's own 401 code (e.g. `grant_revoked`), kept for transports that map it. */
+    readonly upstreamCode: string | null = null,
+  ) {
     super(401, 'authorization_expired', AUTHORIZATION_EXPIRED_MESSAGE, true);
     this.name = 'UpstreamAuthorizationExpiredError';
     this.message = AUTHORIZATION_EXPIRED_MESSAGE;
+  }
+}
+
+const MAX_RUN_FAILURE_LENGTH = 200;
+
+/**
+ * A polled run ended failed or cancelled. pollRun rejects with this so every
+ * caller (starter tools, CLI) reports an error, not a successful result
+ * (P11 review B3). The reason is the app's short summary, re-scrubbed here.
+ */
+export class RobynnRunFailedError extends RobynnApiError {
+  constructor(
+    readonly runId: string,
+    readonly cancelled: boolean,
+    reason: string | undefined,
+  ) {
+    const fallback = cancelled ? 'Run was cancelled.' : 'Run failed.';
+    const detail = redactLogString(reason?.trim() || fallback)
+      .slice(0, MAX_RUN_FAILURE_LENGTH)
+      // Callers detect a poll timeout by this phrase; a failure must never
+      // be mistaken for "still running".
+      .replace(/run timed out/gi, 'run hit a timeout');
+    super(0, cancelled ? 'run_cancelled' : 'run_failed', detail, false);
+    this.name = 'RobynnRunFailedError';
   }
 }
 
@@ -338,7 +365,7 @@ export class RobynnClient {
       }
 
       if (status === 401 && !this.options.refreshAccessToken) {
-        throw new UpstreamAuthorizationExpiredError();
+        throw new UpstreamAuthorizationExpiredError(toApiError(status, text).code);
       }
 
       if (status === 401 && !hasRefreshedAuth && this.options.refreshAccessToken) {
@@ -878,7 +905,11 @@ export class RobynnClient {
     });
   }
 
-  /** Poll a run until completion */
+  /**
+   * Poll a run until it finishes. Resolves only for a completed run; a failed
+   * or cancelled run rejects with RobynnRunFailedError (callers report it as
+   * an error), and running past `timeoutMs` rejects with "Run timed out".
+   */
   async pollRun(
     runId: string,
     timeoutMs = POLL_TIMEOUT_MS,
@@ -890,10 +921,18 @@ export class RobynnClient {
       const result = await this.getRun(runId);
 
       // The app reports failed and cancelled runs as a terminal 200
-      // (`status: "failed"`, P11 review B2); `cancelled` is accepted too.
-      const status = result.data?.status;
-      if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+      // (`status: "failed"` plus `cancelled`, P11 review B2); a raw
+      // `cancelled` status is accepted too.
+      const data = result.data as (RunResult & { cancelled?: boolean }) | undefined;
+      if (data?.status === 'completed') {
         return result;
+      }
+      if (data?.status === 'failed' || data?.status === 'cancelled') {
+        throw new RobynnRunFailedError(
+          data.id ?? runId,
+          data.status === 'cancelled' || data.cancelled === true,
+          data.output,
+        );
       }
 
       await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
