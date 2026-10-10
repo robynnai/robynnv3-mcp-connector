@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { RobynnClient } from "../robynn-client";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 function buildCampaignPendingText(threadId: string | undefined, runId: string | undefined) {
   const lines = [
@@ -62,14 +62,15 @@ export function registerCampaignTools(server: McpServer, client: RobynnClient) {
     server,
     "robynn_campaign_creator",
     {
-      description:
-        "Generate a full marketing campaign strategy using Robynn's specialist campaign creator. Produces a 12-week SEO/content plan and Google Ads strategy, saves completed campaigns as Rory artifacts, and returns pending run IDs if generation is still running.",
-      inputSchema: campaignRequestSchema,
-      annotations: {
+      ...toolMetadata("Create a Marketing Campaign", {
         readOnlyHint: false,
         destructiveHint: false,
         openWorldHint: true,
-      },
+        idempotentHint: false,
+      }),
+      description:
+        "Generate a full marketing campaign strategy (12-week SEO/content plan and Google Ads strategy) with Robynn's campaign creator agent. Saves the finished campaign as a Rory artifact with a shareable report link. Only available to organizations in Robynn's prospecting (robynn-ai) environment. Each call starts a new generation run; if it is still running, returns langgraph_thread_id and langgraph_run_id; poll them with robynn_campaign_status.",
+      inputSchema: campaignRequestSchema,
       _meta: {
         ui: {
           visibility: ["model"],
@@ -120,14 +121,14 @@ export function registerCampaignTools(server: McpServer, client: RobynnClient) {
     server,
     "robynn_campaign_status",
     {
-      description:
-        "Check a pending Robynn campaign creator run and save the generated campaign artifact when complete.",
-      inputSchema: statusSchema,
-      annotations: {
-        readOnlyHint: true,
+      ...toolMetadata("Check Campaign Status", {
+        readOnlyHint: false,
         destructiveHint: false,
-        openWorldHint: true,
-      },
+        openWorldHint: false,
+      }),
+      description:
+        "Check a campaign started by robynn_campaign_creator. Once generation has finished, each call saves the campaign artifact to Robynn again (re-uploading the report). Only available in Robynn's prospecting (robynn-ai) environment.",
+      inputSchema: statusSchema,
       _meta: {
         ui: {
           visibility: ["model"],

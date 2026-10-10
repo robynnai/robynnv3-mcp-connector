@@ -60,9 +60,11 @@ The default export is an `OAuthProvider` that wraps everything:
 
 ```
 fetch wrapper           → 404 for non-canonical paths (`//host/...`) and for /mcp* and /sse* other than exactly /mcp;
-                          provider URL built structurally on the public origin; /token: no Content-Length ⇒ 411, > 16 KB ⇒ 413 (body unread)
+                          provider URL built structurally on the public origin; /token: no Content-Length ⇒ 411, > 16 KB ⇒ 413 (body unread);
+                          refresh_token requests go to the grant's RefreshCoordinator DO (one refresh at a time)
 OAuthProvider (createOAuthProviderOptions: S256-only PKCE, no implicit flow)
-├── /mcp               → RobynnMCP.serve() (McpAgent Durable Object; SSE is not served)
+├── /mcp               → withMcpPreflight (session binding, per-call introspection, TOOL_POLICY)
+│                        → RobynnMCP.serve() (McpAgent Durable Object; SSE is not served)
 ├── /authorize         → Handled by OAuthProvider, delegated to auth handler
 ├── /token, /register  → Handled by OAuthProvider; /token redirect_uri is bound to /authorize
 └── /* (default)       → robynnAuthHandler (Hono app)
@@ -71,8 +73,8 @@ OAuthProvider (createOAuthProviderOptions: S256-only PKCE, no implicit flow)
 ### McpAgent Class (`RobynnMCP`)
 
 Extends `McpAgent<Env, Record<string, never>, Props>`:
-- One Durable Object instance per authenticated user
-- `this.props.accessToken` contains the user's robynn.ai JWT
+- One Durable Object instance per MCP session, bound once to its `initialize` caller (`{hostGrantId, userId, organizationId, appGrantId}` in DO storage); mismatching props and upgrades are refused (P10, `docs/plugin-v1/WORKER_SESSION_AUTHORIZATION.md`)
+- `this.props.accessToken` contains the user's robynn.ai JWT; the DO never refreshes it (an upstream 401 is `authorization_expired`), it adopts the newer token after the host refreshes
 - `init()` creates a `RobynnClient`, registers shared MCP App resources, and registers all tools via `registerXTools(server, client)` functions
 - MCP transport is Streamable HTTP at `/mcp`, handled by the base class. SSE is neither served nor advertised (`ADVERTISE_SSE = false` in `src/authorization/oauth-policy.ts`).
 
@@ -104,16 +106,23 @@ Poll timeout is 280s to stay under Claude's 300s limit.
 
 ## Tool Implementation Patterns
 
-### Standard tools (`server.tool`)
+### Standard tools (`server.registerTool`)
 
-Used by read-only and CMO-based tools:
+Used by read-only and CMO-based tools (`server.tool()` is deprecated in the SDK):
 
 ```typescript
-server.tool(
+server.registerTool(
   "tool_name",
-  "Description for the LLM",
-  { param: z.string().describe("...") },
-  { readOnlyHint: true, destructiveHint: false },
+  {
+    ...toolMetadata("Tool Title", {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+      idempotentHint: true, // only with evidence
+    }),
+    description: "What it does, plus side effects, charges, external access and its poller",
+    inputSchema: { param: z.string().describe("...") },
+  },
   async ({ param }) => {
     const result = await client.someMethod(param);
     return {
@@ -135,7 +144,7 @@ registerAppTool(server, {
   name: "tool_name",
   description: "Description for the LLM",
   inputSchema: { param: z.string().describe("...") },
-  annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+  ...toolMetadata("Tool Title", { readOnlyHint: true, destructiveHint: false, openWorldHint: true }),
   outputResource: { uri: REPORT_RESOURCE_URIS.reportName, ... },
   execute: async ({ param }) => { ... },
 });
@@ -146,7 +155,7 @@ registerAppTool(server, {
 - **Always return both `content` and `structuredContent`** — text fallback for LLM + structured data for UI
 - **Cast `structuredContent`** to `Record<string, unknown>` (SDK type requirement)
 - **Wrap in try/catch** — return `isError: true` on failure
-- **Safety annotations required** — `readOnlyHint`, `destructiveHint`, `openWorldHint` on every tool
+- **Title and safety annotations required** — `toolMetadata(title, hints)` from `src/tools/util.ts` sets the title (top-level and `annotations.title`) and explicit `readOnlyHint`, `destructiveHint`, `openWorldHint` on every tool. Hints follow actual backend behaviour, not the HTTP method; keep `contracts/tool-route-map.json` in lock-step (`src/__tests__/catalog-baseline.test.ts` enforces titles, hints and input-schema digests). See `docs/plugin-v1/TOOL_CONTRACT.md`.
 - **App tools link a report resource** — `outputResource.uri` points to a `ui://reports/*.html` resource registered in `report-app.ts`
 
 ## Tools Reference
@@ -186,7 +195,7 @@ GEO, SEO, battlecard, brand-book, website audit/strategy, content plan, weekly v
 |------|---------|
 | `src/index.ts` | `RobynnMCP` McpAgent class + `OAuthProvider` default export |
 | `src/auth-handler.ts` | Hono app: `/authorize` redirect, `/callback` token exchange, health, `.well-known` |
-| `src/authorization/*` | OAuth front-door policy (scopes, PKCE, resources, `ADVERTISE_SSE`), browser-bound state, upstream grant/introspection, `/token` redirect binding |
+| `src/authorization/*` | OAuth front-door policy (scopes, PKCE, resources, `ADVERTISE_SSE`), browser-bound state, upstream grant/introspection, `/token` redirect binding; P10: `mcp-preflight.ts` (per-request authorization), `session-binding.ts`, `tool-policy.ts` (from `contracts/tool-route-map.json`), `upstream-refresh.ts` (fail-closed refresh), `refresh-coordinator.ts`, `vault-gate.ts` |
 | `src/safe-log.ts` | Redacting structured logger: no codes, state, tokens, query strings or bodies in logs |
 | `src/robynn-client.ts` | HTTP client for robynn.ai API with timeout/polling |
 | `src/internal-mcp-auth.ts` | v2 HMAC signing (body digest + nonce) for Worker→robynn.ai requests; token code exchange and refresh |
@@ -216,7 +225,8 @@ GEO, SEO, battlecard, brand-book, website audit/strategy, content plan, weekly v
 |---------|------|---------|
 | `OAUTH_KEY` | KV Namespace | Stores OAuth state during auth redirect flow (10-min TTL) |
 | `OAUTH_KV` | KV Namespace | Same KV namespace as `OAUTH_KEY` (aliased for OAuthProvider) |
-| `MCP_OBJECT` | Durable Object (`RobynnMCP`) | One instance per authenticated user — hosts MCP server |
+| `MCP_OBJECT` | Durable Object (`RobynnMCP`) | One instance per MCP session — hosts MCP server |
+| `REFRESH_COORDINATOR` | Durable Object (`RefreshCoordinator`) | One per provider grant (`refresh:{grantId}`); serializes host refreshes (P10). Stores nothing |
 | `ROBYNN_API_BASE_URL` | Env var | `https://robynn.ai` |
 | `MCP_PUBLIC_BASE_URL` | Env var | `https://mcp.robynn.ai` — used for URL rewriting and report resource URIs |
 | `MCP_INTERNAL_AUTH_SECRET` | Secret (required, set out of band) | Signs Worker → robynn.ai internal requests (`/api/oauth/token` code exchange and refresh); no fallback. See `docs/plugin-v1/INTERNAL_AUTH_SIGNING.md` |

@@ -68,3 +68,31 @@ export function toPendingRunResult(
 
   return toSuccessResult(result, result.message);
 }
+
+export interface ToolSafetyHints {
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  openWorldHint: boolean;
+  /** Set only with evidence that a repeat call has no additional effect (true) or duplicates work (false). */
+  idempotentHint?: boolean;
+}
+
+/**
+ * Display title plus the explicit safety hints for `registerTool` /
+ * `registerAppTool`. The title is mirrored into `annotations.title` for hosts
+ * that only read the annotation. Values follow contracts/tool-route-map.json.
+ */
+export function toolMetadata(title: string, hints: ToolSafetyHints) {
+  return { title, annotations: { title, ...hints } };
+}
+
+const SAFE_PATH_ID = /^[A-Za-z0-9_-]{1,128}$/;
+
+/**
+ * Ids that the Robynn client interpolates into API paths (thread/run ids).
+ * Rejects `/`, `.`, `?`, `%` and friends so a caller-supplied id cannot
+ * redirect the request to another same-origin route.
+ */
+export function isSafePathId(value: string): boolean {
+  return SAFE_PATH_ID.test(value);
+}

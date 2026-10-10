@@ -1,9 +1,10 @@
 {
-  "$comment": "COS-PLUGIN-001 P01 tool → app route map. Verified against real tools/list by src/__tests__/catalog-baseline.test.ts. Paths in appRoutes[].file are relative to the robynnv3 app repo unless prefixed 'mcp:' in gaps. currentHints = code at baseline; proposedHints = P12 target against today's backend; hintsAfterP07 = target once P07 removes the noted write; pairedWith is an array of tool names.",
+  "$comment": "COS-PLUGIN-001 tool → app route map (P01, updated by P12). Verified against real tools/list by src/__tests__/catalog-baseline.test.ts. Paths in appRoutes[].file are relative to the robynnv3 app repo unless prefixed 'mcp:' in gaps. titleProposal = the shipped tool title (top-level and annotations.title). currentHints = annotations the code declares; proposedHints = target against today's backend (equal to currentHints after P12); hintsAfterP07 / requiredScopeAfterP07 = target once P07 removes the write named in `conditional` (the five † tools). pairedWith is an array of tool names. inputSchemaDigest = sha256 of the tools/list inputSchema with every string-valued 'description' key removed (sorted-key compact JSON).",
   "baseline": {
     "mcpWorker": "85d7781add2914815e7fc48459645c2b4edb4095",
     "app": "6dd04bb315f20ca53612cd0a2aa0951da020ed78",
-    "generatedOn": "2026-10-09"
+    "generatedOn": "2026-10-09",
+    "p12": "titles, hints and descriptions applied (plugin-v1/p12-tool-metadata)"
   },
   "counts": {
     "worker": 48,
@@ -28,7 +29,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -36,6 +38,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:1fc255d6faa48f7b2a636578ac223b6e160571df0067808679c68ba8e346bbf4",
       "hintEvidence": "GET, no writes; 'full' may read the org's R2 vault (brand-context-service.ts:201)",
       "appRoutes": [
         {
@@ -80,7 +83,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -88,6 +92,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:a4f0439b005e771aaaa209b5d353f95e0591883e2c8af3ccdb9dd40b4b4230f2",
       "hintEvidence": "retrieval only; incidental telemetry/snapshot cache writes (persistence-service.ts:637,753-766) are not user-visible",
       "appRoutes": [
         {
@@ -126,7 +131,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -134,6 +140,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:efddc7bd8bbcef73a14eb1ace1ffdaec81e518ef1e13c1e9271d0b8acb694a49",
       "hintEvidence": "GET /api/cli/context/summary, no writes",
       "appRoutes": [
         {
@@ -161,7 +168,8 @@
           "package": "P12",
           "file": "mcp:src/tools/status.ts",
           "function": "registerStatusTools",
-          "summary": "setup skill needs bound org + granted permissions in the result (P10 introspection supplies them)"
+          "summary": "setup skill needs bound org + granted permissions in the result (P10 introspection supplies them)",
+          "resolution": "deferred to P10: the bound organization and granted permissions come from P10 introspection; P12 added title/idempotentHint and registerUnauthenticatedStatusTool (host-neutral fallback) for P10 to wire into src/index.ts"
         }
       ]
     },
@@ -178,7 +186,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -186,6 +195,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:efddc7bd8bbcef73a14eb1ace1ffdaec81e518ef1e13c1e9271d0b8acb694a49",
       "hintEvidence": "reads get_token_breakdown RPC only (TokenService.ts:497-499)",
       "appRoutes": [
         {
@@ -224,7 +234,8 @@
       "currentHints": {
         "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": true,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -232,6 +243,7 @@
         "openWorldHint": true,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:37809a89e9f52cd548fa3bc55961fa8c86e9f812211d7fee6dfa66c345a64661",
       "hintEvidence": "creates thread + run, reserves credits, LangGraph run with connectors-scoped agent token",
       "appRoutes": [
         {
@@ -281,7 +293,8 @@
           "package": "P12",
           "file": "mcp:src/robynn-client.ts",
           "function": "startRun/getRun",
-          "summary": "thread_id/run_id unvalidated and not URL-encoded (path traversal to other same-origin routes)"
+          "summary": "thread_id/run_id unvalidated and not URL-encoded (path traversal to other same-origin routes)",
+          "resolution": "partially fixed in P12: create_content, research, assist, run_status and thread_append reject ids outside [A-Za-z0-9_-]{1,128} before any request (src/tools/util.ts isSafePathId); P11 should still encodeURIComponent path ids in src/robynn-client.ts"
         },
         {
           "package": "P10",
@@ -304,7 +317,8 @@
       "currentHints": {
         "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": true,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -312,6 +326,7 @@
         "openWorldHint": true,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:f7f2fe95dd5b07d45b466d99f3d66a55690286c080258005630b588388d03582",
       "hintEvidence": "same run path as create_content (type=research)",
       "appRoutes": [
         {
@@ -372,7 +387,8 @@
       "currentHints": {
         "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": true,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -380,6 +396,7 @@
         "openWorldHint": true,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:28c3249f3c9466c0c537ffea373dacbc1112bc56069691057b7b1de3a6e87593",
       "hintEvidence": "same run path; caller-controlled claude_skill_slug/history_summary/memory_enabled forwarded to LangGraph",
       "appRoutes": [
         {
@@ -452,7 +469,8 @@
       "currentHints": {
         "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -460,6 +478,7 @@
         "openWorldHint": false,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:1bded4f5273621d4acc1205a1946f5942c635ada5b3bde18452baf1c01a2b87d",
       "hintEvidence": "action=create inserts an org-visible instant_agent_threads row (threads/+server.ts:82-93); list is a pure read",
       "appRoutes": [
         {
@@ -510,9 +529,10 @@
       },
       "requiredScope": "tools:execute",
       "currentHints": {
-        "readOnlyHint": true,
+        "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -520,6 +540,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:7e3fab147f94c6eaf677ca481c08f196263f2849302068b8ccbe188b787ccdd4",
       "hintEvidence": "GET syncInstantAgentRun can finalize the run: writes messages, brand_hub_docs, threads, settles billing (runs.ts:11612-11638,12010-12077); CAS + deterministic ids make repeats idempotent",
       "appRoutes": [
         {
@@ -575,7 +596,8 @@
       "currentHints": {
         "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": true,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -583,6 +605,7 @@
         "openWorldHint": true,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:28c3249f3c9466c0c537ffea373dacbc1112bc56069691057b7b1de3a6e87593",
       "hintEvidence": "creates thread/run, reserves credits, LangGraph CMO with connectors token",
       "appRoutes": [
         {
@@ -636,7 +659,8 @@
       "currentHints": {
         "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": true,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -644,6 +668,7 @@
         "openWorldHint": true,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:f06752d12978e2891fac47c55b99edd8bbda6762f5817cde21736a31b0680fc5",
       "hintEvidence": "claims the decision gate (CAS) and starts a continuation run; gate-scoped continuation key collapses retries (conversation-decision.ts:245-314)",
       "appRoutes": [
         {
@@ -696,13 +721,14 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": true
       },
+      "inputSchemaDigest": "sha256:a6858956eb65b7abd12a931c8d6451f84b5ca16e485d6a92c84035b27a9cc43c",
       "hintEvidence": "no Robynn persistence; multi-LLM fan-out incl. Perplexity web search (agents multi_llm_query.py); generative cost",
       "appRoutes": [
         {
@@ -749,7 +775,8 @@
           "package": "P12",
           "file": "mcp:src/tools/geo.ts",
           "function": "registerGeoTools",
-          "summary": "openWorldHint must be true; analysis_depth is dropped; disclose LLM fan-out"
+          "summary": "openWorldHint must be true; analysis_depth is dropped; disclose LLM fan-out",
+          "resolution": "fixed in P12: openWorldHint true; description discloses the external AI-engine fan-out; analysis_depth marked as currently ignored"
         }
       ]
     },
@@ -764,9 +791,10 @@
       },
       "requiredScope": "tools:execute",
       "currentHints": {
-        "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -774,6 +802,7 @@
         "openWorldHint": true,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:61ec25e6c2d0b14db99004c77202b951ba91f6067ad74e7ae9657b82b4e5b2bd",
       "hintEvidence": "may insert competitor_intel_profiles (weekly schedule); agent inserts battlecards/recommendations and overwrites profile threat score/metadata; paid vendors + competitor site fetch",
       "appRoutes": [
         {
@@ -813,7 +842,8 @@
           "package": "P12",
           "file": "mcp:src/tools/battlecard.ts",
           "function": "registerBattlecardTools",
-          "summary": "readOnly/openWorld wrong; dropped inputs; local-disk report paths"
+          "summary": "readOnly/openWorld wrong; dropped inputs; local-disk report paths",
+          "resolution": "fixed in P12: readOnly false, destructive true, openWorld true; description discloses saved battlecard/profile writes, advisory focus_areas/include_objections, and server-side report_*_path values"
         }
       ]
     },
@@ -830,13 +860,14 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": true
       },
+      "inputSchemaDigest": "sha256:8942d2491955ac895985a2768dae42d2360246a32795a1bad907af8ed58b2d3e",
       "hintEvidence": "no writes found; scrapes caller company_url via Serper and queries Exa/Firecrawl/Semrush",
       "appRoutes": [
         {
@@ -877,7 +908,8 @@
           "package": "P12",
           "file": "mcp:src/tools/seo.ts",
           "function": "registerSeoTools",
-          "summary": "openWorldHint must be true; unbounded keyword/competitor arrays"
+          "summary": "openWorldHint must be true; unbounded keyword/competitor arrays",
+          "resolution": "openWorldHint fixed in P12; unbounded keyword/competitor arrays NOT fixed: bounding them changes the input schema (outside P12's mandate) — bound app-side or in a schema-change follow-up"
         }
       ]
     },
@@ -890,19 +922,28 @@
         "workerWithoutVault": true,
         "cli": true
       },
-      "requiredScope": "brand:read",
+      "requiredScope": "tools:execute",
+      "requiredScopeAfterP07": "brand:read",
       "currentHints": {
-        "readOnlyHint": true,
+        "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintsAfterP07": {
         "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": false,
         "idempotentHint": true
       },
-      "conditional": "readOnly/brand:read assumes P07 removes the completeness write; otherwise readOnlyHint:false + tools:execute",
+      "inputSchemaDigest": "sha256:5df38530e82fde4a418ddfd9cdb35bb7040c42ec877b863f45b724b23258811b",
+      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change.",
       "hintEvidence": "intended read; currently upserts the derived 'Brand Completeness' doc (brand-book-v2-service.ts:181-196,1871)",
       "appRoutes": [
         {
@@ -943,19 +984,28 @@
         "workerWithoutVault": true,
         "cli": true
       },
-      "requiredScope": "brand:read",
+      "requiredScope": "tools:execute",
+      "requiredScopeAfterP07": "brand:read",
       "currentHints": {
-        "readOnlyHint": true,
+        "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintsAfterP07": {
         "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": false,
         "idempotentHint": true
       },
-      "conditional": "as robynn_brand_book_status",
+      "inputSchemaDigest": "sha256:29392f14967630c7478edf3b63c6fd4617fb2e00ea2d4dae6a4381c11a1ae5eb",
+      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change.",
       "hintEvidence": "deterministic, no LLM (brand-book-adapters.ts:255-372); same hidden completeness write",
       "appRoutes": [
         {
@@ -996,19 +1046,28 @@
         "workerWithoutVault": true,
         "cli": true
       },
-      "requiredScope": "brand:read",
+      "requiredScope": "tools:execute",
+      "requiredScopeAfterP07": "brand:read",
       "currentHints": {
-        "readOnlyHint": true,
+        "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "hintsAfterP07": {
         "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": false,
         "idempotentHint": true
       },
-      "conditional": "as robynn_brand_book_status",
+      "inputSchemaDigest": "sha256:2d51e7bf0fade09fd076f22effce7babcbdc3459b7128bbf1040a55358280fb2",
+      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change.",
       "hintEvidence": "deterministic templates (brand-book-adapters.ts:374-485); same hidden completeness write",
       "appRoutes": [
         {
@@ -1053,7 +1112,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -1061,6 +1121,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:7f64da534d4556a5a5f4f03604bc02f704ae0f0d5e3a0e3154716837bb24f695",
       "hintEvidence": "org-filtered changelog reads only (changelog-service.ts:254,805)",
       "appRoutes": [
         {
@@ -1099,7 +1160,8 @@
       "currentHints": {
         "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -1107,6 +1169,7 @@
         "openWorldHint": false,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:f28c1fccea2f2a552995d116edbc88a0b523f0521c6d3fa4931cb1ee8f0317b9",
       "hintEvidence": "processes the pending changelog queue: inserts/updates brand_hub_docs_changelog and brand_reflection_clusters; LLM synthesis",
       "appRoutes": [
         {
@@ -1148,7 +1211,8 @@
           "package": "P12",
           "file": "mcp:src/tools/brand-book.ts",
           "function": "registerBrandBookTools",
-          "summary": "dry_run description inaccurate (synthesis skipped)"
+          "summary": "dry_run description inaccurate (synthesis skipped)",
+          "resolution": "fixed in P12: dry_run described as a pattern preview that skips AI synthesis and saves nothing"
         }
       ]
     },
@@ -1161,19 +1225,28 @@
         "workerWithoutVault": true,
         "cli": true
       },
-      "requiredScope": "brand:read",
+      "requiredScope": "tools:execute",
+      "requiredScopeAfterP07": "brand:read",
       "currentHints": {
         "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": true,
+        "idempotentHint": true
       },
       "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true,
+        "idempotentHint": true
+      },
+      "hintsAfterP07": {
         "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": true,
         "idempotentHint": true
       },
-      "conditional": "as robynn_brand_book_status; tool does NOT publish — returns HTML inline",
+      "inputSchemaDigest": "sha256:e812faf489716af95305541e1f3cd71e77ba392c759e30644e567621ff2ed379",
+      "conditional": "† P12 ships the conservative form: the brand-book read path still upserts the derived 'Brand Completeness' doc, so proposedHints (= currentHints) are readOnlyHint:false and requiredScope is tools:execute. When P07 removes that write, flip BRAND_BOOK_READS_PERSIST_COMPLETENESS (src/tools/brand-book.ts) and set currentHints/proposedHints to hintsAfterP07 and requiredScope to requiredScopeAfterP07 in the same change. The tool does NOT publish — it returns HTML inline.",
       "hintEvidence": "inline HTML export, no storage/public URL (brand-book-adapters.ts:612-656); server fetches the stored logo URL (brand-book-export-service.ts:404)",
       "appRoutes": [
         {
@@ -1213,7 +1286,8 @@
           "package": "P12",
           "file": "mcp:src/tools/brand-book.ts",
           "function": "registerBrandBookTools",
-          "summary": "description must say export, not publish; theme/include_private_sections ignored"
+          "summary": "description must say export, not publish; theme/include_private_sections ignored",
+          "resolution": "fixed in P12: described as an inline HTML export (no hosting/publication/public URL); theme and include_private_sections marked as currently ignored"
         }
       ]
     },
@@ -1230,7 +1304,8 @@
       "currentHints": {
         "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": true
+        "openWorldHint": true,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -1238,6 +1313,7 @@
         "openWorldHint": true,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:1ddd6eaaf6264cd6ca992b8a62eb50c84e0c8f7c27930a9ca1dff2eb32e9cb06",
       "hintEvidence": "LangGraph marketing_campaign_builder run; persists thread, brand_hub_docs, messages and a tokenized report",
       "appRoutes": [
         {
@@ -1288,15 +1364,16 @@
       },
       "requiredScope": "tools:execute",
       "currentHints": {
-        "readOnlyHint": true,
+        "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": true
+        "openWorldHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
         "destructiveHint": false,
         "openWorldHint": false
       },
+      "inputSchemaDigest": "sha256:7df33ec8429d98434a819f13cf754bd98af1ece91e22d48c0350d1d5e4e7d875",
       "hintEvidence": "GET persists the campaign artifact on success and re-uploads/updates on every repeat poll (campaign-artifact-persistence.ts:143-173)",
       "appRoutes": [
         {
@@ -1344,7 +1421,8 @@
           "package": "P12",
           "file": "mcp:src/tools/campaign.ts",
           "function": "registerCampaignTools",
-          "summary": "readOnlyHint true is wrong"
+          "summary": "readOnlyHint true is wrong",
+          "resolution": "fixed in P12: readOnlyHint false; description discloses the artifact save on every successful poll"
         }
       ]
     },
@@ -1359,9 +1437,10 @@
       },
       "requiredScope": "tools:execute",
       "currentHints": {
-        "readOnlyHint": true,
+        "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": true
+        "openWorldHint": true,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -1369,6 +1448,7 @@
         "openWorldHint": true,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:4af93e56d8ebf93dea16c3387efd41c0c99d7b5049519740a188d5c0e191d716",
       "hintEvidence": "BillingService.charge 'website-audit-report' (50 cr) before website resolution/dispatch; inserts prospect_audits; public audit_url",
       "appRoutes": [
         {
@@ -1404,7 +1484,8 @@
           "package": "P12",
           "file": "mcp:src/tools/website.ts",
           "function": "registerWebsiteTools",
-          "summary": "readOnlyHint true is wrong; disclose charge and robynn-ai restriction; goals/competitors/analysis_depth ignored"
+          "summary": "readOnlyHint true is wrong; disclose charge and robynn-ai restriction; goals/competitors/analysis_depth ignored",
+          "resolution": "fixed in P12: readOnlyHint false; description discloses the non-refundable up-front charge and the robynn-ai environment gate; goals/competitors/analysis_depth marked as currently ignored"
         }
       ]
     },
@@ -1419,9 +1500,10 @@
       },
       "requiredScope": "tools:execute",
       "currentHints": {
-        "readOnlyHint": true,
+        "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": true
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -1429,6 +1511,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:70a47534094f82eb3990ad9609485fce0b60bfd0528b3dbef993f1672af02484",
       "hintEvidence": "status GET advances the audit: LangGraph poll, LLM extraction, prospect_audits updates (prospect-audit-runner.ts:421-429,510-514); converges once complete",
       "appRoutes": [
         {
@@ -1467,7 +1550,8 @@
           "package": "P12",
           "file": "mcp:src/tools/website.ts",
           "function": "registerWebsiteTools",
-          "summary": "readOnlyHint true is wrong"
+          "summary": "readOnlyHint true is wrong",
+          "resolution": "fixed in P12: readOnlyHint false; description discloses that polling advances and saves the audit"
         }
       ]
     },
@@ -1482,9 +1566,10 @@
       },
       "requiredScope": "tools:execute",
       "currentHints": {
-        "readOnlyHint": true,
+        "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": true
+        "openWorldHint": true,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -1492,6 +1577,7 @@
         "openWorldHint": true,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:9faee9b9c89f730ce4517cba9feb160b171fb51a9c9ddffda273cdeb1a667d23",
       "hintEvidence": "reserveOrShadow 'website-audit-v2' (50 cr); creates scans/pages/recommendations/heal findings; crawls",
       "appRoutes": [
         {
@@ -1533,7 +1619,8 @@
           "package": "P12",
           "file": "mcp:src/tools/website.ts",
           "function": "registerWebsiteTools",
-          "summary": "readOnlyHint true is wrong; mode ignored; site_id description"
+          "summary": "readOnlyHint true is wrong; mode ignored; site_id description",
+          "resolution": "fixed in P12: readOnlyHint false; mode marked as currently ignored; site_id described as a Website Studio site ID"
         }
       ]
     },
@@ -1550,7 +1637,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": true
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -1558,6 +1646,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:57443ecce87bdbffee5ce3342c6a6ac9a28074a3c9000ca11d39ea3e44535fee",
       "hintEvidence": "pure read via org-scoped getScan (v2/scan-runner.ts:549-556)",
       "appRoutes": [
         {
@@ -1590,7 +1679,8 @@
           "package": "P12",
           "file": "mcp:src/tools/website.ts",
           "function": "registerWebsiteTools",
-          "summary": "openWorldHint should be false"
+          "summary": "openWorldHint should be false",
+          "resolution": "fixed in P12: openWorldHint false"
         }
       ]
     },
@@ -1605,9 +1695,10 @@
       },
       "requiredScope": "tools:execute",
       "currentHints": {
-        "readOnlyHint": true,
+        "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": true
+        "openWorldHint": true,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -1615,6 +1706,7 @@
         "openWorldHint": true,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:b6b209ec9639ab81619b5504db0299ef3d45da22ed4008667961be2d4c36194e",
       "hintEvidence": "reserveOrShadow 'website-optimization-v3'; fresh scan id per call; crawls + LLM",
       "appRoutes": [
         {
@@ -1656,7 +1748,8 @@
           "package": "P12",
           "file": "mcp:src/tools/website.ts",
           "function": "registerWebsiteTools",
-          "summary": "readOnlyHint true is wrong; no confirmed_estimate_id/site_id inputs"
+          "summary": "readOnlyHint true is wrong; no confirmed_estimate_id/site_id inputs",
+          "resolution": "readOnlyHint fixed in P12; missing confirmed_estimate_id/site_id inputs NOT added: that changes the input schema (outside P12's mandate)"
         }
       ]
     },
@@ -1673,7 +1766,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": true
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -1681,6 +1775,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:7e3fab147f94c6eaf677ca481c08f196263f2849302068b8ccbe188b787ccdd4",
       "hintEvidence": "pure read via org-scoped getScan (v3/scan-runner.ts:560-567)",
       "appRoutes": [
         {
@@ -1713,7 +1808,8 @@
           "package": "P12",
           "file": "mcp:src/tools/website.ts",
           "function": "registerWebsiteTools",
-          "summary": "openWorldHint should be false"
+          "summary": "openWorldHint should be false",
+          "resolution": "fixed in P12: openWorldHint false"
         }
       ]
     },
@@ -1728,9 +1824,10 @@
       },
       "requiredScope": "tools:execute",
       "currentHints": {
-        "readOnlyHint": true,
+        "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": true
+        "openWorldHint": true,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -1738,6 +1835,7 @@
         "openWorldHint": true,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:d365d463ddb38d0e041b1167ecc4233455795664517cc96edca4a403360252f8",
       "hintEvidence": "reserveOrShadow 'website-audit-orchestrator' (50 cr); starts a v3 scan; description wrongly says read-only",
       "appRoutes": [
         {
@@ -1773,7 +1871,8 @@
           "package": "P12",
           "file": "mcp:src/tools/website.ts",
           "function": "registerWebsiteTools",
-          "summary": "description says read-only; it charges and persists"
+          "summary": "description says read-only; it charges and persists",
+          "resolution": "fixed in P12: no longer described as read-only; discloses the credit reservation and saved scan"
         }
       ]
     },
@@ -1790,7 +1889,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": true
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -1798,6 +1898,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:6361c0958bdbcbfd3a361ec637a7b3f263e38403cde63c9a366506b629500975",
       "hintEvidence": "pure read through org-scoped getScan; POST transport only",
       "appRoutes": [
         {
@@ -1827,7 +1928,8 @@
           "package": "P12",
           "file": "mcp:src/tools/website.ts",
           "function": "registerWebsiteTools",
-          "summary": "openWorldHint should be false"
+          "summary": "openWorldHint should be false",
+          "resolution": "fixed in P12: openWorldHint false"
         }
       ]
     },
@@ -1851,6 +1953,7 @@
         "destructiveHint": false,
         "openWorldHint": true
       },
+      "inputSchemaDigest": "sha256:478b53b49a9935f8984b0249f4405389f67043798b45c6d2a825cb3e9851cab7",
       "hintEvidence": "no DB writes (persist_artifacts:false); synchronous LangGraph website_report_v1 that crawls the caller URL; uncharged LLM-heavy run",
       "appRoutes": [
         {
@@ -1893,7 +1996,7 @@
       },
       "requiredScope": "tools:execute",
       "currentHints": {
-        "readOnlyHint": false,
+        "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": false
       },
@@ -1902,6 +2005,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
+      "inputSchemaDigest": "sha256:d4b71a0bbdabc0d1c11a8f82f9fab6aeba431c7ac77c3b2f45b6e25774f1fdb5",
       "hintEvidence": "no app writes found (dry_run is only forwarded); LangGraph planner /runs/wait, LLM cost",
       "appRoutes": [
         {
@@ -1929,7 +2033,8 @@
           "package": "P12",
           "file": "mcp:src/tools/content-plan.ts",
           "function": "registerContentPlanTools",
-          "summary": "dry_run text implies calendar writes the app never performs"
+          "summary": "dry_run text implies calendar writes the app never performs",
+          "resolution": "fixed in P12: dry_run described as forwarded only; the tool never saves calendar rows"
         },
         {
           "package": "P09",
@@ -1952,7 +2057,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": true,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -1960,6 +2066,7 @@
         "openWorldHint": true,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:a4fd62f0226a02a1d685226c98b19f9c3c055f784f98e35f7a0fc4929d138adc",
       "hintEvidence": "no writes found; live GSC/GA4 reads via Composio for the org's own connected properties",
       "appRoutes": [
         {
@@ -1987,7 +2094,8 @@
           "package": "P12",
           "file": "mcp:src/tools/weekly-visibility.ts",
           "function": "registerWeeklyVisibilityTools",
-          "summary": "openWorldHint must be true (live Google API reads)"
+          "summary": "openWorldHint must be true (live Google API reads)",
+          "resolution": "fixed in P12: openWorldHint true; description discloses live Google Search Console/GA4 reads"
         }
       ]
     },
@@ -2004,7 +2112,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -2012,6 +2121,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:efddc7bd8bbcef73a14eb1ace1ffdaec81e518ef1e13c1e9271d0b8acb694a49",
       "hintEvidence": "static catalog + org connection summaries",
       "appRoutes": [
         {
@@ -2049,14 +2159,15 @@
       "requiredScope": "tools:execute",
       "currentHints": {
         "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": true
+        "destructiveHint": true,
+        "openWorldHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
         "destructiveHint": true,
         "openWorldHint": false
       },
+      "inputSchemaDigest": "sha256:d97c0bf0718c3406d01de331db44a1d67bd68161dfd2ec6d8bcdee27c592f8ee",
       "hintEvidence": "brand_hub_docs update-or-insert keyed by idempotency_key reused as draftId/collectionId; can overwrite existing docs; no crawl started",
       "appRoutes": [
         {
@@ -2092,7 +2203,8 @@
           "package": "P12",
           "file": "mcp:src/tools/brand-operations.ts",
           "function": "registerBrandOperationTools",
-          "summary": "openWorld false, destructive true"
+          "summary": "openWorld false, destructive true",
+          "resolution": "fixed in P12: openWorld false, destructive true; description discloses overwrite-by-idempotency_key and that page_limit is only saved with the draft (no crawl starts)"
         }
       ]
     },
@@ -2108,8 +2220,9 @@
       "requiredScope": "tools:execute",
       "currentHints": {
         "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -2117,6 +2230,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:25869edaeb385b1baa02c94868f3576772c0be99bd2c56433e551bc8060f9b03",
       "hintEvidence": "overwrites the brand_context singleton from current sources (brand-hub-docs-service.ts:6420-6444); deterministic",
       "appRoutes": [
         {
@@ -2146,7 +2260,8 @@
           "package": "P12",
           "file": "mcp:src/tools/brand-operations.ts",
           "function": "registerBrandOperationTools",
-          "summary": "destructiveHint true"
+          "summary": "destructiveHint true",
+          "resolution": "fixed in P12: destructiveHint true"
         }
       ]
     },
@@ -2163,7 +2278,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -2171,6 +2287,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:efddc7bd8bbcef73a14eb1ace1ffdaec81e518ef1e13c1e9271d0b8acb694a49",
       "hintEvidence": "local catalog + org connection metadata only",
       "appRoutes": [
         {
@@ -2209,7 +2326,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -2217,6 +2335,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:3b0c998945e9dccc744aa9b47d84e430113b3a9871ad071fd9846b1a402b996f",
       "hintEvidence": "same route filtered by provider_key",
       "appRoutes": [
         {
@@ -2255,10 +2374,13 @@
         "cli": true
       },
       "requiredScope": "tools:execute",
+      "requiredScopeAfterP07": "tools:execute",
+      "openDecision": "D-A (Madhukar): requires tools:execute — default YES. To downgrade, change requiredScope (and requiredScopeAfterP07) to brand:read here plus the matching P07 route scope; no tool code or description changes.",
       "currentHints": {
-        "readOnlyHint": true,
+        "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": true,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -2272,7 +2394,8 @@
         "openWorldHint": true,
         "idempotentHint": true
       },
-      "conditional": "readOnlyHint stays false until P07 removes the getOrCreatePolicy write from the read path (connector-execution-service.ts:330 -> connector-policy-service.ts:27-33,61-99); then hintsAfterP07 applies. requiredScope stays tools:execute either way",
+      "inputSchemaDigest": "sha256:095903fc853e6752f219a1ced654a0e0567268f355d3cd0dff3f8429b4dabef7",
+      "conditional": "† readOnlyHint stays false until P07 removes the getOrCreatePolicy write from the read path (connector-execution-service.ts:330 -> connector-policy-service.ts:27-33,61-99). Then flip CONNECTED_APP_READS_PERSIST_POLICY (src/tools/connectors.ts) and set currentHints/proposedHints to hintsAfterP07 in the same change. requiredScope stays tools:execute either way (D-A).",
       "hintEvidence": "curated read actions executed live against third-party apps via Composio/Arcade; the read path persists Robynn state: getOrCreatePolicy inserts a default connector_policies row or rewrites allowed_actions (re-adding admin-removed read actions) — plan §5 keeps read-only only if the backend prevents writes; connector_action_logs is an exempt audit write",
       "appRoutes": [
         {
@@ -2308,7 +2431,8 @@
           "package": "P12",
           "file": "mcp:src/tools/connectors.ts",
           "function": "registerConnectorTools",
-          "summary": "openWorldHint must be true"
+          "summary": "openWorldHint must be true",
+          "resolution": "fixed in P12: openWorldHint true; readOnlyHint false while CONNECTED_APP_READS_PERSIST_POLICY (src/tools/connectors.ts) is true, because the read path persists connector_policies; the description discloses the policy create/update and call logging and does not state the D-A scope"
         }
       ]
     },
@@ -2325,7 +2449,8 @@
       "currentHints": {
         "readOnlyHint": false,
         "destructiveHint": true,
-        "openWorldHint": true
+        "openWorldHint": true,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -2333,6 +2458,7 @@
         "openWorldHint": true,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:57fd493928da8344ec5bd9b15b2a6c59eb6673dc07036cc684cced51fe663964",
       "hintEvidence": "third-party writes via Composio/Arcade; replay only for completed ok rows",
       "appRoutes": [
         {
@@ -2380,7 +2506,8 @@
           "package": "P12",
           "file": "mcp:src/tools/connector-act.ts",
           "function": "registerConnectorActionTools",
-          "summary": "description over-claims idempotency"
+          "summary": "description over-claims idempotency",
+          "resolution": "fixed in P12: description and idempotency_key text say replay only returns a stored result for a completed successful call"
         }
       ]
     },
@@ -2396,8 +2523,9 @@
       "requiredScope": "tools:execute",
       "currentHints": {
         "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": true
+        "destructiveHint": true,
+        "openWorldHint": true,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -2405,6 +2533,7 @@
         "openWorldHint": true,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:e6b93e6dd4a50f90a722802eb99d1e3cda572b0da2f3587a7fee4665ea9b577a",
       "hintEvidence": "creates or updates a document in the org's connected Strapi; random source id per call without artifact_id",
       "appRoutes": [
         {
@@ -2451,7 +2580,8 @@
           "package": "P12",
           "file": "mcp:src/tools/strapi.ts",
           "function": "registerStrapiTools",
-          "summary": "destructiveHint true"
+          "summary": "destructiveHint true",
+          "resolution": "fixed in P12: destructiveHint true; description discloses overwrite/new-draft behaviour"
         }
       ]
     },
@@ -2467,8 +2597,9 @@
       "requiredScope": "tools:execute",
       "currentHints": {
         "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -2476,6 +2607,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:b722a95219d7599c61aa1893dbdc6b75d0a91ff3cdb5f2af3866ec5826519dd7",
       "hintEvidence": "hermes_threads upsert on (host_id, session_id) overwrites org/user/title (hermes-bridge.ts:65-69)",
       "appRoutes": [
         {
@@ -2522,7 +2654,8 @@
       "currentHints": {
         "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -2530,6 +2663,7 @@
         "openWorldHint": false,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:3760567117eb99be67bae53a7eefdab164510cdc4b0ceab9c1e974372b8891a7",
       "hintEvidence": "hermes_messages insert, no idempotency key",
       "appRoutes": [
         {
@@ -2586,8 +2720,9 @@
       },
       "currentHints": {
         "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "idempotentHint": false
       },
       "proposedHints": {
         "readOnlyHint": false,
@@ -2595,6 +2730,7 @@
         "openWorldHint": false,
         "idempotentHint": false
       },
+      "inputSchemaDigest": "sha256:d21e48672b14ba19a1e81cc5b1ac88d9c1395eab661a238eafa84f7c27a9334c",
       "hintEvidence": "overwrites by key; unified source_key not user-qualified (agent-memory-substrate.ts:51-53,126-143); legacy NULL user_id duplicates",
       "appRoutes": [
         {
@@ -2642,7 +2778,8 @@
           "package": "P12",
           "file": "mcp:src/tools/hermes-bridge.ts",
           "function": "registerHermesBridgeTools",
-          "summary": "destructiveHint true; 'session = scoped to this thread' is false"
+          "summary": "destructiveHint true; 'session = scoped to this thread' is false",
+          "resolution": "fixed in P12: destructiveHint true; scope text no longer claims session = this thread and says session is unsupported for plugin (OAuth) connections (enforcement is P09)"
         }
       ]
     },
@@ -2664,7 +2801,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -2672,6 +2810,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:6c92ee5c18722f904133a5860311d9a89fe22875550103b1770f8d843eb461fd",
       "hintEvidence": "GET read",
       "appRoutes": [
         {
@@ -2727,7 +2866,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -2735,6 +2875,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:bffd6fdce6272dda4bb0e15cd818a4dafae3c7124dd6c87006fe0af8a1820be4",
       "hintEvidence": "hybrid search, no writes",
       "appRoutes": [
         {
@@ -2779,7 +2920,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -2787,6 +2929,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:473b5ab5c568fd45bbd5be06d6e3d51164f1b7782222c050fb2d9adde94ba31a",
       "hintEvidence": "R2 list under the org prefix (vault-r2.ts)",
       "appRoutes": [
         {
@@ -2827,7 +2970,8 @@
       "currentHints": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "idempotentHint": true
       },
       "proposedHints": {
         "readOnlyHint": true,
@@ -2835,6 +2979,7 @@
         "openWorldHint": false,
         "idempotentHint": true
       },
+      "inputSchemaDigest": "sha256:2a0d6c4be612c7e9a6951fcefe59967af994e4714f3df7dc0f9ec417968bd435",
       "hintEvidence": "R2 get of one object under the org prefix",
       "appRoutes": [
         {

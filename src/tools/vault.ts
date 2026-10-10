@@ -20,47 +20,65 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
+import { DENY_ALL_VAULT_CALLS, vaultDeniedResult, type VaultGate } from "../authorization/vault-gate";
 import type { VaultR2 } from "../vault-r2";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
-export function registerVaultTools(server: McpServer, vault: VaultR2): void {
-  server.tool(
+/**
+ * `authorize` runs before every R2 operation (P10): without the Worker
+ * preflight's stamp for this tool and grant, nothing is read. The default
+ * denies everything.
+ */
+export function registerVaultTools(
+  server: McpServer,
+  vault: VaultR2,
+  authorize: VaultGate = DENY_ALL_VAULT_CALLS,
+): void {
+  server.registerTool(
     "robynn_vault_list",
-    [
-      "List materialized vault objects for the current organization.",
-      "",
-      "Layout:",
-      "  brand/<doc-name>/<entry>.md           — brand_hub_docs (filtered)",
-      "  facts/<doc-name>/<short-id>.md        — org_facts (live only)",
-      "  sources/<source-type>/<key>.md        — org_knowledge_documents (live only)",
-      "  sources/<source-type>/<key>.embedding.json  — chunk embeddings sidecar",
-      "  vault.lock                            — last-materialized timestamp",
-      "",
-      "Pass an empty/absent `prefix` to enumerate everything; pass e.g.",
-      "`brand/voice-attribute/` to drill in. Returns at most `limit` entries",
-      "(default 100, max 1000) and a `cursor` you can pass back to continue.",
-    ].join("\n"),
     {
-      prefix: z
-        .string()
-        .optional()
-        .describe(
-          "Path prefix relative to the org root. Examples: 'brand/', 'sources/website/'. Omit to list everything.",
-        ),
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(1000)
-        .optional()
-        .describe("Max entries to return (default 100, max 1000)."),
-      cursor: z
-        .string()
-        .optional()
-        .describe("Continuation cursor returned by a previous list call."),
+      ...toolMetadata("List Vault Files", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
+      description: [
+        "List materialized vault objects for the current organization (read-only).",
+        "",
+        "Layout:",
+        "  brand/<doc-name>/<entry>.md           — brand_hub_docs (filtered)",
+        "  facts/<doc-name>/<short-id>.md        — org_facts (live only)",
+        "  sources/<source-type>/<key>.md        — org_knowledge_documents (live only)",
+        "  sources/<source-type>/<key>.embedding.json  — chunk embeddings sidecar",
+        "  vault.lock                            — last-materialized timestamp",
+        "",
+        "Pass an empty/absent `prefix` to enumerate everything; pass e.g.",
+        "`brand/voice-attribute/` to drill in. Returns at most `limit` entries",
+        "(default 100, max 1000) and a `cursor` you can pass back to continue.",
+      ].join("\n"),
+      inputSchema: {
+        prefix: z
+          .string()
+          .optional()
+          .describe(
+            "Path prefix relative to the org root. Examples: 'brand/', 'sources/website/'. Omit to list everything.",
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(1000)
+          .optional()
+          .describe("Max entries to return (default 100, max 1000)."),
+        cursor: z
+          .string()
+          .optional()
+          .describe("Continuation cursor returned by a previous list call."),
+      },
     },
-    { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    async ({ prefix, limit, cursor }) => {
+    async ({ prefix, limit, cursor }, extra) => {
+      if (!authorize("robynn_vault_list", extra)) return vaultDeniedResult();
       try {
         const result = await vault.list({ prefix, limit, cursor });
         return toSuccessResult(
@@ -86,27 +104,35 @@ export function registerVaultTools(server: McpServer, vault: VaultR2): void {
     },
   );
 
-  server.tool(
+  server.registerTool(
     "robynn_vault_read",
-    [
-      "Read one materialized vault object by its path (relative to the",
-      "current org's root). The body is returned as UTF-8 text — vault",
-      "objects are markdown (with YAML frontmatter) or JSON sidecars.",
-      "",
-      "Use robynn_vault_list first if you need to discover available paths.",
-      "Returns null/error if the path doesn't exist; check `not_found` in",
-      "the response.",
-    ].join("\n"),
     {
-      path: z
-        .string()
-        .min(1)
-        .describe(
-          "Vault-relative path. Examples: 'brand/voice-attribute/direct.md', 'sources/website/about.embedding.json', 'vault.lock'.",
-        ),
+      ...toolMetadata("Read a Vault File", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
+      description: [
+        "Read one materialized vault object (read-only) by its path (relative to the",
+        "current org's root). The body is returned as UTF-8 text — vault",
+        "objects are markdown (with YAML frontmatter) or JSON sidecars.",
+        "",
+        "Use robynn_vault_list first if you need to discover available paths.",
+        "Returns null/error if the path doesn't exist; check `not_found` in",
+        "the response.",
+      ].join("\n"),
+      inputSchema: {
+        path: z
+          .string()
+          .min(1)
+          .describe(
+            "Vault-relative path. Examples: 'brand/voice-attribute/direct.md', 'sources/website/about.embedding.json', 'vault.lock'.",
+          ),
+      },
     },
-    { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    async ({ path }) => {
+    async ({ path }, extra) => {
+      if (!authorize("robynn_vault_read", extra)) return vaultDeniedResult();
       try {
         const obj = await vault.read(path);
         if (!obj) {

@@ -14,7 +14,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({
   WorkerEntrypoint: class {},
-  DurableObject: class {},
+  DurableObject: class {
+    ctx: unknown;
+    env: unknown;
+    constructor(ctx: unknown, env: unknown) {
+      this.ctx = ctx;
+      this.env = env;
+    }
+  },
   env: {},
 }));
 
@@ -33,7 +40,7 @@ vi.mock("agents/mcp", () => ({
   },
 }));
 
-import worker, { createOAuthProviderOptions } from "../index";
+import worker, { createOAuthProviderOptions, RefreshCoordinator } from "../index";
 import type { Env } from "../types";
 
 const ORIGIN = "https://mcp.test";
@@ -127,6 +134,20 @@ function createHarness(): Harness {
     MCP_SERVER_NAME: "Robynn",
     MCP_SERVER_VERSION: "test",
   } as unknown as Harness["env"];
+  // P10: refreshes are serialized by the per-grant RefreshCoordinator DO; a
+  // non-loopback Worker without it refuses refreshes (P10 review N3).
+  const coordinators = new Map<string, RefreshCoordinator>();
+  (env as unknown as Record<string, unknown>).REFRESH_COORDINATOR = {
+    idFromName: (name: string) => ({ name }),
+    get: ({ name }: { name: string }) => {
+      let instance = coordinators.get(name);
+      if (!instance) {
+        instance = new RefreshCoordinator({ waitUntil() {} } as never, env as never);
+        coordinators.set(name, instance);
+      }
+      return instance;
+    },
+  };
   const appCalls: Harness["appCalls"] = [];
   const harness: Harness = {
     env,

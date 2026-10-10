@@ -4,25 +4,40 @@ import { z } from "zod";
 
 import type { RobynnClient } from "../robynn-client";
 import { REPORT_RESOURCE_URIS } from "../ui/report-app";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
+
+/**
+ * COS-PLUGIN-001 (†): the app's brand-book read path still upserts the derived
+ * "Brand Completeness" Brand Hub doc (brand-book-v2-service.ts
+ * calculateBrandCompleteness), so status, gap analysis, strategy and the HTML
+ * export are not read-only yet. Flip to false once P07 removes that write, and
+ * flip contracts/tool-route-map.json (currentHints, proposedHints,
+ * requiredScope -> brand:read) in the same change.
+ */
+export const BRAND_BOOK_READS_PERSIST_COMPLETENESS = true;
+
+const COMPLETENESS_EFFECT = BRAND_BOOK_READS_PERSIST_COMPLETENESS
+  ? " Also refreshes Robynn's stored brand-completeness summary; repeat calls are safe."
+  : " Read-only.";
 
 export function registerBrandBookTools(server: McpServer, client: RobynnClient) {
   registerAppTool(
     server,
     "robynn_brand_book_status",
     {
+      ...toolMetadata("Check Brand Book Completeness", {
+        readOnlyHint: !BRAND_BOOK_READS_PERSIST_COMPLETENESS,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
       description:
-        "Inspect current brand-book completeness, missing sections, and readiness for downstream marketing work.",
+        `Check brand-book completeness, missing sections, and readiness for downstream marketing work.${COMPLETENESS_EFFECT}`,
       inputSchema: {
         include_recent_reflections: z
           .boolean()
           .optional()
           .describe("Include a recent reflection count alongside completeness"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: false,
       },
       _meta: {
         ui: {
@@ -55,8 +70,14 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
     server,
     "robynn_brand_book_gap_analysis",
     {
+      ...toolMetadata("Analyze Brand Book Gaps", {
+        readOnlyHint: !BRAND_BOOK_READS_PERSIST_COMPLETENESS,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
       description:
-        "Explain which brand-book gaps matter most, why they matter, and what inputs would improve Robynn's downstream outputs.",
+        `Explain which brand-book gaps matter most, why they matter, and what inputs would improve Robynn's downstream outputs.${COMPLETENESS_EFFECT}`,
       inputSchema: {
         focus_areas: z
           .array(z.string())
@@ -70,11 +91,6 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
           .boolean()
           .optional()
           .describe("Include sample source-of-truth examples for missing fields"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: false,
       },
       _meta: {
         ui: {
@@ -109,8 +125,14 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
     server,
     "robynn_brand_book_strategy",
     {
+      ...toolMetadata("Plan Brand Book Improvements", {
+        readOnlyHint: !BRAND_BOOK_READS_PERSIST_COMPLETENESS,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
       description:
-        "Turn the current brand-book state into a prioritized improvement strategy for positioning, voice, competition, and proof.",
+        `Turn the current brand-book state into a prioritized improvement strategy for positioning, voice, competition, and proof.${COMPLETENESS_EFFECT}`,
       inputSchema: {
         goals: z
           .array(z.string())
@@ -124,11 +146,6 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
           .boolean()
           .optional()
           .describe("Include follow-up recommendations for GEO, SEO, and battlecard signals"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: false,
       },
       _meta: {
         ui: {
@@ -163,8 +180,14 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
     server,
     "robynn_brand_reflections",
     {
+      ...toolMetadata("List Brand Reflections", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: true,
+      }),
       description:
-        "List pending and recent brand reflections from the brand_hub_docs changelog pipeline.",
+        "List pending and recent brand reflections from the Brand Hub changelog. Read-only.",
       inputSchema: {
         status_filter: z
           .enum(["pending", "recent", "all"])
@@ -177,11 +200,6 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
           .max(25)
           .optional()
           .describe("Maximum number of reflections to return"),
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: false,
       },
       _meta: {
         ui: {
@@ -215,8 +233,14 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
     server,
     "robynn_trigger_brand_reflections",
     {
+      ...toolMetadata("Generate Brand Reflections", {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+        idempotentHint: false,
+      }),
       description:
-        "Manually trigger the nightly brand-reflection pipeline for the caller's organization. Pulls the latest brand-hub docs, runs aggregate pattern analysis, and returns a bulleted summary of new reflections plus any rules accepted in the lookback window. Subject to a 5-minute per-org cooldown.",
+        "Run the brand-reflection pipeline now for your organization: analyzes recent Brand Hub changes with an AI model, saves new reflections to the changelog, and returns a bulleted summary plus rules accepted in the lookback window. Limited to once every 5 minutes per organization; each successful call processes pending changes again. dry_run previews detected patterns only (no AI synthesis, nothing saved). Read results later with robynn_brand_reflections.",
       inputSchema: {
         lookback_hours: z
           .number()
@@ -235,12 +259,7 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
         dry_run: z
           .boolean()
           .optional()
-          .describe("Run the full analysis but skip persisting new changelog entries"),
-      },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        openWorldHint: false,
+          .describe("Preview detected patterns only: skips the AI synthesis pass and saves nothing"),
       },
       _meta: {
         ui: {
@@ -279,22 +298,23 @@ export function registerBrandBookTools(server: McpServer, client: RobynnClient) 
     server,
     "robynn_publish_brand_book_html",
     {
+      ...toolMetadata("Export Brand Book as HTML", {
+        readOnlyHint: !BRAND_BOOK_READS_PERSIST_COMPLETENESS,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      }),
       description:
-        "Generate an exportable HTML brand book artifact from the current source-of-truth brand context.",
+        `Export the current brand book as a self-contained HTML document returned inline in the response. This is an export, not a publication: nothing is hosted, shared, or published and no public URL is created. Robynn fetches the organization's stored logo image to embed it.${COMPLETENESS_EFFECT}`,
       inputSchema: {
         theme: z
           .string()
           .optional()
-          .describe("Optional future-facing theme hint for the export pipeline"),
+          .describe("Theme hint for the export (currently ignored)"),
         include_private_sections: z
           .boolean()
           .optional()
-          .describe("Reserved flag for future export filtering"),
-      },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        openWorldHint: false,
+          .describe("Reserved for future export filtering (currently ignored)"),
       },
       _meta: {
         ui: {

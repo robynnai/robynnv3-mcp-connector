@@ -19,6 +19,13 @@ export interface TokenRequestContext {
   grantType: string | null;
   /** The single `redirect_uri` form value, or null if absent/repeated. */
   redirectUri: string | null;
+  /**
+   * `{userId}:{grantId}` parsed from a single `refresh_token` form value (P01
+   * F1, F11), or null. The token itself is never kept. Untrusted until the
+   * provider validates the token; used to route the refresh to its
+   * per-grant coordinator and to revoke that grant on a permanent failure.
+   */
+  refreshGrant?: { userId: string; grantId: string } | null;
 }
 
 export class RedirectUriMismatchError extends Error {
@@ -33,34 +40,59 @@ export const MAX_TOKEN_BODY_BYTES = 16 * 1024;
 
 export type TokenRequestRead =
   | { ok: true; context: TokenRequestContext }
-  | { ok: false; reason: "body_too_large" | "length_required" };
+  | {
+      ok: false;
+      reason: "body_too_large" | "length_required" | "unsupported_media_type" | "malformed" | "repeated_parameter";
+    };
 
-function single(params: URLSearchParams, key: string): string | null {
-  const values = params.getAll(key);
-  return values.length === 1 ? values[0] : null;
+const FORM_MEDIA_TYPE = "application/x-www-form-urlencoded";
+
+/**
+ * Parameters that must appear at most once (RFC 6749 §3.2). The provider
+ * turns a repeated key into an array; refusing repeats keeps the Worker and
+ * the provider looking at the same single value. `resource` may legitimately
+ * repeat (RFC 8707) and is not read here.
+ */
+const SINGLE_VALUED = ["grant_type", "code", "redirect_uri", "refresh_token", "code_verifier", "client_id", "scope"];
+
+/** Media-type essence: the type/subtype before any parameter, lower-cased. */
+export function mediaTypeEssence(contentType: string | null): string {
+  return (contentType ?? "").split(";")[0].trim().toLowerCase();
+}
+
+function single(form: FormData, key: string): string | null {
+  const values = form.getAll(key);
+  return values.length === 1 && typeof values[0] === "string" ? values[0] : null;
 }
 
 /**
- * Read grant_type/redirect_uri from a form-encoded token request.
+ * Read the token request's form parameters exactly as the provider will.
  *
- * The decision is made from `Content-Length` **before** the body is cloned or
- * read: a missing length is refused (411) and a length over
- * MAX_TOKEN_BODY_BYTES is refused (413) without touching the body. Only a
- * small, declared body is read (from a clone, so the provider can still read
- * the original). Partially reading a body and then abandoning it left the
- * connection in a bad state in local workerd/wrangler (P06 review round 1),
- * so the body is either read completely or not at all. Hosts always send a
- * length for these small form posts.
+ * - The decision on size is made from `Content-Length` **before** the body
+ *   is cloned or read: a missing length is refused (411) and a length over
+ *   MAX_TOKEN_BODY_BYTES is refused (413) without touching the body.
+ *   Partially reading a body and abandoning it left the connection in a bad
+ *   state in local workerd/wrangler (P06 review round 1), so the body is
+ *   read completely or not at all.
+ * - P10 review B1: the body is parsed with `formData()`, the parser the
+ *   provider uses, and only when the media-type essence is exactly
+ *   `application/x-www-form-urlencoded` (the provider accepts any type that
+ *   merely *contains* that string, which `formData()` would then parse by
+ *   the real type). Anything else is refused before the provider, and so is
+ *   a repeated single-valued parameter. The Worker therefore routes,
+ *   serializes and (on a permanent refresh failure) revokes by the same
+ *   `refresh_token` value the provider validates.
  */
 export async function readTokenRequestContext(
   request: Request,
   maxBytes = MAX_TOKEN_BODY_BYTES,
 ): Promise<TokenRequestRead> {
-  const empty = { ok: true as const, context: { grantType: null, redirectUri: null } };
-  const contentType = request.headers.get("content-type") ?? "";
-  if (request.method !== "POST" || !contentType.includes("application/x-www-form-urlencoded")) {
-    // The provider rejects these itself without reading the body.
-    return empty;
+  if (request.method !== "POST") {
+    // The provider answers 405 itself without reading the body.
+    return { ok: true, context: { grantType: null, redirectUri: null, refreshGrant: null } };
+  }
+  if (mediaTypeEssence(request.headers.get("content-type")) !== FORM_MEDIA_TYPE) {
+    return { ok: false, reason: "unsupported_media_type" };
   }
   const declared = request.headers.get("content-length");
   if (declared === null || !/^\d{1,10}$/.test(declared.trim())) {
@@ -68,19 +100,34 @@ export async function readTokenRequestContext(
   }
   if (Number(declared) > maxBytes) return { ok: false, reason: "body_too_large" };
 
-  let text: string;
+  let form: FormData;
   try {
-    text = await request.clone().text();
+    form = await request.clone().formData();
   } catch {
-    return empty;
+    return { ok: false, reason: "malformed" };
   }
-  // The runtime enforces the declared length; this is a backstop.
-  if (text.length > maxBytes) return { ok: false, reason: "body_too_large" };
-  const params = new URLSearchParams(text);
+  if (SINGLE_VALUED.some((key) => form.getAll(key).length > 1)) {
+    return { ok: false, reason: "repeated_parameter" };
+  }
   return {
     ok: true,
-    context: { grantType: single(params, "grant_type"), redirectUri: single(params, "redirect_uri") },
+    context: {
+      grantType: single(form, "grant_type"),
+      redirectUri: single(form, "redirect_uri"),
+      refreshGrant: parseRefreshGrant(single(form, "refresh_token")),
+    },
   };
+}
+
+const PROVIDER_ID_PART = /^[A-Za-z0-9_-]{1,128}$/;
+
+function parseRefreshGrant(token: string | null): { userId: string; grantId: string } | null {
+  if (!token) return null;
+  const parts = token.split(":");
+  if (parts.length !== 3 || !PROVIDER_ID_PART.test(parts[0]) || !PROVIDER_ID_PART.test(parts[1])) {
+    return null;
+  }
+  return { userId: parts[0], grantId: parts[1] };
 }
 
 /** Closed set for logs: never the raw, attacker-controlled form value. */

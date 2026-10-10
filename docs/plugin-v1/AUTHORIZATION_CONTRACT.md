@@ -202,6 +202,8 @@ Around `oauthProvider.fetch` for `POST /token`:
 4. Wrapper catch: `UpstreamGrantRevoked` ⇒ `revokeGrant(grantId, userId)` then `400 {"error":"invalid_grant"}`; `UpstreamUnavailable` ⇒ `503 {"error":"temporarily_unavailable"}` (grant un-rotated, F12). Any other throw ⇒ `500 {"error":"server_error"}` with a redacted log.
 5. Legacy grants (`props.authVersion !== 2`) ⇒ revoke + `invalid_grant` (forces reconnect; plan §6 "legacy credentials").
 
+**P10 update** (implemented; details in [`WORKER_SESSION_AUTHORIZATION.md`](./WORKER_SESSION_AUTHORIZATION.md) §5): the coordinator is `RefreshCoordinator` (binding `REFRESH_COORDINATOR`). A `401` from the app at refresh means the Worker's own signature was refused, so it is `temporarily_unavailable`, not a revocation. A rotated answer that cannot be validated revokes. If introspection is unavailable *after* the app has rotated, the refresh completes narrowed to the token's scope, because per-call introspection still gates every tool. Failing would strand the rotated upstream token and later trip `refresh_reuse`.
+
 ### 6.4 MCP request preflight (P10) — **before every `/mcp` request reaches the DO**
 
 1. Path allow-list: exactly `/mcp`. Everything else under the API prefixes — `/mcpx`, `/mcp/*` (F14) and `/sse`, `/sse/message` (F19: already a 404 today) — ⇒ `404` before forwarding. If SSE is ever enabled (D10), it gets its own allow-list entry **and** the `?sessionId=` binding in step 4.
@@ -224,6 +226,13 @@ Around `oauthProvider.fetch` for `POST /token`:
 
 `tools/list`, `initialize`, `ping`, `resources/*` need only steps 1–4 (`resources/read` of `ui://reports/*` is static HTML).
 
+**P10 update** (implemented in `src/authorization/mcp-preflight.ts`; see [`WORKER_SESSION_AUTHORIZATION.md`](./WORKER_SESSION_AUTHORIZATION.md)):
+
+- step 4 also strips `x-partykit-*` and `cf-mcp-*`;
+- step 5.2 keeps the provider grant on `credential_version_stale` (`401` only), so the host's refresh picks up the bumped version; every other inactive reason revokes;
+- step 8's Vault requirement is a gate at the R2 call site that needs the preflight's `x-robynn-preflight` stamp for that tool and grant.
+
+
 ## 7. Scope → operation policy
 
 | Requirement | `brand:read` | `tools:execute` |
@@ -237,8 +246,8 @@ Rules:
 
 1. `readOnlyHint:false` ⇒ `tools:execute` (asserted by `catalog-baseline.test.ts`). A read-only tool that charges or runs LLM generation is still `tools:execute` (e.g. `robynn_website_strategy`, `robynn_geo_analysis`, `robynn_seo_opportunities`, `robynn_content_plan`).
 2. Starter/poller pairs: a poller that persists or advances work (`robynn_website_audit_status`, `robynn_campaign_status`, `robynn_run_status`) is `tools:execute`; pure pollers are `brand:read`.
-3. Per-tool assignment: [`TOOL_CONTRACT.md`](./TOOL_CONTRACT.md) §2, machine-readable in `contracts/tool-route-map.json` (`requiredScope`, plus `scopeByArgument` / `argumentPolicy`). **20 tools are `brand:read`, 28 are `tools:execute`.** `robynn_conversations` is argument-dependent (`action=list` ⇒ `brand:read`, `create` ⇒ `tools:execute`); memory tools reject `scope:"session"`.
-4. Open product decision (Madhukar): `robynn_query_connected_app` is `tools:execute` in v1 (live third-party CRM/analytics data through the user's connections is not "existing Robynn data"); downgrading it to `brand:read` later only needs a map change plus a P07 route change. Its `readOnlyHint` is **false** until P07 removes the `getOrCreatePolicy` write from the read path (map field `hintsAfterP07`, TOOL_CONTRACT †); the scope is `tools:execute` either way.
+3. Per-tool assignment: [`TOOL_CONTRACT.md`](./TOOL_CONTRACT.md) §2, machine-readable in `contracts/tool-route-map.json` (`requiredScope`, plus `scopeByArgument` / `argumentPolicy`). **16 tools are `brand:read`, 32 are `tools:execute`** while the four † brand-book tools stay conservative (P12: `robynn_brand_book_status`, `_gap_analysis`, `_strategy`, `robynn_publish_brand_book_html` still trigger the hidden "Brand Completeness" write). Once P07 removes that write they return to `brand:read`: **20 / 28** (the map's `requiredScopeAfterP07`). `robynn_conversations` is argument-dependent (`action=list` ⇒ `brand:read`, `create` ⇒ `tools:execute`); memory tools reject `scope:"session"`.
+4. Open product decision (Madhukar): `robynn_query_connected_app` is `tools:execute` in v1 (live third-party CRM/analytics data through the user's connections is not "existing Robynn data"); downgrading it to `brand:read` later only needs a map change plus a P07 route change. Its `readOnlyHint` is **false** until P07 removes the `getOrCreatePolicy` write from the read path (map field `hintsAfterP07`, TOOL_CONTRACT †; code flag `CONNECTED_APP_READS_PERSIST_POLICY` in M `src/tools/connectors.ts`); the scope is `tools:execute` either way.
 5. The **app enforces the same mapping per route** (P07) via a helper `requireMcpOperation(request, locals, { scope, roles? })` that replaces `requireMcpApiContext` / `requireAgentMcpApiContext` / `requireCmoCompatibilityContext` for OAuth credentials. Route → scope is in A `docs/plugin-v1/MCP_ROUTE_MATRIX.md`.
 
 ## 8. Error codes

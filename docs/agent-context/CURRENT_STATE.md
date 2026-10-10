@@ -15,8 +15,9 @@ This repo provides the hosted Robynn MCP connector at `mcp.robynn.ai` and the lo
 
 - `docs/plugin-v1/AUTHORIZATION_CONTRACT.md` — grant record, introspection, Worker preflight, scope policy, error codes. Decision: stay on `@cloudflare/workers-oauth-provider` 0.3.0.
 - `docs/plugin-v1/TOOL_CONTRACT.md` + `contracts/tool-route-map.json` — all 48 tools: scope, current vs proposed hints, app routes, side effects.
-- `src/__tests__/provider-contract.test.ts` (35 cases, facts F1–F20) pins provider/agents behaviour; `src/__tests__/catalog-baseline.test.ts` (7 cases) recounts 48/46/40 via real `tools/list` and validates the map in both directions. Change the map and these tests together.
+- `src/__tests__/provider-contract.test.ts` (35 cases, facts F1–F20) pins provider/agents behaviour; `src/__tests__/catalog-baseline.test.ts` recounts 48/46/40 via real `tools/list` and validates the map in both directions. Change the map and these tests together.
 - Transport truth (F19): only streamable HTTP `/mcp` is served. `/sse` and `/sse/message` are auth-gated 404s that never reach a Durable Object, although `/sse` is still advertised in the resource aliases and landing JSON. v1 keeps SSE unserved (contract D10).
+- P12 (tool metadata): every tool registers via `registerTool`/`registerAppTool` with `toolMetadata(title, hints)`. Hints, titles and input-schema digests are locked to the map. Five † tools stay `readOnlyHint:false` until P07 removes a hidden write from their read path: the four brand-book reads (`BRAND_BOOK_READS_PERSIST_COMPLETENESS` in `src/tools/brand-book.ts`) and `robynn_query_connected_app` (`CONNECTED_APP_READS_PERSIST_POLICY` in `src/tools/connectors.ts`). Flip the flag and the map entry (`hintsAfterP07` / `requiredScopeAfterP07`) together; `catalog-baseline.test.ts` derives its expectations from the flags.
 
 ## Verification
 
@@ -34,7 +35,7 @@ Updated 2026-10-09.
   - `src/auth-handler.internal-auth.test.ts`
   - `src/index.refresh-signing.test.ts`
   - `src/wrangler-secrets.test.ts`
-- **Still open (P10):** refresh fails open when the upstream refresh fails (contract F12).
+- **Closed by P10:** refresh no longer fails open when the upstream refresh fails (contract F12).
 
 ## Plugin v1 Worker OAuth front door (COS-PLUGIN-001 P06)
 
@@ -56,3 +57,14 @@ Updated 2026-10-09. Stacked on P03.
   - `ADVERTISE_SSE = false` is the single D-C switch.
 - **Logging:** `src/safe-log.ts` only. Canary tests cover the OAuth paths.
 - **Docs:** `docs/plugin-v1/WORKER_OAUTH_FRONT_DOOR.md`.
+
+## Plugin v1 Worker session, Vault and refresh (COS-PLUGIN-001 P10)
+
+Updated 2026-10-09. Stacked on P06, with P12 merged in.
+
+- **Every `/mcp` request** passes `withMcpPreflight`: `unwrapToken`, legacy cutover (`authVersion !== 2` ⇒ revoke + 401), internal-header stripping, and the session binding read from the session DO's storage (mismatch ⇒ 404 `-32001`). Every `tools/call` also gets app introspection plus `TOOL_POLICY` (from `contracts/tool-route-map.json`). Inactive ⇒ revoke + 401; unavailable ⇒ `authorization_unavailable`, nothing forwarded.
+- **`RobynnMCP`:** the binding is write-once; mismatching props are never adopted; foreign upgrades are refused; a newer upstream token is adopted on a warm session; there is no in-session refresh; P12's unauthenticated status tool is wired; there are server instructions.
+- **Vault:** an R2-call-site gate needs the preflight stamp for the tool and grant; objects are capped at 1 MiB.
+- **Refresh:** fail-closed typed errors (`invalid_grant` + revoke, or `temporarily_unavailable`, un-rotated), serialized per grant by the `RefreshCoordinator` DO. **`wrangler.toml` migration `v2`.**
+- **Docs:** `docs/plugin-v1/WORKER_SESSION_AUTHORIZATION.md`.
+

@@ -23,14 +23,22 @@ id = "5727f263cda54e439bd998f618878b18"
 binding = "OAUTH_KV"
 id = "5727f263cda54e439bd998f618878b18"
 
+# MCP_OBJECT hosts one MCP session per DO. REFRESH_COORDINATOR serializes
+# host refreshes per provider grant (`refresh:{grantId}`, COS-PLUGIN-001 P10);
+# it stores nothing.
 [durable_objects]
 bindings = [
-  { name = "MCP_OBJECT", class_name = "RobynnMCP" }
+  { name = "MCP_OBJECT", class_name = "RobynnMCP" },
+  { name = "REFRESH_COORDINATOR", class_name = "RefreshCoordinator" }
 ]
 
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RobynnMCP"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["RefreshCoordinator"]
 
 # R2 binding: read-only access to the vault bucket the materializer cron
 # writes to (robynnv3 /api/cron/vault-materializer). Bind directly so the

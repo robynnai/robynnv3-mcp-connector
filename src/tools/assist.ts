@@ -6,9 +6,11 @@ import { buildCmoAguiTextFallback } from "./cmo-text";
 import {
   getShortSyncWaitMs,
   isRunTimeoutError,
+  isSafePathId,
   toErrorResult,
   toPendingRunResult,
   toSuccessResult,
+  toolMetadata,
 } from "./util";
 
 const assistantIdSchema = z.enum(["cmo_v2", "cmo_v3", "auto"]);
@@ -43,20 +45,28 @@ function extractAguiFields(data: {
 export function registerAssistTools(server: McpServer, client: RobynnClient) {
   const syncWaitMs = getShortSyncWaitMs();
 
-  server.tool(
+  server.registerTool(
     "robynn_assist",
-    "Run a general-purpose Robynn CMO assistant request. Use this when you want Robynn to choose the best assistant routing while still preserving thread history and caller hints.",
     {
-      message: z.string().describe("The user message or request to send to Robynn"),
-      thread_id: z.string().optional().describe("Continue in an existing conversation thread"),
-      assistant_id: assistantIdSchema.optional().describe("Optional assistant override hint"),
-      route_hint: routeHintSchema.optional().describe("Optional routing preference for the backend assistant"),
-      requested_capability: requestedCapabilitySchema.optional().describe("Optional capability hint for the backend assistant"),
-      claude_skill_slug: z.string().optional().describe("Optional Claude skill slug to preserve"),
-      history_summary: z.string().optional().describe("Optional summary of prior thread history"),
-      memory_enabled: z.boolean().optional().describe("Whether backend memory should be enabled for this run"),
+      ...toolMetadata("Ask the Robynn Assistant", {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: false,
+      }),
+      description:
+        "Send a general request to the Robynn CMO assistant and let Robynn choose the best routing, keeping thread history and caller hints. Starts an agent run that uses Robynn credits, saves the conversation to a thread visible to your organization (a new one unless thread_id is given), and may use your organization's connected apps. Each call starts a new run. May return response_blocks; if the run is still going after a short wait, returns run_id; poll it with robynn_run_status.",
+      inputSchema: {
+        message: z.string().describe("The user message or request to send to Robynn"),
+        thread_id: z.string().optional().describe("Continue in an existing conversation thread"),
+        assistant_id: assistantIdSchema.optional().describe("Optional assistant override hint"),
+        route_hint: routeHintSchema.optional().describe("Optional routing preference for the backend assistant"),
+        requested_capability: requestedCapabilitySchema.optional().describe("Optional capability hint for the backend assistant"),
+        claude_skill_slug: z.string().optional().describe("Optional Claude skill slug to preserve"),
+        history_summary: z.string().optional().describe("Optional summary of prior thread history"),
+        memory_enabled: z.boolean().optional().describe("Whether backend memory should be enabled for this run"),
+      },
     },
-    { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     async ({
       message,
       thread_id,
@@ -67,6 +77,10 @@ export function registerAssistTools(server: McpServer, client: RobynnClient) {
       history_summary,
       memory_enabled,
     }) => {
+      if (thread_id && !isSafePathId(thread_id)) {
+        return toErrorResult("Invalid thread_id.");
+      }
+
       try {
         let threadId = thread_id;
         if (!threadId) {

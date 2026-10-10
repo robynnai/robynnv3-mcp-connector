@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { registerVaultTools } from "./vault";
-import { VaultR2 } from "../vault-r2";
+import { MAX_VAULT_OBJECT_BYTES, MAX_VAULT_PATH_LENGTH, VaultR2 } from "../vault-r2";
+import { createVaultGate, type VaultGate } from "../authorization/vault-gate";
+import { PREFLIGHT_HEADER } from "../authorization/session-binding";
+
+/** Existing behaviour tests run behind an open gate; the gate is tested below. */
+const ALLOW_ALL: VaultGate = () => true;
 
 // ----------------------------------------------------------------------------
 // Mock R2Bucket — only the methods VaultR2 calls (.list / .get).
@@ -16,10 +21,11 @@ interface FakeObject {
   body: string;
 }
 
-function makeFakeBucket(objects: FakeObject[]) {
+function makeFakeBucket(objects: FakeObject[], calls: string[] = []) {
   const byKey = new Map(objects.map((o) => [o.key, o]));
   return {
     async list(opts: { prefix?: string; limit?: number; cursor?: string }) {
+      calls.push(`list:${opts.prefix ?? ""}`);
       const prefix = opts.prefix ?? "";
       const matched = objects.filter((o) => o.key.startsWith(prefix));
       const start = opts.cursor ? Number.parseInt(opts.cursor, 10) : 0;
@@ -38,15 +44,18 @@ function makeFakeBucket(objects: FakeObject[]) {
       };
     },
     async get(key: string) {
+      calls.push(`get:${key}`);
       const obj = byKey.get(key);
       if (!obj) return null;
+      const cancel = vi.fn(async () => undefined);
       return {
+        body: { cancel },
         key: obj.key,
         size: obj.size,
         uploaded: obj.uploaded,
         etag: obj.etag,
         httpMetadata: { contentType: obj.contentType ?? "text/plain" },
-        text: () => Promise.resolve(obj.body),
+        text: vi.fn(() => Promise.resolve(obj.body)),
       };
     },
   } as never;
@@ -60,12 +69,12 @@ type Handler = (args: never) => Promise<never>;
 
 function createServerHarness() {
   const handlers = new Map<string, Handler>();
-  const tool = vi.fn((...args: unknown[]) => {
+  const registerTool = vi.fn((...args: unknown[]) => {
     const name = args[0] as string;
     const handler = args[args.length - 1] as Handler;
     handlers.set(name, handler);
   });
-  const server = { tool } as never;
+  const server = { registerTool } as never;
   return { server, handlers };
 }
 
@@ -110,7 +119,7 @@ describe("registerVaultTools — robynn_vault_list", () => {
   it("lists objects scoped to the org and strips the org prefix from paths", async () => {
     const { server, handlers } = createServerHarness();
     const vault = new VaultR2(makeFakeBucket(fixture()), ORG);
-    registerVaultTools(server, vault);
+    registerVaultTools(server, vault, ALLOW_ALL);
 
     const res = (await handlers.get("robynn_vault_list")!({
       prefix: "brand/",
@@ -133,7 +142,7 @@ describe("registerVaultTools — robynn_vault_list", () => {
   it("paginates via cursor when limit is below the matching count", async () => {
     const { server, handlers } = createServerHarness();
     const vault = new VaultR2(makeFakeBucket(fixture()), ORG);
-    registerVaultTools(server, vault);
+    registerVaultTools(server, vault, ALLOW_ALL);
 
     const page1 = (await handlers.get("robynn_vault_list")!({
       prefix: "brand/",
@@ -163,7 +172,7 @@ describe("registerVaultTools — robynn_vault_list", () => {
   it("returns an isError result on path-traversal attempts", async () => {
     const { server, handlers } = createServerHarness();
     const vault = new VaultR2(makeFakeBucket(fixture()), ORG);
-    registerVaultTools(server, vault);
+    registerVaultTools(server, vault, ALLOW_ALL);
 
     const res = (await handlers.get("robynn_vault_list")!({
       prefix: "../",
@@ -177,7 +186,7 @@ describe("registerVaultTools — robynn_vault_read", () => {
   it("reads an object scoped to the org and returns text + metadata", async () => {
     const { server, handlers } = createServerHarness();
     const vault = new VaultR2(makeFakeBucket(fixture()), ORG);
-    registerVaultTools(server, vault);
+    registerVaultTools(server, vault, ALLOW_ALL);
 
     const res = (await handlers.get("robynn_vault_read")!({
       path: "brand/voice-attribute/direct.md",
@@ -204,7 +213,7 @@ describe("registerVaultTools — robynn_vault_read", () => {
   it("returns { not_found: true } when the path does not exist (no isError)", async () => {
     const { server, handlers } = createServerHarness();
     const vault = new VaultR2(makeFakeBucket(fixture()), ORG);
-    registerVaultTools(server, vault);
+    registerVaultTools(server, vault, ALLOW_ALL);
 
     const res = (await handlers.get("robynn_vault_read")!({
       path: "brand/missing.md",
@@ -221,7 +230,7 @@ describe("registerVaultTools — robynn_vault_read", () => {
   it("refuses to read another org's object via path traversal (defense-in-depth)", async () => {
     const { server, handlers } = createServerHarness();
     const vault = new VaultR2(makeFakeBucket(fixture()), ORG);
-    registerVaultTools(server, vault);
+    registerVaultTools(server, vault, ALLOW_ALL);
 
     const res = (await handlers.get("robynn_vault_read")!({
       path: "../22222222-2222-2222-2222-222222222222/brand/secret/leak.md",
@@ -234,7 +243,7 @@ describe("registerVaultTools — robynn_vault_read", () => {
   it("refuses absolute paths", async () => {
     const { server, handlers } = createServerHarness();
     const vault = new VaultR2(makeFakeBucket(fixture()), ORG);
-    registerVaultTools(server, vault);
+    registerVaultTools(server, vault, ALLOW_ALL);
 
     const res = (await handlers.get("robynn_vault_read")!({
       path: "/etc/passwd",
@@ -247,5 +256,142 @@ describe("VaultR2 constructor", () => {
   it("requires organizationId", () => {
     const bucket = makeFakeBucket([]);
     expect(() => new VaultR2(bucket, "")).toThrow(/organizationId/);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// COS-PLUGIN-001 P10: no R2 operation without the Worker preflight's stamp.
+// ----------------------------------------------------------------------------
+
+const APP_GRANT = "6f0c0000-0000-4000-8000-00000000000a";
+const OTHER_GRANT = "6f0c0000-0000-4000-8000-00000000000b";
+const hardenedProps = { authVersion: 2, appGrantId: APP_GRANT, organizationId: ORG };
+
+function extraWith(stamp: unknown) {
+  return {
+    requestInfo: {
+      headers: stamp === undefined ? {} : { [PREFLIGHT_HEADER]: typeof stamp === "string" ? stamp : JSON.stringify(stamp) },
+    },
+  };
+}
+
+async function callGated(
+  tool: "robynn_vault_list" | "robynn_vault_read",
+  gate: VaultGate | undefined,
+  extra: unknown,
+) {
+  const calls: string[] = [];
+  const handlers = new Map<string, (args: unknown, extra: unknown) => Promise<unknown>>();
+  const server = {
+    registerTool: (name: string, _config: unknown, handler: (args: unknown, extra: unknown) => Promise<unknown>) =>
+      handlers.set(name, handler),
+  } as never;
+  const vault = new VaultR2(makeFakeBucket(fixture(), calls), ORG);
+  if (gate) registerVaultTools(server, vault, gate);
+  else registerVaultTools(server, vault);
+  const args = tool === "robynn_vault_list" ? { prefix: "brand/" } : { path: "brand/voice-attribute/direct.md" };
+  const result = (await handlers.get(tool)!(args, extra)) as {
+    isError?: boolean;
+    structuredContent?: { error?: { code: string; retryable: boolean } };
+  };
+  return { result, calls };
+}
+
+describe("registerVaultTools — P10 authorization gate (fails closed before R2)", () => {
+  const stamped = (tools: string[], appGrantId = APP_GRANT) => extraWith({ appGrantId, tools });
+
+  it.each(["robynn_vault_list", "robynn_vault_read"] as const)(
+    "%s: the default gate denies every call and never touches R2",
+    async (tool) => {
+      const { result, calls } = await callGated(tool, undefined, stamped([tool]));
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent?.error).toMatchObject({ code: "authorization_unavailable", retryable: true });
+      expect(calls).toEqual([]);
+    },
+  );
+
+  it.each(["robynn_vault_list", "robynn_vault_read"] as const)(
+    "%s: runs only with a preflight stamp for this tool and this grant",
+    async (tool) => {
+      const gate = createVaultGate(() => hardenedProps);
+      const ok = await callGated(tool, gate, stamped([tool]));
+      expect(ok.result.isError).toBeFalsy();
+      expect(ok.calls).toHaveLength(1);
+
+      const denials = [
+        extraWith(undefined), // no stamp: request did not pass the Worker preflight
+        stamped([tool], OTHER_GRANT), // stamp for another grant
+        stamped(["robynn_status"]), // stamp for another tool
+        extraWith("{not json"),
+        extraWith({ appGrantId: APP_GRANT, tools: tool }), // tools not a list
+        undefined,
+      ];
+      for (const extra of denials) {
+        const denied = await callGated(tool, gate, extra);
+        expect(denied.result.isError).toBe(true);
+        expect(denied.result.structuredContent?.error?.code).toBe("authorization_unavailable");
+        expect(denied.calls).toEqual([]);
+      }
+    },
+  );
+
+  it("denies legacy (non-v2) or grant-less session props even with a stamp", async () => {
+    for (const props of [
+      undefined,
+      { ...hardenedProps, authVersion: 1 },
+      { ...hardenedProps, appGrantId: undefined },
+      { ...hardenedProps, appGrantId: "not-a-uuid" },
+    ]) {
+      const gate = createVaultGate(() => props as never);
+      const { result, calls } = await callGated("robynn_vault_read", gate, stamped(["robynn_vault_read"]));
+      expect(result.isError).toBe(true);
+      expect(calls).toEqual([]);
+    }
+  });
+});
+
+describe("VaultR2 — P10 bounds", () => {
+  it("refuses an object over MAX_VAULT_OBJECT_BYTES without reading its body", async () => {
+    const big: FakeObject = {
+      key: `orgs/${ORG}/sources/website/huge.md`,
+      size: MAX_VAULT_OBJECT_BYTES + 1,
+      uploaded: new Date("2026-04-29T05:00:00Z"),
+      etag: '"big"',
+      body: "x",
+    };
+    const bucket = makeFakeBucket([big]) as unknown as { get(key: string): Promise<{ text: ReturnType<typeof vi.fn>; body: { cancel: ReturnType<typeof vi.fn> } }> };
+    const gets: Array<Awaited<ReturnType<typeof bucket.get>>> = [];
+    const original = bucket.get.bind(bucket);
+    bucket.get = async (key: string) => {
+      const obj = await original(key);
+      gets.push(obj);
+      return obj;
+    };
+    const vault = new VaultR2(bucket as never, ORG);
+    await expect(vault.read("sources/website/huge.md")).rejects.toThrow(/too large/);
+    expect(gets[0].text).not.toHaveBeenCalled();
+    expect(gets[0].body.cancel).toHaveBeenCalledOnce();
+  });
+
+  it("reads an object exactly at the limit", async () => {
+    const edge: FakeObject = {
+      key: `orgs/${ORG}/edge.md`,
+      size: MAX_VAULT_OBJECT_BYTES,
+      uploaded: new Date("2026-04-29T05:00:00Z"),
+      etag: '"edge"',
+      body: "edge",
+    };
+    const vault = new VaultR2(makeFakeBucket([edge]), ORG);
+    await expect(vault.read("edge.md")).resolves.toMatchObject({ text: "edge" });
+  });
+
+  it("refuses over-long paths, prefixes and cursors before calling R2", async () => {
+    const calls: string[] = [];
+    const vault = new VaultR2(makeFakeBucket(fixture(), calls), ORG);
+    const long = "a".repeat(MAX_VAULT_PATH_LENGTH + 1);
+    await expect(vault.read(long)).rejects.toThrow(/at most/);
+    await expect(vault.list({ prefix: long })).rejects.toThrow(/at most/);
+    await expect(vault.list({ cursor: "c".repeat(2000) })).rejects.toThrow(/cursor/);
+    expect(calls).toEqual([]);
   });
 });

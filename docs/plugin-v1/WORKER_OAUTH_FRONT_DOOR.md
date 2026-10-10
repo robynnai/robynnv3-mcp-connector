@@ -77,7 +77,9 @@ The browser is then sent back to the host. An http(s) redirect URI (the usual lo
 
 ### Fail-closed until P05 and P10
 
-Today the app's tokens have no `gid` (P05 adds grants), and `/api/oauth/introspect` does not exist (P10). Until both land, every `/callback` ends with an error to the host:
+**P10 update:** with P05's `gid` and P10's `POST /api/oauth/introspect`, the positive path works end to end on the plugin-local stack (`cos-share/reports/plugin/P10-evidence/live.mjs`). The fail-closed behaviour below still applies whenever introspection is missing or unavailable.
+
+Before P05 and P10, the app's tokens had no `gid` and `/api/oauth/introspect` did not exist, so every `/callback` ended with an error to the host:
 
 - `server_error` (`upstream_grant_id_missing`) when the token has no `gid`;
 - `temporarily_unavailable` (introspection 404) when the token has a `gid` but introspection is missing.
@@ -99,11 +101,11 @@ The provider accepts any **registered** `redirect_uri` at `/token`, or none when
   - a declared length over 16 KB gets `413 invalid_request`;
   - in both cases the body is never touched.
 
-  Only a small, declared body is read, from a clone so the provider can read the original. It is parsed with the same `application/x-www-form-urlencoded` algorithm the provider uses. Bodies are read completely or not at all: in local workerd/wrangler, partially reading an upload and abandoning it broke the next request on that connection and then crashed wrangler's dev proxy. Hosts always send a length for these small form posts.
+  Only a small, declared body is read, from a clone so the provider can read the original. Since P10 review B1 it is parsed with `formData()`, the provider's own parser, and only when the media-type essence is exactly `application/x-www-form-urlencoded`; any other type, or a repeated single-valued parameter, gets `400 invalid_request` before the provider. The earlier text parse could disagree with the provider (multipart labelled as form, UTF-8 BOM). Bodies are read completely or not at all: in local workerd/wrangler, partially reading an upload and abandoning it broke the next request on that connection and then crashed wrangler's dev proxy. Hosts always send a length for these small form posts.
 - The wrapper's own `/token` errors carry the provider's CORS headers when an `Origin` is present (N5).
 - Signed Worker → app calls (code exchange, refresh, introspection) use `redirect: "manual"`. A 3xx is a failure, and signed headers are never re-sent to another URL (N4).
 
-The refresh path is unchanged: P10 owns F12 fail-open, serialization and introspection on refresh.
+The refresh path (F12 fail-closed, per-grant serialization, refresh-time introspection) is P10's: see [`WORKER_SESSION_AUTHORIZATION.md`](./WORKER_SESSION_AUTHORIZATION.md) §5.
 
 ## 4. Transport surface (D-C / D10)
 
@@ -112,7 +114,7 @@ The refresh path is unchanged: P10 owns F12 fail-open, serialization and introsp
   1. A request path that is not canonical gets `404 {"error":"not_found"}` before anything else. Non-canonical means it does not start with exactly one `/`, or it contains `\`. This covers `//host/...`; `/\host/...` parses to the same thing.
   2. The URL handed to the provider is built **structurally** from the public origin (`url.pathname = …; url.search = …`), never by string concatenation. It is then checked to still have that origin.
   3. **Every decision** is taken from that URL's pathname, which is exactly what the provider routes on: the API allow-list, `/token` handling and tracing.
-  4. P10's preflight must key on the same value.
+  4. P10's preflight runs as the provider's API handler, on that same request.
 
   Before this fix, `//mcp.test/mcp` passed the wrapper's checks unseen while the provider re-parsed it as `/mcp`.
 - The wrapper answers every path under `/mcp*` or `/sse*` other than exactly `/mcp` with `404 {"error":"not_found"}` **before** the provider. This covers `/mcpx`, `/mcp/`, `/mcp/openai`, `/mcp/lazy`, `/sse`, `/sse/message`, and their `//host/...` forms. These requests get no auth challenge and never reach a handler.

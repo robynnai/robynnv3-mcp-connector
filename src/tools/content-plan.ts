@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { RobynnClient } from "../robynn-client";
-import { toErrorResult, toSuccessResult } from "./util";
+import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 function contentPlanSummary(data: Record<string, unknown>) {
   if (data.status === "missing_context") {
@@ -33,8 +33,13 @@ export function registerContentPlanTools(server: McpServer, client: RobynnClient
     server,
     "robynn_content_plan",
     {
+      ...toolMetadata("Plan Content", {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      }),
       description:
-        "Create a Content Studio content plan from existing Robynn research. Prefer passing project_id so Robynn can hydrate SEO, GEO, deep research, existing website content, and calendar rows server-side. This is synthesis-only: it does not run fresh keyword research, web search, scraping, or news search.",
+        "Create a Content Studio content plan from existing Robynn research. Prefer passing project_id so Robynn can hydrate SEO, GEO, deep research, existing website content, and calendar rows server-side. Synthesis only: it runs an AI planner over research you already have and does no fresh keyword research, web search, scraping, or news search. Nothing is saved and no Robynn credits are charged, but each call runs the planner again.",
       inputSchema: {
         project_id: z
           .string()
@@ -74,12 +79,7 @@ export function registerContentPlanTools(server: McpServer, client: RobynnClient
         dry_run: z
           .boolean()
           .optional()
-          .describe("Return the generated plan without saving rows to the calendar"),
-      },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        openWorldHint: false,
+          .describe("Forwarded to the planner; this tool never saves calendar rows either way"),
       },
       _meta: {
         ui: {
