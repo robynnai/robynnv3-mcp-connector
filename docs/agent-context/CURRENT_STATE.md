@@ -1,6 +1,6 @@
 # robynn-mcp-server Current State
 
-Last updated: 2026-05-14
+Last updated: 2026-10-09
 
 This repo provides the hosted Robynn MCP connector at `mcp.robynn.ai` and the local CLI bridge for command-based agents.
 
@@ -10,6 +10,13 @@ This repo provides the hosted Robynn MCP connector at `mcp.robynn.ai` and the lo
 - No prior Beads issue history existed in this repo. The first Beads issue update should commit the exported `.beads/issues.jsonl`.
 - Fresh clones should run `bd bootstrap --yes` before using `bd ready`.
 - Beads uses embedded Dolt metadata so agents do not depend on a machine-local Dolt server.
+
+## Plugin v1 contracts (COS-PLUGIN-001)
+
+- `docs/plugin-v1/AUTHORIZATION_CONTRACT.md` — grant record, introspection, Worker preflight, scope policy, error codes. Decision: stay on `@cloudflare/workers-oauth-provider` 0.3.0.
+- `docs/plugin-v1/TOOL_CONTRACT.md` + `contracts/tool-route-map.json` — all 48 tools: scope, current vs proposed hints, app routes, side effects.
+- `src/__tests__/provider-contract.test.ts` (35 cases, facts F1–F20) pins provider/agents behaviour; `src/__tests__/catalog-baseline.test.ts` (7 cases) recounts 48/46/40 via real `tools/list` and validates the map in both directions. Change the map and these tests together.
+- Transport truth (F19): only streamable HTTP `/mcp` is served. `/sse` and `/sse/message` are auth-gated 404s that never reach a Durable Object, although `/sse` is still advertised in the resource aliases and landing JSON. v1 keeps SSE unserved (contract D10).
 
 ## Verification
 
@@ -28,3 +35,24 @@ Updated 2026-10-09.
   - `src/index.refresh-signing.test.ts`
   - `src/wrangler-secrets.test.ts`
 - **Still open (P10):** refresh fails open when the upstream refresh fails (contract F12).
+
+## Plugin v1 Worker OAuth front door (COS-PLUGIN-001 P06)
+
+Updated 2026-10-09. Stacked on P03.
+
+- **`/authorize`:**
+  - Requires the code flow and an S256 challenge; a missing challenge is rejected too (F9).
+  - Forwards exactly the requested scope (omitted ⇒ `brand:read`, unknown ⇒ `invalid_scope`).
+  - Accepts only `{base}`, `{base}/` and `{base}/mcp` as `resource`.
+  - Binds state to the browser with a per-transaction `HttpOnly` cookie.
+- **`/callback`:**
+  - Fails closed: state and cookie must match, and the state is single use.
+  - The signed exchange's result is checked by app introspection; the JWT is only a hint and there is no `"unknown"` identity.
+  - Requires granted ⊆ requested scopes, and the client name must still match.
+  - **Until P05 (`gid`) and P10 (`/api/oauth/introspect`) land, every callback ends with an OAuth error to the host. This is intended.**
+- **`/token`:** `redirect_uri` must equal the authorize-time value (F10). The binding is enforced in `tokenExchangeCallback` via grant props.
+- **Transport:**
+  - Only `/mcp` is served; other `/mcp*` and `/sse*` paths get 404 before the provider.
+  - `ADVERTISE_SSE = false` is the single D-C switch.
+- **Logging:** `src/safe-log.ts` only. Canary tests cover the OAuth paths.
+- **Docs:** `docs/plugin-v1/WORKER_OAUTH_FRONT_DOOR.md`.

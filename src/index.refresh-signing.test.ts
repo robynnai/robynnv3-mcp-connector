@@ -125,7 +125,11 @@ describe("provider tokenExchangeCallback (host refresh path)", () => {
 
   it("does not call upstream for authorization_code grants", async () => {
     const callback = await captureTokenExchangeCallback({ MCP_INTERNAL_AUTH_SECRET: "internal-secret" });
-    await callback({ grantType: "authorization_code", props });
+    // P06: without a matching token-request redirect_uri the code grant is
+    // refused (F10); either way the upstream app is never called.
+    await expect(callback({ grantType: "authorization_code", props })).rejects.toThrow(
+      "redirect_uri does not match",
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -151,6 +151,8 @@ export async function buildSignedTokenRequest(
       method: "POST",
       headers: { "Content-Type": "application/json", ...headers },
       body,
+      // Never re-send signed headers to a redirect target (P06 review N4).
+      redirect: "manual",
     },
   };
 }
