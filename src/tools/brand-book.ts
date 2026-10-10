@@ -7,14 +7,14 @@ import { REPORT_RESOURCE_URIS } from "../ui/report-app";
 import { toErrorResult, toSuccessResult, toolMetadata } from "./util";
 
 /**
- * COS-PLUGIN-001 (†): the app's brand-book read path still upserts the derived
- * "Brand Completeness" Brand Hub doc (brand-book-v2-service.ts
- * calculateBrandCompleteness), so status, gap analysis, strategy and the HTML
- * export are not read-only yet. Flip to false once P07 removes that write, and
- * flip contracts/tool-route-map.json (currentHints, proposedHints,
- * requiredScope -> brand:read) in the same change.
+ * COS-PLUGIN-001 (†): flipped in P17. P07 removed the app's hidden write on the
+ * brand-book read path (robynnv3 brand-book-adapters.ts passes
+ * `persistCompleteness: false`; operation-policy.ts serves status, gap
+ * analysis, strategy and the HTML export as brand:read), so these tools are
+ * read-only and contracts/tool-route-map.json carries hintsAfterP07 and
+ * requiredScope brand:read. Set back to true only together with the map.
  */
-export const BRAND_BOOK_READS_PERSIST_COMPLETENESS = true;
+export const BRAND_BOOK_READS_PERSIST_COMPLETENESS = false;
 
 const COMPLETENESS_EFFECT = BRAND_BOOK_READS_PERSIST_COMPLETENESS
   ? " Also refreshes Robynn's stored brand-completeness summary; repeat calls are safe."
