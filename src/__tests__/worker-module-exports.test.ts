@@ -20,5 +20,6 @@ describe("src/index.ts exports", () => {
       expect(typeof value, `export ${name}`).toBe("function");
     }
     expect(Object.keys(mod)).toEqual(expect.arrayContaining(["RobynnMCP", "RefreshCoordinator", "default"]));
-  });
+    // Cold import of the whole Worker graph; slow under machine load (P10 review N1).
+  }, 30_000);
 });

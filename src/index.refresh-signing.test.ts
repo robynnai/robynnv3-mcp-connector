@@ -45,7 +45,7 @@ vi.mock("./robynn-client", () => ({
   },
 }));
 
-import worker, { RobynnMCP } from "./index";
+import { createOAuthProviderOptions, RobynnMCP } from "./index";
 
 const API = "https://app.test";
 const REFRESH = "rrt_" + "ab".repeat(32);
@@ -130,11 +130,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function captureTokenExchangeCallback(env: Record<string, unknown>) {
-  await worker.fetch(new Request("https://mcp.test/"), env as never, {} as never);
-  const callback = providerOptions.current?.tokenExchangeCallback;
+/** The Worker's view of the refresh request (P10 review B1: it must name the validated user). */
+const refreshView = (userId = USER) => ({ grantType: "refresh_token", redirectUri: null, refreshGrant: { userId, grantId: "hostgrant1" } });
+
+async function captureTokenExchangeCallback(env: Record<string, unknown>, ...view: [unknown?]) {
+  const tokenRequest = view.length > 0 ? view[0] : refreshView();
+  const callback = createOAuthProviderOptions(env as never, tokenRequest as never).tokenExchangeCallback;
   expect(typeof callback).toBe("function");
-  return callback as (options: Record<string, unknown>) => Promise<unknown>;
+  return callback as unknown as (options: Record<string, unknown>) => Promise<unknown>;
 }
 
 const props = {
@@ -172,6 +175,17 @@ describe("provider tokenExchangeCallback (host refresh path)", () => {
       ROBYNN_API_BASE_URL: API,
     });
     await expect(callback(refreshOptions)).rejects.toMatchObject({ name: "UpstreamUnavailableError" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses (and sends nothing) when the Worker's view of the refresh token names another user or none (review B1)", async () => {
+    for (const view of [refreshView("22222222-2222-4222-8222-222222222222"), { grantType: "refresh_token", redirectUri: null, refreshGrant: null }, undefined]) {
+      const callback = await captureTokenExchangeCallback(
+        { MCP_INTERNAL_AUTH_SECRET: "internal-secret", MCP_PUBLIC_BASE_URL: "https://mcp.test", ROBYNN_API_BASE_URL: API },
+        view,
+      );
+      await expect(callback(refreshOptions)).rejects.toMatchObject({ name: "RefreshRequestMismatchError" });
+    }
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

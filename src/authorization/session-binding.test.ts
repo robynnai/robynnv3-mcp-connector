@@ -62,6 +62,16 @@ describe("admitStartProps (cold start, F17)", () => {
   });
 });
 
+describe("admitStartProps ordering (review N4)", () => {
+  it("after eviction keeps stored props with a newer upstream token; adopts a newer incoming one", async () => {
+    const newer = { ...A, accessToken: jwtWithExp(2000) };
+    const older = { ...A, accessToken: jwtWithExp(1000) };
+    const s = storage({ [SESSION_BINDING_STORAGE_KEY]: A, props: newer });
+    expect(await admitStartProps(s, older)).toEqual({ adopt: undefined, outcome: "kept_newer" });
+    expect((await admitStartProps(s, { ...A, accessToken: jwtWithExp(3000) })).outcome).toBe("matched");
+  });
+});
+
 describe("admitUpgrade", () => {
   it("requires the Worker's header to match the stored binding", async () => {
     const s = storage({ [SESSION_BINDING_STORAGE_KEY]: A });

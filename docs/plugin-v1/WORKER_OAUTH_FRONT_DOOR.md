@@ -101,7 +101,7 @@ The provider accepts any **registered** `redirect_uri` at `/token`, or none when
   - a declared length over 16 KB gets `413 invalid_request`;
   - in both cases the body is never touched.
 
-  Only a small, declared body is read, from a clone so the provider can read the original. It is parsed with the same `application/x-www-form-urlencoded` algorithm the provider uses. Bodies are read completely or not at all: in local workerd/wrangler, partially reading an upload and abandoning it broke the next request on that connection and then crashed wrangler's dev proxy. Hosts always send a length for these small form posts.
+  Only a small, declared body is read, from a clone so the provider can read the original. Since P10 review B1 it is parsed with `formData()`, the provider's own parser, and only when the media-type essence is exactly `application/x-www-form-urlencoded`; any other type, or a repeated single-valued parameter, gets `400 invalid_request` before the provider. The earlier text parse could disagree with the provider (multipart labelled as form, UTF-8 BOM). Bodies are read completely or not at all: in local workerd/wrangler, partially reading an upload and abandoning it broke the next request on that connection and then crashed wrangler's dev proxy. Hosts always send a length for these small form posts.
 - The wrapper's own `/token` errors carry the provider's CORS headers when an `Origin` is present (N5).
 - Signed Worker → app calls (code exchange, refresh, introspection) use `redirect: "manual"`. A 3xx is a failure, and signed headers are never re-sent to another URL (N4).
 

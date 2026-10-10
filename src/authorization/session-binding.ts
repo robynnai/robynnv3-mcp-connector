@@ -151,13 +151,19 @@ export async function readSessionBinding(storage: BindingStorage): Promise<Sessi
   return bindingFromProps((await storage.get(SESSION_BINDING_STORAGE_KEY)) as Partial<Props> | undefined);
 }
 
-export type StartOutcome = "bound" | "matched" | "refused" | "no_props";
+export type StartOutcome = "bound" | "matched" | "kept_newer" | "refused" | "no_props";
+
+/** McpAgent's storage key for the session's props (agents 0.7.5, F18). */
+export const SESSION_PROPS_STORAGE_KEY = "props";
 
 /**
  * Cold start (`onStart(props)`, F17): decide which props the session may
  * adopt. The first complete props bind the session; later props are adopted
  * only for the same binding. Refused props are never written to storage, so
- * the session keeps (only) its bound user's state.
+ * the session keeps (only) its bound user's state. For the same binding, the
+ * stored props are kept when they hold a newer upstream token (review N4:
+ * after an eviction an older, still-valid host token must not roll the
+ * session back, exactly as on a warm session).
  */
 export async function admitStartProps(
   storage: BindingStorage,
@@ -171,9 +177,12 @@ export async function admitStartProps(
     await storage.put(SESSION_BINDING_STORAGE_KEY, JSON.parse(serializeBinding(incoming)));
     return { adopt: props as Props, outcome: "bound" };
   }
-  return sameBinding(binding, incoming)
-    ? { adopt: props as Props, outcome: "matched" }
-    : { adopt: undefined, outcome: "refused" };
+  if (!sameBinding(binding, incoming)) return { adopt: undefined, outcome: "refused" };
+  const stored = (await storage.get(SESSION_PROPS_STORAGE_KEY)) as Partial<Props> | undefined;
+  if (stored?.accessToken && !shouldAdoptProps(stored, props)) {
+    return { adopt: undefined, outcome: "kept_newer" };
+  }
+  return { adopt: props as Props, outcome: "matched" };
 }
 
 /** Transport upgrade: only the Worker, for the bound identity, may open one. */

@@ -39,6 +39,7 @@ import {
   type TokenRequestContext,
 } from "./authorization/token-binding";
 import {
+  RefreshRequestMismatchError,
   RefreshScopeError,
   refreshUpstreamGrant,
   UpstreamGrantRevokedError,
@@ -232,7 +233,18 @@ async function tokenExchangeCallback(
     };
   }
   if (options.grantType !== GrantType.REFRESH_TOKEN) return;
-  return refreshUpstreamGrant(options, env);
+
+  // P10 review B1: the only grant the Worker may ever revoke is the one the
+  // provider just validated. The Worker's parse of `refresh_token` (same
+  // bytes, same `formData()` parser) must name the provider-validated user.
+  const grant = tokenRequest?.refreshGrant;
+  if (!grant || grant.userId !== options.userId) throw new RefreshRequestMismatchError();
+  try {
+    return await refreshUpstreamGrant(options, env);
+  } catch (err) {
+    if (err instanceof UpstreamGrantRevokedError) err.revokeTarget = grant;
+    throw err;
+  }
 }
 
 /**
@@ -318,7 +330,7 @@ function notFound() {
  * failures (P06 F10, P10 F12) to OAuth errors. Used in-process for code
  * exchange and inside `RefreshCoordinator` for refresh.
  */
-async function handleTokenRequest(
+export async function handleTokenRequest(
   request: Request,
   env: Env,
   ctx: ExecutionContext,
@@ -333,8 +345,9 @@ async function handleTokenRequest(
       return oauthErrorResponse(request, 400, "invalid_grant", "redirect_uri does not match the authorization request");
     }
     if (err instanceof UpstreamGrantRevokedError) {
-      // Permanent: end the provider grant so no host token outlives it.
-      const grant = tokenRequest?.refreshGrant;
+      // Permanent: end the provider grant so no host token outlives it. Only
+      // the provider-validated identity bound in tokenExchangeCallback.
+      const grant = err.revokeTarget;
       if (grant) {
         try {
           await getOAuthApi(options, env).revokeGrant(grant.grantId, grant.userId);
@@ -344,6 +357,10 @@ async function handleTokenRequest(
       }
       safeLog.warn("oauth.refresh.rejected", { reason: err.reason, revoked: Boolean(grant) });
       return oauthErrorResponse(request, 400, "invalid_grant", "The grant is no longer valid");
+    }
+    if (err instanceof RefreshRequestMismatchError) {
+      safeLog.warn("oauth.refresh.rejected", { reason: "refresh_request_mismatch", revoked: false });
+      return oauthErrorResponse(request, 400, "invalid_grant", "Invalid refresh token");
     }
     if (err instanceof UpstreamUnavailableError) {
       // Transient: the grant is not rotated; the same refresh token works later.
@@ -359,6 +376,25 @@ async function handleTokenRequest(
   }
 }
 
+/** The wrapper's answer to a `/token` body it refuses to hand the provider. */
+function tokenReadErrorResponse(
+  request: Request,
+  reason: Exclude<Awaited<ReturnType<typeof readTokenRequestContext>>, { ok: true }>["reason"],
+): Response {
+  switch (reason) {
+    case "length_required":
+      return oauthErrorResponse(request, 411, "invalid_request", "Content-Length is required");
+    case "body_too_large":
+      return oauthErrorResponse(request, 413, "invalid_request", "Token request body too large");
+    case "unsupported_media_type":
+      return oauthErrorResponse(request, 400, "invalid_request", "Content-Type must be application/x-www-form-urlencoded");
+    case "repeated_parameter":
+      return oauthErrorResponse(request, 400, "invalid_request", "Token request parameters must not be repeated");
+    default:
+      return oauthErrorResponse(request, 400, "invalid_request", "Malformed token request");
+  }
+}
+
 /**
  * RefreshCoordinator — one Durable Object per provider grant
  * (`refresh:{grantId}`) that runs that grant's refreshes one at a time and
@@ -371,7 +407,8 @@ export class RefreshCoordinator extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     if (request.method !== "POST" || new URL(request.url).pathname !== "/token") return notFound();
     const read = await readTokenRequestContext(request);
-    if (!read.ok || read.context.grantType !== "refresh_token" || !read.context.refreshGrant) {
+    if (!read.ok) return tokenReadErrorResponse(request, read.reason);
+    if (read.context.grantType !== "refresh_token" || !read.context.refreshGrant) {
       return oauthErrorResponse(request, 400, "invalid_request", "Unsupported token request");
     }
     const tokenRequest = read.context;
@@ -383,6 +420,12 @@ export class RefreshCoordinator extends DurableObject<Env> {
     } as unknown as ExecutionContext;
     return this.runner.run(key, () => handleTokenRequest(request, this.env, ctx, tokenRequest));
   }
+}
+
+/** Local development only (`http://localhost`, `127.0.0.1`, `[::1]`). */
+function isLoopbackOrigin(origin: string): boolean {
+  const { protocol, hostname } = new URL(origin);
+  return protocol === "http:" && (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]");
 }
 
 const TRACED_PATHS = new Set(["/register", "/authorize", "/callback", "/token", MCP_API_PATH]);
@@ -432,9 +475,7 @@ export default {
       if (!read.ok) {
         // The body was never read: refused on the declared length alone.
         safeLog.warn("oauth.token.rejected", { reason: read.reason });
-        return read.reason === "length_required"
-          ? oauthErrorResponse(request, 411, "invalid_request", "Content-Length is required")
-          : oauthErrorResponse(request, 413, "invalid_request", "Token request body too large");
+        return tokenReadErrorResponse(request, read.reason);
       }
       tokenRequest = read.context;
       const refreshGrant = tokenRequest.grantType === "refresh_token" ? tokenRequest.refreshGrant : null;
@@ -442,6 +483,11 @@ export default {
       if (refreshGrant && coordinators) {
         const stub = coordinators.get(coordinators.idFromName(refreshCoordinatorName(refreshGrant.grantId)));
         response = await stub.fetch(rewrittenRequest);
+      } else if (refreshGrant && !isLoopbackOrigin(publicOrigin)) {
+        // P10 review N3: a deployed Worker without the coordinator would
+        // refresh unserialized; refuse instead (grant not rotated).
+        safeLog.error("oauth.refresh.rejected", { reason: "coordinator_binding_missing" });
+        return oauthErrorResponse(request, 503, "temporarily_unavailable", "Token service temporarily unavailable");
       } else {
         if (refreshGrant) safeLog.warn("oauth.refresh.unserialized", { reason: "coordinator_binding_missing" });
         response = await handleTokenRequest(rewrittenRequest, env, ctx, tokenRequest);

@@ -10,7 +10,10 @@
  *
  * - `UpstreamGrantRevokedError` ⇒ revoke the provider grant, `400 invalid_grant`
  * - `UpstreamUnavailableError`  ⇒ `503 temporarily_unavailable` (un-rotated)
- * - `RefreshScopeError`         ⇒ `400 invalid_scope` (nothing left to grant)
+ * - `RefreshScopeError`         ⇒ `400 invalid_scope` (nothing requested is
+ *   on the grant; decided before the app is called)
+ * - `RefreshRequestMismatchError` (from the Worker's callback) ⇒
+ *   `400 invalid_grant`, nothing revoked
  *
  * Only the provider `/token` path refreshes; the session DO never does (D6).
  */
@@ -35,9 +38,27 @@ const MIN_ACCESS_TOKEN_TTL_SECONDS = 60;
 const MAX_ERROR_BODY_BYTES = 2048;
 
 export class UpstreamGrantRevokedError extends Error {
+  /**
+   * The provider grant to revoke, set only by the Worker's
+   * `tokenExchangeCallback` after it has bound the request's refresh token to
+   * the provider-validated user (P10 review B1). Unset ⇒ revoke nothing.
+   */
+  revokeTarget: { userId: string; grantId: string } | null = null;
+
   constructor(readonly reason: string) {
     super(`upstream grant revoked: ${reason}`);
     this.name = "UpstreamGrantRevokedError";
+  }
+}
+
+/**
+ * The refresh request's own `refresh_token` does not name the grant the
+ * provider validated (or names none). Nothing is refreshed or revoked.
+ */
+export class RefreshRequestMismatchError extends Error {
+  constructor() {
+    super("refresh request does not match the validated grant");
+    this.name = "RefreshRequestMismatchError";
   }
 }
 
@@ -103,6 +124,13 @@ export async function refreshUpstreamGrant(
     props.userId !== options.userId
   ) {
     throw new UpstreamGrantRevokedError("legacy_grant");
+  }
+
+  // P10 review N2: decide "nothing requested is grantable" before the app
+  // rotates anything (the provider passes [] when the host asks only for
+  // scopes outside the grant).
+  if (intersect(scopeList(options.requestedScope), scopeList(props.scopes)).length === 0) {
+    throw new RefreshScopeError();
   }
 
   const secret = getInternalAuthSecret(env);
@@ -172,8 +200,11 @@ export async function refreshUpstreamGrant(
   }
   if (scopes.length === 0) throw new UpstreamGrantRevokedError("scope_empty");
 
+  // After the app has rotated, never throw away the new pair (that would
+  // strand it and trip refresh-reuse later). If a role narrowing left none of
+  // the requested scopes, issue a token with no scope: every tool call is then
+  // refused by the preflight, and a later refresh can ask again.
   const accessTokenScope = intersect(scopeList(options.requestedScope), scopes);
-  if (accessTokenScope.length === 0) throw new RefreshScopeError();
 
   const upstreamTtl = Math.min(tokens.expiresIn ?? MAX_ACCESS_TOKEN_TTL_SECONDS, MAX_ACCESS_TOKEN_TTL_SECONDS);
   const accessTokenTTL = Math.max(MIN_ACCESS_TOKEN_TTL_SECONDS, Math.floor(upstreamTtl) - ACCESS_TOKEN_TTL_MARGIN_SECONDS);

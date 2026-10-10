@@ -217,7 +217,7 @@ vi.mock("agents/mcp", () => {
 });
 
 import { getOAuthApi } from "@cloudflare/workers-oauth-provider";
-import worker, { createOAuthProviderOptions, RefreshCoordinator, RobynnMCP } from "../index";
+import worker, { createOAuthProviderOptions, handleTokenRequest, RefreshCoordinator, RobynnMCP } from "../index";
 import { PREFLIGHT_HEADER, SESSION_BINDING_HEADER, SESSION_BINDING_STORAGE_KEY } from "../authorization/session-binding";
 import type { Env } from "../types";
 
@@ -821,6 +821,21 @@ describe("session binding (D7; F15–F17 attack)", () => {
     expect(ok.json.result.isError).toBeFalsy();
   });
 
+  it("GET (standalone stream) with another user's token on an existing session id ⇒ 404 before the session (review N5)", async () => {
+    const h = await createHarness();
+    const a = await connect(h, { userId: USER_A, organizationId: ORG_A, appGrantId: APP_GRANT_A, scopes: ["brand:read"] });
+    const b = await connect(h, { userId: USER_B, organizationId: ORG_B, appGrantId: APP_GRANT_B, scopes: ["brand:read"] });
+    const { sessionId } = await initialize(h, a.access);
+    doEvents.length = 0;
+    const res = await h.fetch("/mcp", {
+      method: "GET",
+      headers: { Accept: "text/event-stream", Authorization: `Bearer ${b.access}`, "mcp-session-id": sessionId },
+    });
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { error: { code: number } }).error.code).toBe(-32001);
+    expect(doEvents).toEqual([]);
+  });
+
   it("strips client-supplied x-robynn-*, x-partykit-* and cf-mcp-* headers before the session", async () => {
     const h = await createHarness();
     const a = await connect(h, { userId: USER_A, organizationId: ORG_A, appGrantId: APP_GRANT_A, scopes: ["brand:read"] });
@@ -1156,6 +1171,135 @@ describe("refresh (contract §6.3; F12, F13)", () => {
     expect((await refreshHost(h, legacy.refresh)).status).toBe(400);
     expect(h.app.calls.length).toBe(before); // never asked the app
     expect([...h.kv.store.keys()].some((k) => k.startsWith(`grant:${USER_B}:${legacy.hostGrantId}`))).toBe(false);
+  });
+
+  // --- P10 review B1: a refresh can only ever revoke the grant the provider validated ---
+
+  const grantAlive = (h: Harness, userId: string, hostGrantId: string) =>
+    [...h.kv.store.keys()].some((k) => k === `grant:${userId}:${hostGrantId}`);
+
+  it("B1: a /token body whose media type is not exactly form-urlencoded is refused before the provider, touching no grant or coordinator", async () => {
+    const h = await createHarness();
+    const victim = await connect(h, { userId: USER_A, organizationId: ORG_A, appGrantId: APP_GRANT_A, scopes: ["brand:read"] });
+    const attacker = await connect(h, { userId: USER_B, organizationId: ORG_B, appGrantId: APP_GRANT_B, scopes: ["brand:read"], legacy: true });
+    const boundary = "p10b1";
+    // Read as urlencoded text this names the victim; read by formData() as
+    // multipart it names the attacker's own (legacy, revocable) grant.
+    const body =
+      `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="pad"\r\n\r\n&refresh_token=${encodeURIComponent(victim.refresh)}&z=\r\n--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="grant_type"\r\n\r\nrefresh_token\r\n--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="refresh_token"\r\n\r\n${attacker.refresh}\r\n--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="client_id"\r\n\r\n${h.clientId}\r\n--${boundary}--\r\n`;
+    h.app.calls.length = 0;
+    for (const contentType of [
+      `multipart/form-data; boundary=${boundary}; x=application/x-www-form-urlencoded`,
+      "text/plain; charset=application/x-www-form-urlencoded",
+      "application/x-www-form-urlencoded-evil",
+    ]) {
+      const res = await h.fetch("/token", { method: "POST", headers: { "Content-Type": contentType }, body });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toBe("invalid_request");
+    }
+    expect(grantAlive(h, USER_A, victim.hostGrantId)).toBe(true);
+    expect(grantAlive(h, USER_B, attacker.hostGrantId)).toBe(true);
+    expect(h.coordinators.instances.size).toBe(0);
+    expect(h.app.calls).toEqual([]);
+    // Parameters on the right type are still accepted.
+    const ok = await h.fetch("/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: victim.refresh, client_id: h.clientId }).toString(),
+    });
+    expect(ok.status).toBe(200);
+  });
+
+  it("B1: the Worker reads the body with the provider's parser, so a BOM-prefixed body cannot route to another grant's coordinator", async () => {
+    const h = await createHarness();
+    const victim = await connect(h, { userId: USER_A, organizationId: ORG_A, appGrantId: APP_GRANT_A, scopes: ["brand:read"] });
+    h.app.calls.length = 0;
+    // text() strips a leading BOM; formData() (the provider's parser) keeps
+    // it in the first key, so the provider sees no refresh_token at all.
+    const res = await h.fetch("/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `\uFEFFrefresh_token=${encodeURIComponent(victim.refresh)}&grant_type=refresh_token&client_id=${h.clientId}`,
+    });
+    expect(res.status).toBe(400);
+    expect(h.coordinators.instances.size).toBe(0);
+    expect(h.app.calls).toEqual([]);
+    expect(grantAlive(h, USER_A, victim.hostGrantId)).toBe(true);
+  });
+
+  it("B1: a repeated refresh_token (or grant_type) is refused before the provider", async () => {
+    const h = await createHarness();
+    const victim = await connect(h, { userId: USER_A, organizationId: ORG_A, appGrantId: APP_GRANT_A, scopes: ["brand:read"] });
+    const attacker = await connect(h, { userId: USER_B, organizationId: ORG_B, appGrantId: APP_GRANT_B, scopes: ["brand:read"], legacy: true });
+    for (const body of [
+      `grant_type=refresh_token&refresh_token=${encodeURIComponent(victim.refresh)}&refresh_token=${encodeURIComponent(attacker.refresh)}&client_id=${h.clientId}`,
+      `grant_type=refresh_token&grant_type=authorization_code&refresh_token=${encodeURIComponent(attacker.refresh)}&client_id=${h.clientId}`,
+    ]) {
+      const res = await h.fetch("/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+      expect(res.status).toBe(400);
+    }
+    expect(grantAlive(h, USER_A, victim.hostGrantId)).toBe(true);
+    expect(grantAlive(h, USER_B, attacker.hostGrantId)).toBe(true);
+    expect(h.coordinators.instances.size).toBe(0);
+  });
+
+  it("B1: even if the Worker's view named another grant, a permanent failure revokes only the provider-validated one", async () => {
+    const h = await createHarness();
+    const victim = await connect(h, { userId: USER_A, organizationId: ORG_A, appGrantId: APP_GRANT_A, scopes: ["brand:read"] });
+    const attacker = await connect(h, { userId: USER_B, organizationId: ORG_B, appGrantId: APP_GRANT_B, scopes: ["brand:read"], legacy: true });
+    const request = () =>
+      new Request(`${ORIGIN}/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: attacker.refresh, client_id: h.clientId }).toString(),
+      });
+
+    // A forged context naming the victim: the callback refuses, nothing is revoked.
+    const forged = await handleTokenRequest(request(), h.env, executionContext(), {
+      grantType: "refresh_token",
+      redirectUri: null,
+      refreshGrant: { userId: USER_A, grantId: victim.hostGrantId },
+    });
+    expect(forged.status).toBe(400);
+    expect(grantAlive(h, USER_A, victim.hostGrantId)).toBe(true);
+    expect(grantAlive(h, USER_B, attacker.hostGrantId)).toBe(true);
+    const ok = await callTool(h, victim.access, (await initialize(h, victim.access)).sessionId, "robynn_status");
+    expect(ok.json.result.isError).toBeFalsy();
+
+    // No Worker view at all: refused, nothing revoked.
+    const none = await handleTokenRequest(request(), h.env, executionContext(), {
+      grantType: "refresh_token",
+      redirectUri: null,
+      refreshGrant: null,
+    });
+    expect(none.status).toBe(400);
+    expect(grantAlive(h, USER_B, attacker.hostGrantId)).toBe(true);
+
+    // The honest path revokes exactly the caller's own legacy grant.
+    const own = await h.fetch("/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: attacker.refresh, client_id: h.clientId }).toString(),
+    });
+    expect(own.status).toBe(400);
+    expect(grantAlive(h, USER_B, attacker.hostGrantId)).toBe(false);
+    expect(grantAlive(h, USER_A, victim.hostGrantId)).toBe(true);
+    expect([...h.coordinators.instances.keys()]).toEqual([`refresh:${attacker.hostGrantId}`]);
+  });
+
+  it("N3: a deployed (non-loopback) Worker without REFRESH_COORDINATOR refuses refreshes with 503, un-rotated", async () => {
+    const h = await createHarness();
+    const a = await connect(h, { userId: USER_A, organizationId: ORG_A, appGrantId: APP_GRANT_A, scopes: ["brand:read"] });
+    delete (h.env as unknown as Record<string, unknown>).REFRESH_COORDINATOR;
+    const res = await refreshHost(h, a.refresh);
+    expect(res.status).toBe(503);
+    expect(h.app.calls.filter((c) => c.path === "/api/oauth/token")).toEqual([]);
+    (h.env as unknown as Record<string, unknown>).REFRESH_COORDINATOR = h.coordinators;
+    expect((await refreshHost(h, a.refresh)).status).toBe(200);
   });
 
   it("concurrent refreshes of one grant run through its coordinator: one upstream refresh, no reuse revocation", async () => {

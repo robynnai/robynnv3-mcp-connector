@@ -190,12 +190,25 @@ describe("refreshUpstreamGrant", () => {
     expect(result.newProps.scopes).toEqual(["brand:read"]);
   });
 
-  it("nothing left of the requested scope ⇒ RefreshScopeError (no revoke)", async () => {
-    await expect(
-      refreshUpstreamGrant(options({ requestedScope: ["tools:execute"] }), env, {
-        fetchImpl: tokenResponse() as never,
-        introspect: async () => active(["brand:read"]),
-      }),
-    ).rejects.toBeInstanceOf(RefreshScopeError);
+  it("nothing requested is on the grant ⇒ RefreshScopeError before the app is called (review N2)", async () => {
+    for (const requestedScope of [[], ["tools:execute"]]) {
+      const fetchImpl = tokenResponse();
+      await expect(
+        refreshUpstreamGrant(options({ requestedScope, props: { ...props, scopes: ["brand:read"] } }), env, {
+          fetchImpl: fetchImpl as never,
+          introspect: async () => active(),
+        }),
+      ).rejects.toBeInstanceOf(RefreshScopeError);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    }
+  });
+
+  it("a role narrowing after rotation keeps the new pair and issues a token with no scope (never strands it)", async () => {
+    const result = await refreshUpstreamGrant(options({ requestedScope: ["tools:execute"] }), env, {
+      fetchImpl: tokenResponse() as never,
+      introspect: async () => active(["brand:read"]),
+    });
+    expect(result.newProps).toMatchObject({ refreshToken: "rrt_new", scopes: ["brand:read"] });
+    expect(result.accessTokenScope).toEqual([]);
   });
 });
