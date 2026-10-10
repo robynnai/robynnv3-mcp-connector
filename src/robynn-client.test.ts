@@ -621,20 +621,16 @@ describe("RobynnClient auth refresh", () => {
     expect(result.success).toBe(true);
     expect(refreshAccessToken).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(warnMock).toHaveBeenCalledWith(
-      "[RobynnApi401] upstream Robynn API returned 401",
-      expect.objectContaining({
-        path: "/api/cli/context/summary",
-        refreshAvailable: true,
-        alreadyRefreshed: false,
-      }),
-    );
-    expect(logMock).toHaveBeenCalledWith(
-      "[RobynnApi401] refreshed upstream token; retrying",
-      expect.objectContaining({
-        path: "/api/cli/context/summary",
-      }),
-    );
+    expect(JSON.parse(String(warnMock.mock.calls[0][0]))).toMatchObject({
+      event: "robynn_api.unauthorized",
+      route: "api.cli.context.summary",
+      refresh_available: true,
+      already_refreshed: false,
+    });
+    expect(JSON.parse(String(logMock.mock.calls[0][0]))).toMatchObject({
+      event: "robynn_api.token_refreshed",
+      route: "api.cli.context.summary",
+    });
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "https://robynn.test/api/cli/context/summary",
