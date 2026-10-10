@@ -46,9 +46,10 @@ import {
   UpstreamUnavailableError,
 } from "./authorization/upstream-refresh";
 import { createVaultGate } from "./authorization/vault-gate";
+import { readPreflightStamp } from "./authorization/preflight-stamp";
 import { errorKind, safeLog } from "./safe-log";
 import { registerContextTools } from "./tools/context";
-import { registerStatusTools, registerUnauthenticatedStatusTool } from "./tools/status";
+import { connectionFromStamp, registerStatusTools, registerUnauthenticatedStatusTool } from "./tools/status";
 import { registerContentTools } from "./tools/content";
 import { registerResearchTools } from "./tools/research";
 import { registerAssistTools } from "./tools/assist";
@@ -174,7 +175,11 @@ export class RobynnMCP extends McpAgent<Env, Record<string, never>, Props> {
     registerReportAppResources(this.server, publicBaseUrl);
 
     registerContextTools(this.server, client);
-    registerStatusTools(this.server, client);
+    // robynn_status reports the organization and permissions the preflight
+    // verified for this very call (stamp), never the session's stored props.
+    registerStatusTools(this.server, client, {
+      connection: (extra) => connectionFromStamp(readPreflightStamp(extra), this.props?.appGrantId),
+    });
     registerContentTools(this.server, client);
     registerResearchTools(this.server, client);
     registerAssistTools(this.server, client);

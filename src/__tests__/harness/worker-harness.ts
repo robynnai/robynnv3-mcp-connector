@@ -251,6 +251,7 @@ export function installAppFetch(app: App) {
           organization_id: grant.organizationId,
           client_id: "robynn-mcp-worker",
           scopes: grant.scopes,
+          organization: { id: grant.organizationId, name: "Harness Org ✓" },
           role: "collaborator",
           membership_status: "active",
           credential_version: grant.credentialVersion,

@@ -42,6 +42,13 @@ type ListedTool = Awaited<ReturnType<Awaited<ReturnType<typeof startWorkerSessio
 const catalog = {} as { worker: ListedTool[]; noVault: ListedTool[]; cli: ListedTool[] };
 
 beforeAll(async () => {
+  // P13 review note 5: this suite never calls a tool; any outbound request is a bug (no network in unit tests).
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      throw new Error(`catalog-baseline makes no network requests (attempted ${String(input)})`);
+    }),
+  );
   process.env.ROBYNN_API_BASE_URL = APP_BASE_URL;
   const worker = await startWorkerSession();
   const noVault = await startWorkerSession({ vault: false });
@@ -53,6 +60,7 @@ beforeAll(async () => {
 }, 30_000);
 afterAll(() => {
   delete process.env.ROBYNN_API_BASE_URL;
+  vi.unstubAllGlobals();
 });
 
 interface Hints {
@@ -213,6 +221,8 @@ describe("P01 catalog baseline (real tools/list)", () => {
   it("every mapped tool has a scope, a title proposal, explicit proposed hints and an app route (or an explicit null for Vault)", () => {
     for (const tool of routeMap.tools) {
       expect(["brand:read", "tools:execute"], tool.name).toContain(tool.requiredScope);
+      // P13 review note 2: a pending (pre-flip) scope must already be a real scope.
+      if (tool.requiredScopeAfterP07) expect(["brand:read", "tools:execute"], tool.name).toContain(tool.requiredScopeAfterP07);
       expect(tool.titleProposal.length, tool.name).toBeGreaterThan(3);
       for (const hint of ["readOnlyHint", "destructiveHint", "openWorldHint"] as const) {
         expect(typeof tool.proposedHints[hint], `${tool.name}.${hint}`).toBe("boolean");

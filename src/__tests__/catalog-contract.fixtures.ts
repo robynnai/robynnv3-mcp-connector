@@ -60,10 +60,13 @@ export const TOOL_FIXTURES: Record<string, ToolFixture> = {
   },
   robynn_research: {
     args: { query: `${P13_ARG}-query` },
+    // P13 review note 1: with a thread_id there is no createThread title, so only the run request can carry the query.
+    variants: [{ label: "existing thread", args: { query: `${P13_ARG}-query-run`, thread_id: "thr_existing" } }],
     rejected: [{ label: "unsafe thread_id", args: { query: "q", thread_id: "a/b" }, reason: PATH_GUARD }],
   },
   robynn_assist: {
     args: { message: `${P13_ARG}-message` },
+    variants: [{ label: "existing thread", args: { message: `${P13_ARG}-message-run`, thread_id: "thr_existing" } }],
     rejected: [{ label: "unsafe thread_id", args: { message: "m", thread_id: "a?b" }, reason: PATH_GUARD }],
   },
   robynn_conversations: {

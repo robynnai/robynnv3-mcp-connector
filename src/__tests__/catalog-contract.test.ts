@@ -366,6 +366,22 @@ describe("P13 per-tool contract (app-backed tools)", () => {
       await session.close();
     });
 
+    // P13 review note 6 / P17: errors never carry the session credential or
+    // upstream body content beyond a bounded 4xx message (plan §5 error canaries).
+    it.each([
+      { label: "4xx", status: 409, body: { message: "p17-visible-message", stack: "p17-stack-canary at x.ts:1", details: { sql: "p17-sql-canary" } } },
+      { label: "5xx", status: 500, body: { message: "p17-5xx-message-canary", error: "p17-5xx-error-canary", stack: "p17-stack-canary" } },
+    ])("error canary ($label): no bearer, no stack, no upstream body fields in the result", async ({ status, body }) => {
+      const session = await workerSession(() => ({ status, body }));
+      const result = await session.client.callTool({ name, arguments: fixture.args });
+      await session.close();
+      expect(result.isError, resultText(result)).toBe(true);
+      const text = JSON.stringify(result);
+      expect(text).not.toContain(session.token);
+      expect(text).not.toMatch(/Bearer /);
+      expect(text).not.toMatch(/p17-stack-canary|p17-sql-canary|p17-5xx-message-canary|p17-5xx-error-canary/);
+    }, 15_000);
+
     if (fixture.rejected?.length) {
       it.each(fixture.rejected)("refuses $label before any request", async ({ args, reason }) => {
         const session = await workerSession(reply);

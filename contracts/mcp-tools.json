@@ -282,7 +282,7 @@
         "readOnlyHint": true,
         "title": "Check Robynn Connection"
       },
-      "description": "Check the Robynn connection and the connected organization's name, company info, and connection health. Read-only.",
+      "description": "Check the Robynn connection: the organization it is bound to, its permissions (brand:read; tools:execute only if granted at consent), company info and connection health. Read-only.",
       "execution": {
         "taskSupport": "forbidden"
       },

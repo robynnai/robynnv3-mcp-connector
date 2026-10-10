@@ -10,9 +10,9 @@
  * printed, and registered with {@link sensitive} so the suite can prove none
  * of them reached the app or Worker logs.
  *
- * The suites are skipped unless PLUGIN_LOCAL_LIVE=1 and
- * PLUGIN_LOCAL_STATE_DIR (the workspace's `.workspace-dev/plugin-local`) are
- * set.
+ * The suites are skipped unless PLUGIN_LOCAL_LIVE=1. With PLUGIN_LOCAL_LIVE=1
+ * the run fails (never skips) unless PLUGIN_LOCAL_STATE_DIR names the
+ * workspace's `.workspace-dev/plugin-local` (P16 review N1: no vacuous pass).
  */
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
@@ -22,7 +22,24 @@ import { join } from "node:path";
 import { internalMcpRequestHeaders } from "../../internal-mcp-auth";
 
 export const STATE_DIR = process.env.PLUGIN_LOCAL_STATE_DIR ?? "";
-export const LIVE = process.env.PLUGIN_LOCAL_LIVE === "1" && STATE_DIR !== "" && existsSync(STATE_DIR);
+/** Live suites were requested (`pnpm test:plugin-local`). */
+export const LIVE_REQUESTED = process.env.PLUGIN_LOCAL_LIVE === "1";
+if (LIVE_REQUESTED && (STATE_DIR === "" || !existsSync(join(STATE_DIR, "secrets.env")))) {
+  throw new Error(
+    "PLUGIN_LOCAL_LIVE=1 needs PLUGIN_LOCAL_STATE_DIR set to the workspace's .workspace-dev/plugin-local (with secrets.env); refusing to skip",
+  );
+}
+export const LIVE = LIVE_REQUESTED;
+
+/**
+ * Suites a run explicitly opts out of (`PLUGIN_LOCAL_SKIP=vault,...`). An
+ * explicit opt-out is the only way a requested live suite may skip.
+ */
+export const explicitlySkipped = (suite: string) =>
+  (process.env.PLUGIN_LOCAL_SKIP ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .includes(suite);
 
 export const APP = process.env.PLUGIN_LOCAL_APP_URL ?? "http://localhost:5173";
 export const WORKER = process.env.PLUGIN_LOCAL_WORKER_URL ?? "http://localhost:8787";
@@ -201,7 +218,7 @@ export async function browserFor(user: { email: string }): Promise<Browser> {
 // ---------------------------------------------------------------------------
 
 export function pkce() {
-  const verifier = randomBytes(32).toString("base64url");
+  const verifier = remember(randomBytes(32).toString("base64url"));
   return { verifier, challenge: createHash("sha256").update(verifier).digest("base64url") };
 }
 
@@ -419,6 +436,9 @@ export async function appInternal(path: string, body: Record<string, unknown>, o
   const url = `${APP}${path}`;
   const raw = JSON.stringify(body);
   const signed = opts.sign === false ? {} : await internalMcpRequestHeaders(internalSecret(), { method: "POST", url, body: raw });
+  // P16 review N3: the signature and nonce this suite generates are canaries too.
+  // (Not the timestamp: a bare epoch-milliseconds value is not a secret.)
+  for (const [name, value] of Object.entries(signed)) if (!/timestamp/i.test(name)) remember(value);
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json", ...signed },

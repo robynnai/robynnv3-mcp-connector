@@ -103,6 +103,8 @@ describe.skipIf(!LIVE)("plugin-local: host OAuth chain end to end (real app, Wor
   afterAll(() => {
     // Leave the seed as it was for the next suite.
     setMembershipStatus(ALPHA.id, ORG_B, "active");
+    // P16 review N10: drop the stranger org the tamper case created.
+    sql(`delete from public.organizations where id=${lit(STRANGER_ORG)}`);
   });
 
   describe("happy path: consent, exchange, tools, refresh, revocation", () => {
