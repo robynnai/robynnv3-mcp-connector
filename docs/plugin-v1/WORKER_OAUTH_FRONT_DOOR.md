@@ -14,7 +14,10 @@ Code:
 
 ## 1. `/authorize`
 
-Checks run in this order. Requests that fail before the client and redirect URI are validated get a static 400 page. Requests that fail afterwards get an RFC 6749 error redirect to the host, carrying the host's `state`.
+Checks run in this order. Requests that fail before the client and redirect URI are validated get a static 400 page. Requests that fail afterwards get an RFC 6749 error redirect to the host, carrying the host's `state`. Two exceptions apply (P06 review round 1):
+
+- **Unusable redirect URIs** are refused at `/authorize` with a 400 page, before any state is stored or an app grant is minted (N1). A redirect is unusable unless it is http(s) or a safe native scheme. Examples: `about:`, `filesystem:`, non-ASCII, or more than 4096 characters.
+- **Error redirects go only to loopback http(s) URIs** (`localhost`, `127.0.0.0/8`, `[::1]`) **and native custom schemes** (N3). Any other https redirect receives the static error page instead. With open DCR, error redirects to the open web would make the Worker an open redirector (RFC 9700 §4.11.2). Successful authorizations still redirect to any registered URI. The same rule applies to `/callback` errors.
 
 | Check | Failure |
 |---|---|
@@ -91,12 +94,23 @@ The provider accepts any **registered** `redirect_uri` at `/token`, or none when
 - On a mismatch the callback throws. The provider calls it **before** it consumes the code (installed source, `handleAuthorizationCodeGrant`), so the legitimate client can still redeem the code. The wrapper maps the throw to `400 {"error":"invalid_grant"}`.
 - Any other throw on `/token` gives `500 server_error`, with only the error class logged.
 
+- `/token` bodies over 16 KB get `413 invalid_request` before any parsing (P06 review B1/N6). The read is bounded; it never buffers the whole body. The form is parsed with the same `application/x-www-form-urlencoded` algorithm the provider uses.
+- The wrapper's own `/token` errors carry the provider's CORS headers when an `Origin` is present (N5).
+- Signed Worker → app calls (code exchange, refresh, introspection) use `redirect: "manual"`. A 3xx is a failure, and signed headers are never re-sent to another URL (N4).
+
 The refresh path is unchanged: P10 owns F12 fail-open, serialization and introspection on refresh.
 
 ## 4. Transport surface (D-C / D10)
 
 - `apiRoute` is `["/mcp"]`. SSE is not served.
-- The fetch wrapper answers every path under `/mcp*` or `/sse*` other than exactly `/mcp` with `404 {"error":"not_found"}` **before** the provider. This covers `/mcpx`, `/mcp/`, `/mcp/openai`, `/mcp/lazy`, `/sse` and `/sse/message`. These requests get no auth challenge and never reach a handler.
+- **Path handling in the fetch wrapper** (corrected in P06 review round 1, B2):
+  1. A request path that is not canonical gets `404 {"error":"not_found"}` before anything else. Non-canonical means it does not start with exactly one `/`, or it contains `\`. This covers `//host/...`; `/\host/...` parses to the same thing.
+  2. The URL handed to the provider is built **structurally** from the public origin (`url.pathname = …; url.search = …`), never by string concatenation. It is then checked to still have that origin.
+  3. **Every decision** is taken from that URL's pathname, which is exactly what the provider routes on: the API allow-list, `/token` handling and tracing.
+  4. P10's preflight must key on the same value.
+
+  Before this fix, `//mcp.test/mcp` passed the wrapper's checks unseen while the provider re-parsed it as `/mcp`.
+- The wrapper answers every path under `/mcp*` or `/sse*` other than exactly `/mcp` with `404 {"error":"not_found"}` **before** the provider. This covers `/mcpx`, `/mcp/`, `/mcp/openai`, `/mcp/lazy`, `/sse`, `/sse/message`, and their `//host/...` forms. These requests get no auth challenge and never reach a handler.
 - `ADVERTISE_SSE = false` (`src/authorization/oauth-policy.ts`) is the single switch. It controls the approved resource aliases, `/.well-known/oauth-protected-resource/sse` and `endpoints.sse` in the landing JSON. Flipping it re-advertises SSE but **does not serve it**. Serving SSE would need a `?sessionId=` session binding, server-generated ids and per-call authorization (P01 F20).
 - The provider is constructed with `allowPlainPKCE:false`, `allowImplicitFlow:false` and `allowTokenExchangeGrant:false`. Authorization-server metadata therefore advertises `code_challenge_methods_supported: ["S256"]` and `response_types_supported: ["code"]`.
 
@@ -133,9 +147,17 @@ The old logs that leaked are replaced:
 
 The canary test drives the success path (exchange, refresh, MCP call) and the failure paths. It asserts that no code, state, verifier, cookie, host or app token, JWT payload, secret, `?`, `code=` or `state=` appears in any log line.
 
+Round 1 hardening (P06 review B1):
+
+- **Bounded input.** `redactLogString` caps its input at 512 characters before any regex runs, and drops a trailing token fragment that the cap may split. Every pattern uses bounded quantifiers. A 100 KB hostile value of any shape is scrubbed in well under 50 ms; before the fix, the unbounded patterns were quadratic on an unauthenticated `grant_type`.
+- **`grantType` is a closed enum** in `oauth.trace`: `authorization_code`, `refresh_token` or `other`. The raw form value is never logged.
+- **Provider errors.** The provider's own `onError` (which by default writes a raw `console.warn` line with its description) is replaced by `safeLog.warn("oauth.provider.error", {status, error})`.
+
 ## 7. Not in P06
 
 - **P10:** per-call reauthorization; session binding; Vault gating; refresh-callback fail-closed (F12) and serialization; legacy-grant cutover (`authVersion !== 2`); `x-robynn-*` header stripping; wiring `registerUnauthenticatedStatusTool`; writing `worker_grant_id` back to the app grant (contract §6.2 step 5); the app's `/api/oauth/introspect` route.
 - **P11:** retries.
 - **P12:** tool metadata.
 - **Model-facing errors:** `RobynnClient` still throws `API error <status>: <body>` into tool results (`src/robynn-client.ts`). Sanitizing tool errors belongs to P11, which owns that file, or to P10/P12.
+- **`RobynnClient` logs:** its raw `console.*` calls log the request `path` including query strings (`src/robynn-client.ts:132-165`), for example memory scope/key or audit ids. Owner: P11.
+- **Report app copy:** `src/ui/report-app-script.ts` still says "Run a report from Claude…". Owner: P12/P15 (host-neutral copy).

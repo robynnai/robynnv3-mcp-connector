@@ -22,16 +22,27 @@ const FIELD_NAME_PATTERN = /^[A-Za-z0-9_]{1,60}$/;
 const SENSITIVE_FIELD =
   /(^|_)(code|state|token|tokens|secret|password|authorization|cookie|signature|verifier|challenge|nonce|location|body|query|bearer|jwt|props|credential|session_?id)$|(Code|State|Token|Secret|Password|Authorization|Cookie|Signature|Verifier|Challenge|Nonce|Location|Body|Query|Bearer|Jwt|Props|Credential|SessionId)$/;
 
-const URL_PATTERN = /\b([a-z][a-z0-9+.-]*):\/\/([^\s"'<>?#]*)[^\s"'<>]*/gi;
-const JWT_PATTERN = /\beyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*/g;
-const PROVIDER_TOKEN_PATTERN = /[A-Za-z0-9_-]{4,}:[A-Za-z0-9_-]{4,}:[A-Za-z0-9_-]{8,}/g;
+// Every regex below runs on at most MAX_INPUT_LENGTH characters and uses
+// bounded quantifiers, so worst-case backtracking is a small constant per
+// call even for attacker-chosen values (P06 review B1: unbounded patterns on
+// an unauthenticated `grant_type` were quadratic).
+const MAX_INPUT_LENGTH = 512;
+const URL_PATTERN = /\b([a-z][a-z0-9+.-]{0,31}):\/\/([^\s"'<>?#]{0,256})[^\s"'<>]{0,512}/gi;
+const JWT_PATTERN = /\beyJ[A-Za-z0-9_-]{0,512}\.[A-Za-z0-9_-]{0,512}\.[A-Za-z0-9_-]{0,512}/g;
+const PROVIDER_TOKEN_PATTERN = /[A-Za-z0-9_-]{4,64}:[A-Za-z0-9_-]{4,64}:[A-Za-z0-9_-]{8,128}/g;
 const KEY_VALUE_PATTERN =
-  /\b(code|state|token|access_token|refresh_token|id_token|secret|password|signature|nonce|code_verifier|code_challenge)=[^\s&"']*/gi;
-const LONG_RUN_PATTERN = /[A-Za-z0-9_\-+/=]{20,}/g;
+  /\b(code|state|token|access_token|refresh_token|id_token|secret|password|signature|nonce|code_verifier|code_challenge)=[^\s&"']{0,512}/gi;
+const LONG_RUN_PATTERN = /[A-Za-z0-9_\-+/=]{20,512}/g;
 
 /** Scrub one string value: URLs lose query/fragment, token-like runs vanish. */
 export function redactLogString(value: string): string {
-  const scrubbed = value
+  // Cap first: nothing longer than MAX_INPUT_LENGTH ever reaches a regex.
+  // A cut can split a secret; drop the trailing token-like fragment too.
+  const capped =
+    value.length > MAX_INPUT_LENGTH
+      ? `${value.slice(0, MAX_INPUT_LENGTH).replace(/[A-Za-z0-9_\-+/=.:%~]{1,512}$/, "")}…`
+      : value;
+  const scrubbed = capped
     .replace(JWT_PATTERN, REDACTED)
     .replace(URL_PATTERN, (_match, scheme: string, rest: string) => `${scheme}://${rest}`)
     .replace(KEY_VALUE_PATTERN, (_match, key: string) => `${key}=${REDACTED}`)

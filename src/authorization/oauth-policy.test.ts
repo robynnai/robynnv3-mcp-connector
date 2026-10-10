@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ADVERTISE_SSE,
+  isCanonicalRequestPath,
   getApprovedResources,
   isScopeSubset,
   isUnservedApiPath,
@@ -153,4 +154,13 @@ describe("isUnservedApiPath", () => {
       expect(isUnservedApiPath(p)).toBe(false);
     },
   );
+});
+
+describe("isCanonicalRequestPath (P06 review B2)", () => {
+  it.each([["/"], ["/mcp"], ["/token"], ["/.well-known/oauth-protected-resource/mcp"]])("%s is canonical", (p) => {
+    expect(isCanonicalRequestPath(p)).toBe(true);
+  });
+  it.each([["//mcp.test/mcp"], ["///mcp"], ["/\\host/mcp"], ["/mcp\\x"], ["mcp"], [""]])("%j is not", (p) => {
+    expect(isCanonicalRequestPath(p)).toBe(false);
+  });
 });

@@ -172,3 +172,14 @@ export function isUnservedApiPath(pathname: string): boolean {
   if (pathname === MCP_API_PATH) return false;
   return pathname.startsWith(MCP_API_PATH) || pathname.startsWith("/sse");
 }
+
+/**
+ * A request path the wrapper may route. `//host/...` (and `/\host/...`,
+ * which WHATWG URL parsing treats the same) would be re-read as a
+ * protocol-relative URL if it were ever concatenated into a URL string, so
+ * the wrapper and the provider could disagree about the path (P06 review B2).
+ * Such paths are refused outright.
+ */
+export function isCanonicalRequestPath(pathname: string): boolean {
+  return pathname.startsWith("/") && !pathname.startsWith("//") && !pathname.includes("\\");
+}

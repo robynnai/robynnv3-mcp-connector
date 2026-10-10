@@ -673,6 +673,15 @@ describe("/callback — fail closed on identity and scope", () => {
     expectNoGrant(h);
   });
 
+  it("JWT broader than requested, introspection within it ⇒ invalid_scope (stored upstream token broader than the host grant)", async () => {
+    const h = createHarness();
+    h.plan.tokenBody = { access_token: appJwt({ scope: "brand:read tools:execute" }), refresh_token: CANARY_REFRESH };
+    (h.plan.introspection as { body: Record<string, unknown> }).body.scopes = ["brand:read"];
+    const { loc } = await runCallback(h, "brand:read");
+    expect(loc!.searchParams.get("error")).toBe("invalid_scope");
+    expectNoGrant(h);
+  });
+
   it("introspection narrower than the JWT (role downgrade) narrows the grant", async () => {
     const h = createHarness();
     h.plan.tokenBody = { access_token: appJwt({ scope: "brand:read tools:execute" }), refresh_token: CANARY_REFRESH };
@@ -751,13 +760,26 @@ describe("/token — redirect_uri bound to the authorization transaction (F10)",
     expect(res.status).toBe(400);
   });
 
-  it("still rejects code replay (provider) and refresh keeps working", async () => {
+  it("refresh works before a replay; a code replay is rejected and revokes the grant (provider)", async () => {
     const h = createHarness();
     const clientId = await register(h);
     const { code, verifier } = await authorizeToHostCode(h, clientId);
     const first = (await (await exchange(h, clientId, code, verifier)).json()) as { refresh_token: string };
+    const refreshed = await h.fetch("/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: first.refresh_token, client_id: clientId }).toString(),
+    });
+    expect(refreshed.status).toBe(200);
+    const second = (await refreshed.json()) as { refresh_token: string };
     expect((await exchange(h, clientId, code, verifier)).status).toBe(400);
-    expect(first.refresh_token).toBeTruthy();
+    // F14: replaying the code revoked the whole grant, so its refresh token is dead too.
+    const afterReplay = await h.fetch("/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: second.refresh_token, client_id: clientId }).toString(),
+    });
+    expect(afterReplay.status).toBe(400);
   });
 });
 
@@ -856,5 +878,213 @@ describe("log canaries — no codes, state, tokens, query strings or bodies in l
     for (const line of logLines) {
       expect(() => JSON.parse(line)).not.toThrow();
     }
+  });
+});
+
+describe("P06 review round 1", () => {
+  describe("B2: non-canonical paths never reach the provider", () => {
+    async function validToken(h: Harness) {
+      const clientId = await register(h);
+      const { code, verifier } = await authorizeToHostCode(h, clientId, { resource: `${ORIGIN}/mcp` });
+      return { clientId, ...((await (await exchange(h, clientId, code, verifier)).json()) as { access_token: string }) };
+    }
+
+    it.each([["//mcp.test/mcp/lazy"], ["//mcp.test/mcp"], ["//x/token"], ["//evil.test/authorize"], ["///mcp"]])(
+      "%s ⇒ 404 before the provider (no challenge, no handler)",
+      async (path) => {
+        const h = createHarness();
+        const { access_token } = await validToken(h);
+        apiSeen.length = 0;
+        const res = await h.fetch(path, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+          body: "{}",
+        });
+        expect(res.status).toBe(404);
+        // The wrapper's own 404 (not the provider's or Hono's): refused before routing.
+        expect(await res.json()).toEqual({ error: "not_found" });
+        expect(res.headers.get("www-authenticate")).toBeNull();
+        expect(apiSeen).toEqual([]);
+      },
+    );
+
+    it("/\\host/mcp (backslash, parsed like //) ⇒ 404", async () => {
+      const h = createHarness();
+      const res = await worker.fetch(new Request(`${ORIGIN}/\\mcp.test/mcp`, { method: "POST" }), h.env, {
+        waitUntil() {},
+        passThroughOnException() {},
+      } as unknown as ExecutionContext);
+      expect(new URL(`${ORIGIN}/\\mcp.test/mcp`).pathname).toBe("//mcp.test/mcp");
+      expect(res.status).toBe(404);
+    });
+
+    it("//x/token with a valid code does not reach the provider; the code still redeems at /token", async () => {
+      const h = createHarness();
+      const clientId = await register(h);
+      const { code, verifier } = await authorizeToHostCode(h, clientId);
+      const body = new URLSearchParams({ grant_type: "authorization_code", code, client_id: clientId, code_verifier: verifier, redirect_uri: OTHER_CALLBACK });
+      const res = await h.fetch("//x/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+      });
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({ error: "not_found" });
+      expect((await exchange(h, clientId, code, verifier)).status).toBe(200);
+    });
+
+    it("the provider always sees the public origin, whatever Host the request used", async () => {
+      const h = createHarness();
+      const { access_token } = await validToken(h);
+      apiSeen.length = 0;
+      const res = await worker.fetch(
+        new Request("https://other-host.test/mcp", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+          body: "{}",
+        }),
+        h.env,
+        { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext,
+      );
+      expect(res.status).toBe(200);
+      expect(apiSeen).toHaveLength(1);
+    });
+  });
+
+  describe("B1: oversized and hostile /token bodies", () => {
+    it("refuses a body over 16 KB with 413 before parsing, quickly", async () => {
+      const h = createHarness();
+      const started = performance.now();
+      const res = await h.fetch("/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `grant_type=${"a".repeat(100_000)}`,
+      });
+      expect(res.status).toBe(413);
+      expect(await res.json()).toMatchObject({ error: "invalid_request" });
+      expect(performance.now() - started).toBeLessThan(500);
+    });
+
+    it.each([
+      ["word run", "a".repeat(15_000)],
+      ["dotted", "a.".repeat(7_500)],
+      ["colons", "aaaa:".repeat(2_000)],
+    ])("an unauthenticated %s grant_type is handled quickly and logged as a closed enum", async (_l, grantType) => {
+      const h = createHarness();
+      const started = performance.now();
+      const res = await h.fetch("/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ grant_type: grantType }).toString(),
+      });
+      expect(res.status).toBe(401);
+      expect(performance.now() - started).toBeLessThan(250);
+      const trace = logLines.map((l) => JSON.parse(l)).find((e) => e.event === "oauth.trace");
+      expect(trace.grantType).toBe("other");
+      expect(logLines.join("\n")).not.toContain("aaaaaaaaaa");
+    });
+
+    it("logs the real grant types by name", async () => {
+      const h = createHarness();
+      const clientId = await register(h);
+      const { code, verifier } = await authorizeToHostCode(h, clientId);
+      await exchange(h, clientId, code, verifier);
+      const trace = logLines.map((l) => JSON.parse(l)).filter((e) => e.event === "oauth.trace" && e.path === "/token");
+      expect(trace.map((e) => e.grantType)).toEqual(["authorization_code"]);
+    });
+  });
+
+  describe("N1: unusable host redirects are refused at /authorize", () => {
+    it.each([["about:blank"], ["filesystem:robynn-host://x"], ["robynn-hôst://cb"], [`robynn-host://cb/${"x".repeat(4200)}`]])(
+      "%s ⇒ 400 page, no state, no consent hand-off",
+      async (redirect) => {
+        const h = createHarness();
+        const clientId = await register(h, [redirect]);
+        const res = await h.fetch(authorizeQuery(clientId, { redirect_uri: redirect, code_challenge: pkce().challenge }));
+        expect(res.status).toBe(400);
+        expect(res.headers.get("location")).toBeNull();
+        expect(h.kv.keys("oauth_state:")).toEqual([]);
+      },
+    );
+  });
+
+  describe("N3: errors are never redirected to the open web", () => {
+    const WEB = "https://attacker.test/cb";
+
+    it("/authorize error for a non-loopback https redirect ⇒ static page, no redirect", async () => {
+      const h = createHarness();
+      const clientId = await register(h, [WEB]);
+      const res = await h.fetch(authorizeQuery(clientId, { redirect_uri: WEB, scope: "bad", code_challenge: pkce().challenge }));
+      expect(res.status).toBe(400);
+      expect(res.headers.get("location")).toBeNull();
+      expect(await res.text()).toContain("Error code: invalid_scope");
+    });
+
+    it("/callback error for a non-loopback https redirect ⇒ static page", async () => {
+      const h = createHarness();
+      const clientId = await register(h, [WEB]);
+      const started = await startAuthorization(h, clientId, { redirect_uri: WEB });
+      const res = await callback(h, { error: "access_denied", state: started.state }, started.cookie);
+      expect(res.status).toBe(400);
+      expect(res.headers.get("location")).toBeNull();
+      expect(await res.text()).toContain("Error code: access_denied");
+    });
+
+    it("a successful non-loopback https flow still redirects (registered redirect)", async () => {
+      const h = createHarness();
+      const clientId = await register(h, [WEB]);
+      const started = await startAuthorization(h, clientId, { redirect_uri: WEB });
+      const res = await callback(h, { code: CANARY_APP_CODE, state: started.state }, started.cookie);
+      expect(res.status).toBe(302);
+      expect(res.headers.get("location")!.startsWith(`${WEB}?code=`)).toBe(true);
+    });
+
+    it("loopback and native-scheme redirects still receive errors", async () => {
+      const h = createHarness();
+      const clientId = await register(h, [HOST_CALLBACK, NATIVE_CALLBACK]);
+      const loop = await h.fetch(authorizeQuery(clientId, { scope: "bad", code_challenge: pkce().challenge }));
+      expect(new URL(loop.headers.get("location")!).searchParams.get("error")).toBe("invalid_scope");
+      const native = await h.fetch(
+        authorizeQuery(clientId, { redirect_uri: NATIVE_CALLBACK, scope: "bad", code_challenge: pkce().challenge }),
+      );
+      expect(native.status).toBe(200);
+      expect(await native.text()).toContain("error=invalid_scope");
+    });
+  });
+
+  describe("N4: signed app calls never follow redirects", () => {
+    it("sends redirect: manual on the code exchange and introspection; a 3xx is unavailable", async () => {
+      const h = createHarness();
+      h.plan.introspection = { status: 302, body: {} };
+      const clientId = await register(h);
+      const started = await startAuthorization(h, clientId);
+      const res = await callback(h, { code: CANARY_APP_CODE, state: started.state }, started.cookie);
+      expect(new URL(res.headers.get("location")!).searchParams.get("error")).toBe("temporarily_unavailable");
+      expect(h.appCalls.map((c) => c.init.redirect)).toEqual(["manual", "manual"]);
+      expect(h.kv.keys("grant:")).toEqual([]);
+    });
+  });
+
+  describe("N5: wrapper /token errors carry CORS headers", () => {
+    it("redirect mismatch and 413 responses echo the Origin", async () => {
+      const h = createHarness();
+      const clientId = await register(h);
+      const { code, verifier } = await authorizeToHostCode(h, clientId);
+      const body = new URLSearchParams({ grant_type: "authorization_code", code, client_id: clientId, code_verifier: verifier, redirect_uri: OTHER_CALLBACK });
+      const mismatch = await h.fetch("/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: "https://host.example" },
+        body: body.toString(),
+      });
+      expect(mismatch.status).toBe(400);
+      expect(mismatch.headers.get("access-control-allow-origin")).toBe("https://host.example");
+      const big = await h.fetch("/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: "https://host.example" },
+        body: "x".repeat(20_000),
+      });
+      expect(big.status).toBe(413);
+      expect(big.headers.get("access-control-allow-origin")).toBe("https://host.example");
+    });
   });
 });

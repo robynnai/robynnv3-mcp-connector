@@ -85,3 +85,27 @@ describe("errorKind", () => {
     expect(errorKind("CANARY")).toBe("string");
   });
 });
+
+describe("redactLogString is linear on hostile input (P06 review B1)", () => {
+  it.each([
+    ["word run", "a".repeat(100_000)],
+    ["dotted", "a.".repeat(50_000)],
+    ["colon runs", "aaaa:".repeat(20_000)],
+    ["url-ish", "x://".repeat(25_000)],
+    ["jwt-ish", "eyJ.".repeat(25_000)],
+    ["key=value", "code=".repeat(20_000)],
+  ])("100 KB %s in well under 50 ms", (_l, value) => {
+    const lines = capture();
+    const started = performance.now();
+    safeLog.info("x.y", { reason: value });
+    redactLogString(value);
+    expect(performance.now() - started).toBeLessThan(50);
+    expect(lines[0].length).toBeLessThan(300);
+  });
+
+  it("drops a token split by the input cap instead of leaking its prefix", () => {
+    const secret = "Zm9vYmFyYmF6cXV4CANARYSECRET";
+    const value = `${"a ".repeat(254)}x${secret}`;
+    expect(redactLogString(value)).not.toContain("Zm9v");
+  });
+});

@@ -226,6 +226,8 @@ export async function introspectUpstreamGrant(params: {
       headers: { "Content-Type": "application/json", ...headers },
       body,
       signal: controller.signal,
+      // A 3xx is "unavailable"; signed headers are never re-sent elsewhere.
+      redirect: "manual",
     });
     if (response.status !== 200) {
       return { status: "unavailable", reason: `introspection_http_${response.status}` };

@@ -10,12 +10,14 @@ import { RobynnClient } from "./robynn-client";
 import { buildSignedTokenRequest, getInternalAuthSecret } from "./internal-mcp-auth";
 import { getProtectedResourceMetadata, robynnAuthHandler } from "./auth-handler";
 import {
+  isCanonicalRequestPath,
   isUnservedApiPath,
   MCP_API_PATH,
   SUPPORTED_OAUTH_SCOPES,
 } from "./authorization/oauth-policy";
 import {
   enforceAuthorizationCodeRedirect,
+  grantTypeForLog,
   readTokenRequestContext,
   RedirectUriMismatchError,
   type TokenRequestContext,
@@ -278,6 +280,11 @@ export function createOAuthProviderOptions(
     accessTokenTTL: 3600,
     refreshTokenTTL: 30 * 24 * 3600,
     tokenExchangeCallback: (options) => tokenExchangeCallback(options, env, tokenRequest),
+    // The provider's default writes a raw console line; keep its logs
+    // structured and redacted (status + OAuth code only, no description).
+    onError: ({ status, code }) => {
+      safeLog.warn("oauth.provider.error", { status, error: code });
+    },
   };
 }
 
@@ -285,10 +292,36 @@ export function createOAuthProvider(env: Env, tokenRequest?: TokenRequestContext
   return new OAuthProvider(createOAuthProviderOptions(env, tokenRequest));
 }
 
-function oauthErrorResponse(status: number, error: string, description: string) {
-  return new Response(JSON.stringify({ error, error_description: description }), {
-    status,
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+/** Mirrors the provider's CORS behaviour for the wrapper's own responses. */
+function withCors(response: Response, request: Request): Response {
+  const origin = request.headers.get("Origin");
+  if (!origin) return response;
+  response.headers.set("Access-Control-Allow-Origin", origin);
+  response.headers.set("Access-Control-Allow-Methods", "*");
+  response.headers.set("Access-Control-Allow-Headers", "Authorization, *");
+  response.headers.set("Access-Control-Max-Age", "86400");
+  return response;
+}
+
+function oauthErrorResponse(
+  request: Request,
+  status: number,
+  error: string,
+  description: string,
+) {
+  return withCors(
+    new Response(JSON.stringify({ error, error_description: description }), {
+      status,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    }),
+    request,
+  );
+}
+
+function notFound() {
+  return new Response(JSON.stringify({ error: "not_found" }), {
+    status: 404,
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -297,38 +330,50 @@ const TRACED_PATHS = new Set(["/register", "/authorize", "/callback", "/token", 
 /**
  * Worker entry point — OAuthProvider wraps everything.
  *
- * - /mcp and /sse → routed to McpAgent Durable Object (authenticated)
+ * - /mcp → routed to McpAgent Durable Object (authenticated); SSE is not served
  * - /authorize, /token, /register → handled by OAuthProvider
  * - All other paths → routed to robynnAuthHandler (Hono app)
+ *
+ * Every routing decision below is taken from `rewrittenUrl.pathname`, the
+ * exact path the provider will see (P06 review B2).
  */
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    const publicBaseUrl = getPublicBaseUrl(env.MCP_PUBLIC_BASE_URL);
+    const publicOrigin = new URL(getPublicBaseUrl(env.MCP_PUBLIC_BASE_URL)).origin;
     const originalUrl = new URL(request.url);
-    const rewrittenPath =
+
+    // `//host/...` would be re-parsed as protocol-relative: refuse it.
+    if (!isCanonicalRequestPath(originalUrl.pathname)) return notFound();
+
+    // Build the provider URL structurally (never by string concatenation)
+    // and pin it to the public origin.
+    const rewrittenUrl = new URL(publicOrigin);
+    rewrittenUrl.pathname =
       originalUrl.pathname === "/" && request.method !== "GET"
         ? MCP_API_PATH
         : originalUrl.pathname;
-
-    // Only `/mcp` is served under the API prefixes (contract §6.4 step 1).
-    if (isUnservedApiPath(rewrittenPath)) {
-      return new Response(JSON.stringify({ error: "not_found" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
+    rewrittenUrl.search = originalUrl.search;
+    const path = rewrittenUrl.pathname;
+    if (rewrittenUrl.origin !== publicOrigin || !isCanonicalRequestPath(path)) {
+      return notFound();
     }
 
-    const rewrittenUrl = new URL(
-      `${rewrittenPath}${originalUrl.search}`,
-      publicBaseUrl,
-    );
+    // Only `/mcp` is served under the API prefixes (contract §6.4 step 1).
+    if (isUnservedApiPath(path)) return notFound();
+
     const rewrittenRequest = new Request(rewrittenUrl.toString(), request);
-    const isTokenRequest = rewrittenPath === "/token";
-    const tokenRequest = isTokenRequest
-      ? await readTokenRequestContext(rewrittenRequest)
-      : undefined;
+    const isTokenRequest = path === "/token";
+    let tokenRequest: TokenRequestContext | undefined;
+    if (isTokenRequest) {
+      const read = await readTokenRequestContext(rewrittenRequest);
+      if (!read.ok) {
+        safeLog.warn("oauth.token.rejected", { reason: read.reason });
+        return oauthErrorResponse(request, 413, "invalid_request", "Token request body too large");
+      }
+      tokenRequest = read.context;
+    }
     const oauthProvider = createOAuthProvider(env, tokenRequest);
-    const shouldTrace = TRACED_PATHS.has(rewrittenPath);
+    const shouldTrace = TRACED_PATHS.has(path);
 
     let response: Response;
     try {
@@ -338,24 +383,26 @@ export default {
       if (err instanceof RedirectUriMismatchError) {
         safeLog.warn("oauth.token.rejected", { reason: "redirect_uri_mismatch" });
         return oauthErrorResponse(
+          request,
           400,
           "invalid_grant",
           "redirect_uri does not match the authorization request",
         );
       }
       safeLog.error("oauth.token.failed", { errorKind: errorKind(err) });
-      return oauthErrorResponse(500, "server_error", "Token request failed");
+      return oauthErrorResponse(request, 500, "server_error", "Token request failed");
     }
 
     if (shouldTrace) {
       // Method, path and status only: never Location (it carries the code
-      // and state), query strings, bodies or WWW-Authenticate details.
+      // and state), query strings, bodies, WWW-Authenticate details or the
+      // raw grant_type (a closed enum is logged instead).
       safeLog.info("oauth.trace", {
         method: request.method,
-        path: rewrittenPath,
+        path,
         status: response.status,
         hasAuthHeader: request.headers.has("authorization"),
-        grantType: tokenRequest?.grantType ?? undefined,
+        grantType: grantTypeForLog(tokenRequest),
       });
     }
 

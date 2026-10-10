@@ -430,8 +430,42 @@ function returnToHost(c: AppContext, redirectTo: string) {
   return c.html(html);
 }
 
+/** A host redirect the browser can actually be sent to (http(s) or a safe native scheme). */
+export function isUsableHostRedirect(redirectUri: string): boolean {
+  return /^https?:\/\//i.test(redirectUri) || isSafeLaunchUrl(redirectUri);
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "[::1]" ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)
+  );
+}
+
+/**
+ * Whether OAuth *errors* may be redirected to this URI. With open DCR any
+ * https URI can be registered, so error redirects to the open web would turn
+ * the Worker into an open redirector (RFC 9700 §4.11.2; P06 review N3).
+ * Errors therefore go only to loopback http(s) redirects (Claude Code, Codex)
+ * and native custom schemes; any other host sees the static error page.
+ */
+export function mayRedirectErrorsTo(redirectUri: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(redirectUri);
+  } catch {
+    return false;
+  }
+  if (url.protocol === "http:" || url.protocol === "https:") return isLoopbackHost(url.hostname);
+  return isSafeLaunchUrl(redirectUri);
+}
+
 /** RFC 6749 §4.1.2.1 error response to the host's (validated) redirect URI. */
 function redirectHostError(c: AppContext, request: OAuthRequestInfo, error: FrontDoorErrorCode) {
+  if (!mayRedirectErrorsTo(request.redirectUri)) {
+    return errorPage(c, error === "temporarily_unavailable" ? 503 : 400, error);
+  }
   let url: URL;
   try {
     url = new URL(request.redirectUri);
@@ -491,6 +525,14 @@ app.get("/authorize", async (c) => {
   const client = await c.env.OAUTH_PROVIDER.lookupClient(oauthRequest.clientId);
   if (!client) {
     safeLog.warn("oauth.authorize.rejected", { reason: "client_unknown" });
+    return errorPage(c, 400, "invalid_request");
+  }
+  // A redirect the browser cannot be safely sent to (e.g. `about:`,
+  // `filesystem:`, non-ASCII, over-long) is refused here, before any app
+  // grant is minted or `completeAuthorization` revokes existing grants
+  // (P06 review N1).
+  if (!isUsableHostRedirect(oauthRequest.redirectUri)) {
+    safeLog.warn("oauth.authorize.rejected", { reason: "host_redirect_unsafe" });
     return errorPage(c, 400, "invalid_request");
   }
 
@@ -659,7 +701,8 @@ app.get("/callback", async (c) => {
     return reject("invalid_scope", "granted_scope_empty");
   }
 
-  if (!/^https?:\/\//i.test(hostRequest.redirectUri) && !isSafeLaunchUrl(hostRequest.redirectUri)) {
+  // Defense in depth: /authorize already refused unusable redirects.
+  if (!isUsableHostRedirect(hostRequest.redirectUri)) {
     safeLog.error("oauth.callback.rejected", { reason: "host_redirect_unsafe" });
     return errorPage(c, 400, "invalid_request");
   }

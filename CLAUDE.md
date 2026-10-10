@@ -59,7 +59,8 @@ npx wrangler deploy       # Deploy to production (mcp.robynn.ai)
 The default export is an `OAuthProvider` that wraps everything:
 
 ```
-fetch wrapper           → 404 for /mcp* and /sse* paths other than exactly /mcp
+fetch wrapper           → 404 for non-canonical paths (`//host/...`) and for /mcp* and /sse* other than exactly /mcp;
+                          provider URL built structurally on the public origin; /token bodies > 16 KB ⇒ 413
 OAuthProvider (createOAuthProviderOptions: S256-only PKCE, no implicit flow)
 ├── /mcp               → RobynnMCP.serve() (McpAgent Durable Object; SSE is not served)
 ├── /authorize         → Handled by OAuthProvider, delegated to auth handler
@@ -282,4 +283,4 @@ Then pin the same version in `package.json`.
 - **Both `OAUTH_KEY` and `OAUTH_KV`** KV bindings exist — they point to the same KV namespace.
 - **Poll timeout 280s** — under Claude's 300s tool call timeout.
 - **Tests use vitest** — test files live alongside source as `*.test.ts` (e.g., `src/tools/geo.test.ts`).
-- **URL rewriting in index.ts** — `POST /` is rewritten to `/mcp` and all requests are rewritten to use `MCP_PUBLIC_BASE_URL` as origin.
+- **URL rewriting in index.ts** — `POST /` is rewritten to `/mcp` and all requests are rewritten to use `MCP_PUBLIC_BASE_URL` as origin. The rewrite is structural (`url.pathname = …`), never string concatenation, and every routing decision uses the rewritten URL's pathname.

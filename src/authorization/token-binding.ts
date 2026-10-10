@@ -28,23 +28,83 @@ export class RedirectUriMismatchError extends Error {
   }
 }
 
-function single(form: FormData, key: string): string | null {
-  const values = form.getAll(key);
-  return values.length === 1 && typeof values[0] === "string" ? values[0] : null;
+/** Real token requests are well under 2 KB; anything larger is refused. */
+export const MAX_TOKEN_BODY_BYTES = 16 * 1024;
+
+export type TokenRequestRead =
+  | { ok: true; context: TokenRequestContext }
+  | { ok: false; reason: "body_too_large" };
+
+function single(params: URLSearchParams, key: string): string | null {
+  const values = params.getAll(key);
+  return values.length === 1 ? values[0] : null;
 }
 
-/** Read grant_type/redirect_uri from a cloned token request (form-encoded only). */
-export async function readTokenRequestContext(request: Request): Promise<TokenRequestContext> {
+/** Read at most `maxBytes` of a body; null if it is larger. */
+async function readBoundedText(request: Request, maxBytes: number): Promise<string | null> {
+  const declared = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declared) && declared > maxBytes) return null;
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      // Not awaited: cancelling one branch of a cloned (tee'd) body can wait
+      // on the other branch, which nobody reads once we refuse the request.
+      reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+/**
+ * Read grant_type/redirect_uri from a clone of a form-encoded token request.
+ * Bodies over MAX_TOKEN_BODY_BYTES are refused before any parsing.
+ */
+export async function readTokenRequestContext(
+  request: Request,
+  maxBytes = MAX_TOKEN_BODY_BYTES,
+): Promise<TokenRequestRead> {
+  const empty = { ok: true as const, context: { grantType: null, redirectUri: null } };
   const contentType = request.headers.get("content-type") ?? "";
   if (request.method !== "POST" || !contentType.includes("application/x-www-form-urlencoded")) {
-    return { grantType: null, redirectUri: null };
+    return empty;
   }
+  let text: string | null;
   try {
-    const form = await request.clone().formData();
-    return { grantType: single(form, "grant_type"), redirectUri: single(form, "redirect_uri") };
+    text = await readBoundedText(request.clone(), maxBytes);
   } catch {
-    return { grantType: null, redirectUri: null };
+    return empty;
   }
+  if (text === null) return { ok: false, reason: "body_too_large" };
+  const params = new URLSearchParams(text);
+  return {
+    ok: true,
+    context: { grantType: single(params, "grant_type"), redirectUri: single(params, "redirect_uri") },
+  };
+}
+
+/** Closed set for logs: never the raw, attacker-controlled form value. */
+export function grantTypeForLog(
+  context: TokenRequestContext | undefined,
+): "authorization_code" | "refresh_token" | "other" | undefined {
+  if (!context) return undefined;
+  if (context.grantType === "authorization_code" || context.grantType === "refresh_token") {
+    return context.grantType;
+  }
+  return "other";
 }
 
 /**
