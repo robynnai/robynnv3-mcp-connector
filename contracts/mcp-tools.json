@@ -2562,7 +2562,7 @@
         "readOnlyHint": true,
         "title": "List Vault Files"
       },
-      "description": "List materialized vault objects for the current organization (read-only).\n\nLayout:\n  brand/<doc-name>/<entry>.md           — brand_hub_docs (filtered)\n  facts/<doc-name>/<short-id>.md        — org_facts (live only)\n  sources/<source-type>/<key>.md        — org_knowledge_documents (live only)\n  sources/<source-type>/<key>.embedding.json  — chunk embeddings sidecar\n  vault.lock                            — last-materialized timestamp\n\nPass an empty/absent `prefix` to enumerate everything; pass e.g.\n`brand/voice-attribute/` to drill in. Returns at most `limit` entries\n(default 100, max 1000) and a `cursor` you can pass back to continue.",
+      "description": "List materialized vault objects for the current organization (read-only).\n\nLayout:\n  brand/<doc-name>/<entry>.md           — brand_hub_docs (filtered)\n  facts/<doc-name>/<short-id>.md        — org_facts (live only)\n  sources/<source-type>/<key>.md        — org-shared org_knowledge_documents (live only;\n                                           user-private and session memory are never served)\n  sources/<source-type>/<key>.embedding.json  — chunk embeddings sidecar\n  vault.lock                            — last-materialized timestamp\n\nPass an empty/absent `prefix` to enumerate everything; pass e.g.\n`brand/voice-attribute/` to drill in. Returns at most `limit` entries\n(default 100, max 1000) and a `cursor` you can pass back to continue.",
       "execution": {
         "taskSupport": "forbidden"
       },

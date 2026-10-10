@@ -61,3 +61,14 @@ P13 (Beads `robynn_mcp_server-b1o`, branch `plugin-v1/p13-catalog-contract`, sta
 - D-A flip point: the query tool's `requiredScopeAfterP07` (a downgrade needs P07 first).
 - P10 should add a Worker-side "denied before any request" case per tool to the matrix.
 - Handoff: `~/Developer/cos-share/reports/plugin/P13-handoff.md`.
+
+## COS-PLUGIN-001 P16: OAuth integration and revocation tests (2026-10-10)
+
+- **Branch:** `plugin-v1/p16-oauth-integration`, stacked on `plugin-v1/p10-worker-session-vault`, with `plugin-v1/p11-retry-safety` and `plugin-v1/p13-catalog-contract` merged in. Pairs with robynnv3 `plugin-v1/p16-oauth-integration`. Beads `robynn_mcp_server-5zt`.
+- **What changed:** see `docs/plugin-v1/OAUTH_INTEGRATION_TESTS.md`.
+  - The in-process Worker harness now lives in `src/__tests__/harness/` and is shared by P10's suite.
+  - The new suites are the full front-door chain (`oauth-chain.test.ts`) and the Vault P09b contract (`vault-private-memory.test.ts`).
+  - The live plugin-local suites are in `src/__tests__/plugin-local/` (`pnpm test:plugin-local`).
+- **Behaviour change:** `VaultR2` hides and refuses `sources/agent-memory/user-…` and `session-…` paths (`VAULT_HIDES_PRIVATE_MEMORY_PATHS`, a one-line flip).
+- **Merge note:** P13's catalog harness now activates the DO with P10-shaped (authVersion 2) props and a preflight stamp. Props without `organizationId` are refused by the session binding; `contracts/mcp-tools.json` was regenerated (P10 instructions and the fallback tool).
+- **Full handoff:** `cos-share/reports/plugin/P16-handoff.md`.

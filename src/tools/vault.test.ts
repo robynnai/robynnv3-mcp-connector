@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { registerVaultTools } from "./vault";
-import { MAX_VAULT_OBJECT_BYTES, MAX_VAULT_PATH_LENGTH, VaultR2 } from "../vault-r2";
+import { isPrivateMemoryVaultPath, MAX_VAULT_OBJECT_BYTES, MAX_VAULT_PATH_LENGTH, VaultR2 } from "../vault-r2";
 import { createVaultGate, type VaultGate } from "../authorization/vault-gate";
 import { PREFLIGHT_HEADER } from "../authorization/session-binding";
 
@@ -393,5 +393,51 @@ describe("VaultR2 — P10 bounds", () => {
     await expect(vault.list({ prefix: long })).rejects.toThrow(/at most/);
     await expect(vault.list({ cursor: "c".repeat(2000) })).rejects.toThrow(/cursor/);
     expect(calls).toEqual([]);
+  });
+});
+
+describe("VaultR2 — private-memory paths (P16, defense in depth behind P09b)", () => {
+  const memory = (name: string, body = "x"): FakeObject => ({
+    key: `orgs/${ORG}/sources/agent-memory/${name}`,
+    size: body.length,
+    uploaded: new Date("2026-04-29T05:00:00Z"),
+    etag: '"m"',
+    body,
+  });
+
+  it.each([
+    ["sources/agent-memory/user-0c05a001-voice.md", true],
+    ["sources/agent-memory/user-tone.embedding.json", true],
+    ["sources/agent-memory/session-run-1-notes.md", true],
+    ["sources/agent-memory/USER-tone.md", true],
+    ["./sources//agent-memory/user-tone.md", true],
+    ["sources/agent-memory/org-brand-voice.md", false],
+    ["sources/agent-memory/org-user-guide.md", false],
+    ["sources/agent-memory/users-list.md", false],
+    ["sources/website/user-guide.md", false],
+    ["brand/user-personas/primary.md", false],
+    ["sources/agent-memory/", false],
+  ])("isPrivateMemoryVaultPath(%s) = %s", (path, expected) => {
+    expect(isPrivateMemoryVaultPath(path)).toBe(expected);
+  });
+
+  it("read() answers a private-memory path as not found without calling R2", async () => {
+    const calls: string[] = [];
+    const vault = new VaultR2(makeFakeBucket([memory("user-tone.md", "PRIVATE")], calls), ORG);
+    await expect(vault.read("sources/agent-memory/user-tone.md")).resolves.toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it("list() drops private-memory entries and keeps org-shared memory; the cursor still advances", async () => {
+    const vault = new VaultR2(
+      makeFakeBucket([memory("user-a-voice.md"), memory("org-brand-voice.md"), memory("session-1-notes.md"), memory("org-tone.md")]),
+      ORG,
+    );
+    const first = await vault.list({ prefix: "sources/agent-memory/", limit: 2 });
+    expect(first.entries.map((e) => e.path)).toEqual(["sources/agent-memory/org-brand-voice.md"]);
+    expect(first.truncated).toBe(true);
+    const second = await vault.list({ prefix: "sources/agent-memory/", limit: 2, cursor: first.cursor! });
+    expect(second.entries.map((e) => e.path)).toEqual(["sources/agent-memory/org-tone.md"]);
+    expect(second.cursor).toBeNull();
   });
 });

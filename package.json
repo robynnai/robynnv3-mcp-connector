@@ -9,6 +9,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "vitest",
+    "test:plugin-local": "PLUGIN_LOCAL_LIVE=1 vitest run src/__tests__/plugin-local --no-file-parallelism --testTimeout=60000",
     "typecheck": "tsc --noEmit",
     "build:cli": "rm -rf dist && tsup src/cli/index.ts --format cjs --outDir dist && mv dist/index.cjs dist/robynn.cjs",
     "build": "pnpm typecheck && pnpm build:cli",
