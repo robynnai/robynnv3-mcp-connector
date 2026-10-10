@@ -92,6 +92,37 @@ function assertSafePath(path: string): void {
   }
 }
 
+/**
+ * Defense in depth for COS-PLUGIN-001 P09b (plan §5 "Memory privacy differs
+ * by backend"). The app's vault materializer no longer writes user-private or
+ * session-scope agent memory into the org vault, and its reconcile deletes
+ * objects leaked by earlier runs. Until every org's vault has been rebuilt or
+ * purged, the Worker also refuses the paths those rows were written to:
+ * `agent_memory` source keys `user:<owner>:<key>` / `user:<key>` and
+ * `session:<id>:<key>` slugify to `sources/agent-memory/user-…` and
+ * `sources/agent-memory/session-…`. Org-scope memory (`org:` ⇒ `org-…`) and
+ * every other source stay readable. One-line flip.
+ */
+export const VAULT_HIDES_PRIVATE_MEMORY_PATHS = true;
+
+const PRIVATE_MEMORY_FILE = /^(user|session)-/i;
+
+/**
+ * True for a vault-relative path that names user-private or session-scope
+ * agent memory. Empty and `.` segments are ignored so `sources//agent-memory`
+ * or `./sources/...` spellings cannot slip past; matching is
+ * case-insensitive (fail closed: such a path is hidden, never served).
+ */
+export function isPrivateMemoryVaultPath(path: string): boolean {
+  const segments = path.split("/").filter((segment) => segment !== "" && segment !== ".");
+  return (
+    segments.length >= 3 &&
+    segments[0].toLowerCase() === "sources" &&
+    segments[1].toLowerCase() === "agent-memory" &&
+    PRIVATE_MEMORY_FILE.test(segments[2])
+  );
+}
+
 function joinKey(...parts: string[]): string {
   return parts
     .map((p) => p.replace(/^\/+|\/+$/g, ""))
@@ -144,14 +175,17 @@ export class VaultR2 {
     });
 
     const orgRootWithSlash = `${this.orgRoot}/`;
-    const entries: VaultListEntry[] = result.objects.map((obj) => ({
-      path: obj.key.startsWith(orgRootWithSlash)
-        ? obj.key.slice(orgRootWithSlash.length)
-        : obj.key,
-      size: obj.size,
-      uploaded: obj.uploaded.toISOString(),
-      etag: obj.etag ?? null,
-    }));
+    const entries: VaultListEntry[] = result.objects
+      .map((obj) => ({
+        path: obj.key.startsWith(orgRootWithSlash)
+          ? obj.key.slice(orgRootWithSlash.length)
+          : obj.key,
+        size: obj.size,
+        uploaded: obj.uploaded.toISOString(),
+        etag: obj.etag ?? null,
+      }))
+      // A page may come back shorter than `limit`; the cursor still advances.
+      .filter((entry) => !(VAULT_HIDES_PRIVATE_MEMORY_PATHS && isPrivateMemoryVaultPath(entry.path)));
 
     return {
       entries,
@@ -161,11 +195,15 @@ export class VaultR2 {
   }
 
   /**
-   * Fetch a vault object as UTF-8 text. Returns `null` on missing key so
+   * Fetch a vault object as UTF-8 text. Returns `null` on missing key (and
+   * for a private-memory path, see {@link isPrivateMemoryVaultPath}) so
    * callers can distinguish "not found" from real errors.
    */
   async read(path: string): Promise<VaultReadResult | null> {
     assertSafePath(path);
+    // Reported exactly like a missing object, without an R2 call, so the
+    // answer is no existence oracle.
+    if (VAULT_HIDES_PRIVATE_MEMORY_PATHS && isPrivateMemoryVaultPath(path)) return null;
     const key = joinKey(this.orgRoot, path);
     const obj = await this.bucket.get(key);
     if (!obj) return null;

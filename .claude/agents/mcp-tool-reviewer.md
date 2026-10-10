@@ -7,7 +7,7 @@ Review all MCP tool implementations in `src/tools/` for adherence to project con
 
 ## Checklist
 
-- [ ] Every tool has a title and explicit safety annotations via `toolMetadata(title, { readOnlyHint, destructiveHint, openWorldHint })`, matching `contracts/tool-route-map.json` (`catalog-baseline.test.ts` enforces this)
+- [ ] Every tool has a title and explicit safety annotations via `toolMetadata(title, { readOnlyHint, destructiveHint, openWorldHint })`, matching `contracts/tool-route-map.json` (`catalog-baseline.test.ts` enforces this); the tool has a fixture in `src/__tests__/catalog-contract.fixtures.ts`, and any `contracts/mcp-tools.json` snapshot diff is intentional
 - [ ] Every tool returns both `content` (text array) and `structuredContent`
 - [ ] `structuredContent` is cast to `Record<string, unknown>` (SDK type requirement)
 - [ ] Every tool handler is wrapped in try/catch with `isError: true` on failure

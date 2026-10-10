@@ -45,3 +45,30 @@ P01 (Beads `robynn_mcp_server-1fs`, branch `plugin-v1/p01-baseline-contracts`, d
 - **For P11:** `robynn-client.ts` changes are minimal: `setAccessToken` and a typed `authorization_expired` on an upstream 401 with no refresh hook. The retry and replay work is unchanged.
 - **Full handoff:** `cos-share/reports/plugin/P10-handoff.md`.
 
+P12 (Beads `robynn_mcp_server-qp3`, branch `plugin-v1/p12-tool-metadata`, draft PR #54, stacked on P01) shipped tool metadata:
+
+- Every tool registers via `registerTool` / `registerAppTool` with `toolMetadata(title, hints)`. Titles, hints and input-schema digests are locked to `contracts/tool-route-map.json`.
+- Five † tools stay `readOnlyHint:false` until P07 removes a hidden write: the four brand-book reads (`BRAND_BOOK_READS_PERSIST_COMPLETENESS`) and `robynn_query_connected_app` (`CONNECTED_APP_READS_PERSIST_POLICY`).
+  - The P07 recipe: flip the flag; in the map set `currentHints` / `proposedHints` to `hintsAfterP07` and `requiredScope` to `requiredScopeAfterP07`; regenerate `contracts/mcp-tools.json`.
+- Left to P10: wiring `registerUnauthenticatedStatusTool` and server instructions (`src/index.ts`). Left to P11: `encodeURIComponent` of path ids in `src/robynn-client.ts`.
+- Handoff: `~/Developer/cos-share/reports/plugin/P12-handoff.md`; re-review: `P12-review.md` (APPROVE).
+
+P13 (Beads `robynn_mcp_server-b1o`, branch `plugin-v1/p13-catalog-contract`, stacked on P12) added the full catalog contract suite (TOOL_CONTRACT §7):
+
+- `src/__tests__/catalog-harness.ts` runs the real `RobynnMCP` DO activation (`onStart` → `init()`) and the real `robynn mcp` CLI action behind an SDK `Client`, with a stubbed app `fetch` and in-memory R2.
+- `contracts/mcp-tools.json` is the sanitized real `tools/list` + `resources/list`. Drift fails `catalog-contract.test.ts`; regenerate deliberately with `UPDATE_MCP_TOOLS_SNAPSHOT=1 pnpm exec vitest run src/__tests__/catalog-contract.test.ts`.
+- Any tool change touches four things together: code, map entry, fixture (`catalog-contract.fixtures.ts`), snapshot.
+- D-A flip point: the query tool's `requiredScopeAfterP07` (a downgrade needs P07 first).
+- P10 should add a Worker-side "denied before any request" case per tool to the matrix.
+- Handoff: `~/Developer/cos-share/reports/plugin/P13-handoff.md`.
+
+## COS-PLUGIN-001 P16: OAuth integration and revocation tests (2026-10-10)
+
+- **Branch:** `plugin-v1/p16-oauth-integration`, stacked on `plugin-v1/p10-worker-session-vault`, with `plugin-v1/p11-retry-safety` and `plugin-v1/p13-catalog-contract` merged in. Pairs with robynnv3 `plugin-v1/p16-oauth-integration`. Beads `robynn_mcp_server-5zt`.
+- **What changed:** see `docs/plugin-v1/OAUTH_INTEGRATION_TESTS.md`.
+  - The in-process Worker harness now lives in `src/__tests__/harness/` and is shared by P10's suite.
+  - The new suites are the full front-door chain (`oauth-chain.test.ts`) and the Vault P09b contract (`vault-private-memory.test.ts`).
+  - The live plugin-local suites are in `src/__tests__/plugin-local/` (`pnpm test:plugin-local`).
+- **Behaviour change:** `VaultR2` hides and refuses `sources/agent-memory/user-…` and `session-…` paths (`VAULT_HIDES_PRIVATE_MEMORY_PATHS`, a one-line flip).
+- **Merge note:** P13's catalog harness now activates the DO with P10-shaped (authVersion 2) props and a preflight stamp. Props without `organizationId` are refused by the session binding; `contracts/mcp-tools.json` was regenerated (P10 instructions and the fallback tool).
+- **Full handoff:** `cos-share/reports/plugin/P16-handoff.md`.

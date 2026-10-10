@@ -115,6 +115,16 @@ These are the best tools to test when you want to validate specialized LangGraph
 
 `robynn_content_plan` is synthesis-only. It consumes completed SEO, GEO, deep research, Brand Context, existing site inventory, and existing calendar rows. It does not run fresh keyword research, web search, scraping, or news search. If the caller only provides a topic or brand label without a `project_id`, `research_artifact_id`, or `research_packet`, it returns `status: "missing_context"` with the next step instead of inventing a plan.
 
+## Catalog contract
+
+The authoritative inventory is the committed, sanitized `tools/list` snapshot `contracts/mcp-tools.json`, together with `contracts/tool-route-map.json` (scope, hints and app routes per tool).
+
+- `src/__tests__/catalog-contract.test.ts` regenerates the snapshot through the real `RobynnMCP` Durable Object activation and the real `robynn mcp` CLI action, and fails on drift.
+- It proves 48 tools with Vault, 46 without, and 40 in the CLI. The CLI difference is intentional: no Vault, website family `core`.
+- It also checks that each tool calls exactly its mapped app routes.
+
+Details: `docs/plugin-v1/TOOL_CONTRACT.md` §7.
+
 ## Source Pointers
 
 ### Worker registration

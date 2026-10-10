@@ -1,12 +1,12 @@
 # Robynn plugin v1 — tool contract (COS-PLUGIN-001 P01)
 
-Status: **baseline + P12 applied** (titles, hints and descriptions ship from `plugin-v1/p12-tool-metadata`; see §6; P01 review fixes B2 and notes 5–6 merged). Machine-readable twin: [`contracts/tool-route-map.json`](../../contracts/tool-route-map.json).
+Status: **baseline + P12 applied + P13 contract suite** (titles, hints and descriptions ship from `plugin-v1/p12-tool-metadata`, see §6; P01 review fixes B2 and notes 5–6 merged; the P13 catalog contract suite and committed `tools/list` snapshot are in §7). Machine-readable twin: [`contracts/tool-route-map.json`](../../contracts/tool-route-map.json).
 Baseline: MCP Worker `85d7781`, app `6dd04bb`. Authorization rules: [`AUTHORIZATION_CONTRACT.md`](./AUTHORIZATION_CONTRACT.md).
 App-side per-route detail and owning packages: app repo `docs/plugin-v1/MCP_ROUTE_MATRIX.md`.
 
 ## 1. Catalog counts (reproduced from code)
 
-`src/__tests__/catalog-baseline.test.ts` parses the registrar calls in `RobynnMCP.init()` (M `src/index.ts:100-136`) and the CLI `mcp` command (M `src/cli/index.ts:147-171`), runs them against a real `McpServer`, and calls `tools/list` through the SDK `Client` over an in-memory transport.
+`src/__tests__/catalog-baseline.test.ts` and `src/__tests__/catalog-contract.test.ts` count through a real `tools/list`. Since P13 they no longer parse the registrar calls: the harness (`src/__tests__/catalog-harness.ts`, §7) constructs the real `RobynnMCP` Durable Object, activates it through partyserver `set-name` → `McpAgent.onStart(props)` → `init()` (M `src/index.ts:47-137`), and runs the real `robynn mcp` commander action (M `src/cli/index.ts:136-176`). An SDK `Client` then calls them over an in-memory transport.
 
 | Surface | Count | Why |
 |---|---:|---|
@@ -31,7 +31,7 @@ Conventions used for the proposed hints (P12 implements them; P13 snapshots them
 - **Scope** — see AUTHORIZATION_CONTRACT §7: `readOnlyHint:false ⇒ tools:execute`; read-only tools that charge, generate, crawl caller URLs or run generic connected-app queries are also `tools:execute`. `*` = argument-dependent scope.
 - **pairedWith** (map) — array of tool names; empty when the tool has no starter/poller or companion relationship.
 - **Retry-safe** — whether the Worker client may automatically retry after 5xx/network failure (P11 input). Today it retries **every** call once (M `src/robynn-client.ts:168-200`).
-- **†** — conditional on a P07 backend fix. `proposedHints` are the target **against today's backend** and are what P12 ships; `hintsAfterP07` / `requiredScopeAfterP07` apply once P07 removes the noted write. Each form has one code flag; flip the flag and the map entry together (`catalog-baseline.test.ts` derives its expectations from the flags). Two forms:
+- **†** — conditional on a P07 backend fix. `proposedHints` are the target **against today's backend** and are what P12 ships; `hintsAfterP07` / `requiredScopeAfterP07` apply once P07 removes the noted write. Each form has one code flag; flip the flag and the map entry together, then regenerate `contracts/mcp-tools.json` (§7), because the description text changes. `catalog-baseline.test.ts` derives its expectations from the flags and, for the query tool, from the map's `requiredScopeAfterP07`. Two forms:
   - **Brand-book reads** (`robynn_brand_book_status`, `_gap_analysis`, `_strategy`, `robynn_publish_brand_book_html`): the read path upserts the hidden "Brand Completeness" doc (A `src/lib/services/brand-hub-docs/brand-book-v2-service.ts` `calculateBrandCompleteness`). P12 ships `readOnlyHint:false` + `tools:execute` (flag `BRAND_BOOK_READS_PERSIST_COMPLETENESS`, M `src/tools/brand-book.ts`); after P07: read-only + `brand:read`.
   - **`robynn_query_connected_app`** (P01 review B2, P12 review B1): the read path persists `connector_policies` via `getOrCreatePolicy` (A `connector-execution-service.ts:330` → `connector-policy-service.ts:27-33,61-99`), and plan §5 keeps it read-only only if the backend prevents writes. P12 ships `readOnlyHint:false` (flag `CONNECTED_APP_READS_PERSIST_POLICY`, M `src/tools/connectors.ts`), and the description discloses the policy create/update and call logging; after P07: `readOnlyHint:true`. `requiredScope` stays `tools:execute` either way (D-A).
 
@@ -501,7 +501,7 @@ Skills (P15) must call the **exact** paired poller and preserve the returned job
 ## 5. Inputs for later packages
 
 - **P12** (done, §6): applied `titleProposal` as the tool-level `title`, `proposedHints` (never `hintsAfterP07`; `idempotentHint` only where present), and rewrote descriptions to disclose `charges` / `externalAccess` / `environmentGate`. `catalog-baseline.test.ts` now expects readOnly 20/28 plus destructive 7 / openWorld 19 (25/23 after both P07 † flips) and checks the map's `currentHints` in the same change. Each P12 gap in the map carries a `resolution`.
-- **P13**: snapshot the real `tools/list` (names, titles, annotations, input schemas, full descriptions) and keep `contracts/tool-route-map.json` in lock-step; prove 48/46/40. The snapshot is the real guard for description text: the P12 description checks are heuristics. `catalog-baseline.test.ts` already checks route coverage in both directions (map → client and client → map) at path level; P13 should add per-tool attribution (which tool reaches which client method).
+- **P13** (done, §7): the real `tools/list` (names, titles, annotations, input schemas, full descriptions, `_meta`) and `resources/list` are snapshotted in `contracts/mcp-tools.json` and kept in lock-step with this map. 48/46/40 are proven through the real registration paths. Every tool has success, upstream-failure, permission-denied and revoked-credential cases. Route coverage is attributed per tool, in both directions.
 - **P10**: build the Worker `TOOL_POLICY` from `requiredScope`, `scopeByArgument`, `argumentPolicy`.
 - **P11**: disable automatic retry for every tool with `retrySafe:false`; add idempotency keys where listed.
 - **P07/P08/P09**: the `gaps` arrays name the exact app file + function; the app route matrix groups them by route.
@@ -525,7 +525,7 @@ Skills (P15) must call the **exact** paired poller and preserve the returned job
   - `robynn_publish_brand_book_html` is described as an export, not a publication.
 
   These are heuristics (for example, "no Robynn credits are charged" satisfies the credit check). P13's committed `tools/list` snapshot with full descriptions is the real guard.
-- **D-A and the query tool.** The `robynn_query_connected_app` description does not mention its scope. The single scope flip point is `requiredScope` (and `requiredScopeAfterP07`) in the map (see its `openDecision` note), mirrored by the P07 route scope. Its `readOnlyHint` is a separate † flag (`CONNECTED_APP_READS_PERSIST_POLICY`): the description says the call is logged and may create or update the organization's connector policy for that app.
+- **D-A and the query tool.** The `robynn_query_connected_app` description does not mention its scope. The single D-A flip point is `requiredScopeAfterP07` in the map (see its `openDecision` note), and `catalog-baseline.test.ts` reads it rather than hard-coding the scope. It is mirrored by the P07 route scope. A downgrade to `brand:read` **requires P07 first**: while `CONNECTED_APP_READS_PERSIST_POLICY` is true the tool is not read-only, and rule 1 (`readOnlyHint:false ⇒ tools:execute`) correctly fails the map. Before P07 the decision can be recorded by changing `requiredScopeAfterP07` alone. With P07, `requiredScope` follows it. No tool code or description changes are needed for the scope itself (P13 simulated both: §7). Its `readOnlyHint` is a separate † flag (`CONNECTED_APP_READS_PERSIST_POLICY`): the description says the call is logged and may create or update the organization's connector policy for that app.
 - **Path-id guard.** `robynn_create_content`, `robynn_research`, `robynn_assist`, `robynn_run_status` and `robynn_thread_append` reject `thread_id` / `run_id` values outside `[A-Za-z0-9_-]{1,128}` before any request (`isSafePathId`). This closes the same-origin path-traversal gap at the tool layer. P11 should still `encodeURIComponent` path ids in M `src/robynn-client.ts`.
 - **App route matrix.** The app's `docs/plugin-v1/MCP_ROUTE_MATRIX.md` still lists the four † brand-book routes as `brand:read †`, while this map says `tools:execute` until P07. P07 must use `tools:execute` for those routes until it removes the completeness write, or update the matrix in the same change. The Worker is stricter in the meantime, so the mismatch fails closed.
 - **Unauthenticated fallback.** `registerUnauthenticatedStatusTool` (M `src/tools/status.ts`) gives the fallback `robynn_status` the same title and hints plus host-neutral copy. Wiring it into `RobynnMCP.init()` (M `src/index.ts`) is left to the owner of that file (P10); until then the old unannotated, Claude-specific fallback remains.
@@ -535,3 +535,132 @@ Skills (P15) must call the **exact** paired poller and preserve the returned job
   - returning the bound organization and granted permissions from `robynn_status` (needs P10 introspection);
   - Worker server instructions (none exist today; they would live in M `src/index.ts`). Handed to P10 together with the fallback wiring. Until P10 lands, the live fallback in `src/index.ts` is still unannotated and Claude-specific, so the plan §5 MUST for host-neutral copy stays open under P10.
 
+## 7. P13 catalog contract suite
+
+Plan §8 "MCP protocol contract" and "Every-tool contract coverage", §10 P13. Files: `src/__tests__/catalog-harness.ts`, `catalog-contract.test.ts`, `catalog-contract.fixtures.ts`, the reworked `catalog-baseline.test.ts`, and `contracts/mcp-tools.json`.
+
+### Harness: real registration and transport
+
+- **Worker.** The harness constructs the real `RobynnMCP` class from M `src/index.ts`, with `cloudflare:workers` mocked as in `provider-contract.test.ts`. It activates the class through the same partyserver `set-name` request the stateless handler sends to the DO stub, so the chain `setName` → `onStart(props)` → `updateProps` → `init()` → `server.connect(initTransport())` runs unchanged.
+  - The only substitution is `initTransport`, which returns an SDK `InMemoryTransport` instead of the runtime WebSocket bridge.
+  - Vault availability is driven by the real conditions: the `VAULT` binding and `props.organizationId`.
+  - The unauthenticated path is driven by omitting `props.accessToken`.
+- **CLI.** The harness imports M `src/cli/index.ts` with argv `robynn mcp`, so commander runs the real action. `StdioServerTransport` is replaced by the in-memory pair, and `readConfig` returns a synthetic key.
+- **App.** The app is a stubbed global `fetch` (`FakeApp`) behind the real `RobynnClient`.
+  - Requests are attributed by their synthetic bearer token, so each case has its own session.
+  - Any other origin throws, so nothing leaves the process.
+  - Vault runs against an in-memory R2 bucket.
+- **Not covered here:** the OAuth provider, the Worker `fetch` entry point, the runtime WebSocket bridge, and real app routes. Those belong to P16 (Worker/OAuth integration) and P17 (tool/backend integration against local Supabase). The every-tool cases below prove the Worker side of each contract against a controlled backend. They are not backend proof (plan §8).
+
+### Counts (all through a real `tools/list`)
+
+| Surface | Count | Assertion |
+|---|---:|---|
+| Worker, `VAULT` bound + `organizationId` | 48 | set-equal to the 48 map tools |
+| Worker, `VAULT` unbound | 46 | exactly the map minus `robynn_vault_list` / `_read` |
+| Worker, no `organizationId` | 46 | same |
+| Worker, no access token | 1 | only the fallback `robynn_status`, which errors without calling the app |
+| CLI `robynn mcp` | 40 | **intentional** (below), and every CLI definition is deep-equal to the Worker's |
+
+**The CLI's 40-tool catalog is intentional and asserted.** It omits 8 tools:
+
+- the 2 Vault tools: the local bridge has no R2 binding;
+- the 6 non-core website tools, because `registerWebsiteTools(server, client, { family: "core" })` keeps only `robynn_website_audit`, `_audit_status` and `robynn_website_strategy`:
+  - `robynn_website_audit_v2`, `_v2_status`;
+  - `robynn_website_optimization_audit`, `_status`;
+  - `robynn_website_audit_orchestrator`, `_status`.
+
+The remote Worker keeps all nine website tools (plan §8). The list is `CLI_OMITTED` in `catalog-contract.test.ts` and `surfaces.cliOmitted` in the snapshot.
+
+The old "registers exactly 41 tools" test in M `src/tools/all-tools.test.ts` was a partial handler harness. It is now named for what it covers: the 48-tool catalog minus 5 Hermes bridge tools and 2 Vault tools, derived from the map's `registrar`. It points here for the real catalog.
+
+### Snapshot: `contracts/mcp-tools.json`
+
+The snapshot holds:
+
+- the Worker's real `tools/list` (every field: name, title, full description, `inputSchema`, annotations, `execution`, `_meta`) in registration order;
+- `resources/list` (the 9 `ui://reports/*` resources);
+- the server name and instructions (currently `null`);
+- the unauthenticated fallback catalog;
+- counts and surfaces.
+
+Sanitization:
+
+- the test origins become `{MCP_PUBLIC_BASE_URL}` / `{ROBYNN_API_BASE_URL}`;
+- the server version is omitted;
+- keys are sorted;
+- a guard fails if a synthetic token, `Bearer `, a test origin or a JWT-looking string reaches the file.
+
+**Any drift fails the suite.** Regenerate deliberately and review the diff together with the map:
+
+```bash
+UPDATE_MCP_TOOLS_SNAPSHOT=1 pnpm exec vitest run src/__tests__/catalog-contract.test.ts
+```
+
+Lock-step:
+
+- **tools/list ↔ snapshot:** byte equality.
+- **snapshot ↔ map:** names, titles, `currentHints` and `inputSchemaDigest` are checked statically by `catalog-contract.test.ts`.
+- **tools/list ↔ map:** hints, title, digest and surfaces are checked by `catalog-baseline.test.ts`.
+
+A change that edits code and map consistently still has to regenerate the snapshot. So a description, annotation or `_meta` change can never land silently.
+
+### Every tool: success, error and permission-denied cases
+
+`catalog-contract.fixtures.ts` holds one fixture per map tool; a test fails if a tool has no fixture or a fixture is stale. For each app-backed tool (46):
+
+| Case | App reply | Assertions |
+|---|---|---|
+| success (+ variants) | 200 with a synthetic marker | not `isError`; the marker reaches `content`/`structuredContent`; every request carries the session bearer; arguments are forwarded; every request matches one of the tool's map `appRoutes` |
+| upstream failure | 422 | `isError`, exactly one request, no follow-on work |
+| upstream failure | 503 (all tools concurrently) | `isError` after the client's current single retry (P11 changes retry policy) |
+| permission denied | 403 `insufficient_scope` | `isError`, exactly one request: no run started, no charge route reached |
+| revoked credential | 401 | `isError`, exactly one request (no refresh token in props, so no retry) |
+| refused input | n/a | `isError` with the expected reason and **zero** requests |
+
+Refused inputs:
+
+- unsafe `thread_id` / `run_id` (P12 path-id guard, 5 tools);
+- `write_confirmed:false` (schema, `robynn_brand_rebuild` and `robynn_publish_strapi_draft`);
+- Strapi without `artifact_id` or `content`.
+
+**Vault** (2 tools, R2):
+
+- **success:** every R2 key is under `orgs/<bound org>/`, and a seeded foreign-org object never appears;
+- **R2 failure:** `isError`;
+- **permission denied:** parent-directory and absolute paths are refused before any R2 call;
+- a missing object returns `not_found`.
+
+What "permission denied" proves today: when the app denies (P07's job), the tool surfaces an MCP error and starts nothing else. Worker-side denial before any request (`TOOL_POLICY` from `requiredScope` / `scopeByArgument` / `argumentPolicy`) and Vault grant reauthorization are **P10's**. P10 should add a "denied before any request" case per tool to this matrix, keyed on the map's `requiredScope`.
+
+### Route attribution, both directions
+
+- **Per tool:** the set of routes the tool really calls across its success variants equals its non-internal map `appRoutes`.
+- **Globally:** the string-literal `/api/...` paths in M `src/robynn-client.ts` equal the map's routes, in both directions, and equal the union of routes observed in tool calls.
+
+So a client path no tool reaches, a mapped route no tool calls, and a tool calling an unmapped route all fail.
+
+### Mutation evidence (P13 session; each applied to a scratch tree, then reverted)
+
+| Mutation | Result |
+|---|---|
+| Description wording (`geo.ts`) | snapshot test fails |
+| Vault registered without `organizationId` | 46-tool test fails |
+| Map route path changed (`memory/search`) | per-tool attribution, both global directions and P01 path tests fail (8) |
+| Client calls an unmapped path (`/api/cli/usage-v2`) | 7 fail |
+| CLI registers the full website family | CLI and baseline tests fail (3) |
+| `robynn_create_content` ignores a failed thread creation | 422 / 403 / 401 cases fail |
+| Map-consistent hint change (code + map) | snapshot, snapshot↔map and counts fail |
+| `robynn_run_status` drops the path-id guard | refused-input case fails |
+| D-A downgrade before P07 (`requiredScope` → `brand:read`) | rule-1 and † tests fail, as intended |
+| D-A recorded before P07 (`requiredScopeAfterP07` only) | pass |
+| P07 flip for the query tool (flag + map) + snapshot regen | pass |
+| P07 flip + D-A downgrade (map only) + snapshot regen | **pass** (P12 review remaining issue 1, resolved) |
+| P07 flag only, without map or snapshot | map, † and snapshot tests fail |
+
+### Findings recorded for follow-up (not changed by P13)
+
+- **CLI report resources.** The CLI server registers no resources (no `resources` capability), yet 14 of its tools reference `ui://reports/*` URIs. Hosts fall back to the text result. This is asserted as current behaviour so a fix shows up. Owner: CLI follow-up (not P12, because it is not an annotation).
+- **Upstream bodies in tool errors.** Tool errors echo the app's response body verbatim (`API error 403: {...}`, via `RobynnClient.fetchWithRetry`). This is already the plan §5 MUST ("sanitize tool errors"), owned by P06/P11. Add canaries to this matrix when it lands.
+- **Unauthenticated fallback.** It is still unannotated, untitled and Claude-specific; it is pinned in the snapshot's `unauthenticatedFallback`. P10 wires `registerUnauthenticatedStatusTool` and regenerates the snapshot.
+- **No annotation looked wrong** against the fixtures. The † tools remain as P12 shipped them.
