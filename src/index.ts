@@ -367,8 +367,11 @@ export default {
     if (isTokenRequest) {
       const read = await readTokenRequestContext(rewrittenRequest);
       if (!read.ok) {
+        // The body was never read: refused on the declared length alone.
         safeLog.warn("oauth.token.rejected", { reason: read.reason });
-        return oauthErrorResponse(request, 413, "invalid_request", "Token request body too large");
+        return read.reason === "length_required"
+          ? oauthErrorResponse(request, 411, "invalid_request", "Content-Length is required")
+          : oauthErrorResponse(request, 413, "invalid_request", "Token request body too large");
       }
       tokenRequest = read.context;
     }

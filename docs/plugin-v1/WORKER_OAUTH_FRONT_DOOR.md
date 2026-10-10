@@ -94,7 +94,12 @@ The provider accepts any **registered** `redirect_uri` at `/token`, or none when
 - On a mismatch the callback throws. The provider calls it **before** it consumes the code (installed source, `handleAuthorizationCodeGrant`), so the legitimate client can still redeem the code. The wrapper maps the throw to `400 {"error":"invalid_grant"}`.
 - Any other throw on `/token` gives `500 server_error`, with only the error class logged.
 
-- `/token` bodies over 16 KB get `413 invalid_request` before any parsing (P06 review B1/N6). The read is bounded; it never buffers the whole body. The form is parsed with the same `application/x-www-form-urlencoded` algorithm the provider uses.
+- Form-encoded `/token` requests are gated on `Content-Length` **before the body is cloned or read** (P06 review B1/N6):
+  - no `Content-Length` (e.g. chunked) gets `411 invalid_request`;
+  - a declared length over 16 KB gets `413 invalid_request`;
+  - in both cases the body is never touched.
+
+  Only a small, declared body is read, from a clone so the provider can read the original. It is parsed with the same `application/x-www-form-urlencoded` algorithm the provider uses. Bodies are read completely or not at all: in local workerd/wrangler, partially reading an upload and abandoning it broke the next request on that connection and then crashed wrangler's dev proxy. Hosts always send a length for these small form posts.
 - The wrapper's own `/token` errors carry the provider's CORS headers when an `Origin` is present (N5).
 - Signed Worker → app calls (code exchange, refresh, introspection) use `redirect: "manual"`. A 3xx is a failure, and signed headers are never re-sent to another URL (N4).
 

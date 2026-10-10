@@ -150,7 +150,7 @@ function createHarness(): Harness {
       },
     },
     fetch: (path, init) =>
-      worker.fetch(new Request(`${ORIGIN}${path}`, init), env, {
+      worker.fetch(new Request(`${ORIGIN}${path}`, withWireLength(init)), env, {
         waitUntil() {},
         passThroughOnException() {},
         props: undefined,
@@ -180,6 +180,20 @@ function createHarness(): Harness {
     }),
   );
   return harness;
+}
+
+/**
+ * Node's Request does not expose the Content-Length it will send; on the
+ * wire (and in workerd) a fixed-size body always carries one. Add it so the
+ * Worker sees what a real host sends.
+ */
+function withWireLength(init?: RequestInit): RequestInit | undefined {
+  if (!init || typeof init.body !== "string") return init;
+  const headers = new Headers(init.headers);
+  if (!headers.has("content-length")) {
+    headers.set("content-length", String(Buffer.byteLength(init.body)));
+  }
+  return { ...init, headers };
 }
 
 function pkce() {
@@ -963,6 +977,53 @@ describe("P06 review round 1", () => {
       expect(res.status).toBe(413);
       expect(await res.json()).toMatchObject({ error: "invalid_request" });
       expect(performance.now() - started).toBeLessThan(500);
+    });
+
+    it("refuses an over-limit declared Content-Length with 413 without reading the body", async () => {
+      const h = createHarness();
+      let pulled = 0;
+      const body = new ReadableStream({
+        pull(c) {
+          pulled += 1;
+          c.enqueue(new TextEncoder().encode("a".repeat(20_000)));
+          if (pulled > 5) c.close();
+        },
+      });
+      const res = await worker.fetch(
+        new Request(`${ORIGIN}/token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded", "Content-Length": "100000" },
+          body,
+          duplex: "half",
+        } as RequestInit),
+        h.env,
+        { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext,
+      );
+      expect(res.status).toBe(413);
+      // At most the stream's initial high-water-mark pull; never read to the limit.
+      expect(pulled).toBeLessThanOrEqual(1);
+    });
+
+    it("refuses a /token body without Content-Length (e.g. chunked) with 411, unread", async () => {
+      const h = createHarness();
+      const body = new ReadableStream({
+        start(c) {
+          c.enqueue(new TextEncoder().encode("grant_type=authorization_code"));
+          c.close();
+        },
+      });
+      const res = await worker.fetch(
+        new Request(`${ORIGIN}/token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body,
+          duplex: "half",
+        } as RequestInit),
+        h.env,
+        { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext,
+      );
+      expect(res.status).toBe(411);
+      expect(await res.json()).toMatchObject({ error: "invalid_request" });
     });
 
     it.each([

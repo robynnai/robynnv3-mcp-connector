@@ -60,7 +60,7 @@ The default export is an `OAuthProvider` that wraps everything:
 
 ```
 fetch wrapper           → 404 for non-canonical paths (`//host/...`) and for /mcp* and /sse* other than exactly /mcp;
-                          provider URL built structurally on the public origin; /token bodies > 16 KB ⇒ 413
+                          provider URL built structurally on the public origin; /token: no Content-Length ⇒ 411, > 16 KB ⇒ 413 (body unread)
 OAuthProvider (createOAuthProviderOptions: S256-only PKCE, no implicit flow)
 ├── /mcp               → RobynnMCP.serve() (McpAgent Durable Object; SSE is not served)
 ├── /authorize         → Handled by OAuthProvider, delegated to auth handler

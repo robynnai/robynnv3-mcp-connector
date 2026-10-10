@@ -33,45 +33,24 @@ export const MAX_TOKEN_BODY_BYTES = 16 * 1024;
 
 export type TokenRequestRead =
   | { ok: true; context: TokenRequestContext }
-  | { ok: false; reason: "body_too_large" };
+  | { ok: false; reason: "body_too_large" | "length_required" };
 
 function single(params: URLSearchParams, key: string): string | null {
   const values = params.getAll(key);
   return values.length === 1 ? values[0] : null;
 }
 
-/** Read at most `maxBytes` of a body; null if it is larger. */
-async function readBoundedText(request: Request, maxBytes: number): Promise<string | null> {
-  const declared = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declared) && declared > maxBytes) return null;
-  if (!request.body) return "";
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > maxBytes) {
-      // Not awaited: cancelling one branch of a cloned (tee'd) body can wait
-      // on the other branch, which nobody reads once we refuse the request.
-      reader.cancel().catch(() => undefined);
-      return null;
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(bytes);
-}
-
 /**
- * Read grant_type/redirect_uri from a clone of a form-encoded token request.
- * Bodies over MAX_TOKEN_BODY_BYTES are refused before any parsing.
+ * Read grant_type/redirect_uri from a form-encoded token request.
+ *
+ * The decision is made from `Content-Length` **before** the body is cloned or
+ * read: a missing length is refused (411) and a length over
+ * MAX_TOKEN_BODY_BYTES is refused (413) without touching the body. Only a
+ * small, declared body is read (from a clone, so the provider can still read
+ * the original). Partially reading a body and then abandoning it left the
+ * connection in a bad state in local workerd/wrangler (P06 review round 1),
+ * so the body is either read completely or not at all. Hosts always send a
+ * length for these small form posts.
  */
 export async function readTokenRequestContext(
   request: Request,
@@ -80,15 +59,23 @@ export async function readTokenRequestContext(
   const empty = { ok: true as const, context: { grantType: null, redirectUri: null } };
   const contentType = request.headers.get("content-type") ?? "";
   if (request.method !== "POST" || !contentType.includes("application/x-www-form-urlencoded")) {
+    // The provider rejects these itself without reading the body.
     return empty;
   }
-  let text: string | null;
+  const declared = request.headers.get("content-length");
+  if (declared === null || !/^\d{1,10}$/.test(declared.trim())) {
+    return { ok: false, reason: "length_required" };
+  }
+  if (Number(declared) > maxBytes) return { ok: false, reason: "body_too_large" };
+
+  let text: string;
   try {
-    text = await readBoundedText(request.clone(), maxBytes);
+    text = await request.clone().text();
   } catch {
     return empty;
   }
-  if (text === null) return { ok: false, reason: "body_too_large" };
+  // The runtime enforces the declared length; this is a backstop.
+  if (text.length > maxBytes) return { ok: false, reason: "body_too_large" };
   const params = new URLSearchParams(text);
   return {
     ok: true,
