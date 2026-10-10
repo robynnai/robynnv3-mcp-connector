@@ -139,6 +139,23 @@ export class RobynnApiError extends Error {
   }
 }
 
+/**
+ * Upstream 401 with no refresh hook: the hosted Worker never refreshes inside
+ * a session (P10); the host's own refresh renews both token layers. The
+ * message is fixed and never echoes the upstream body. Names and message match
+ * P10 (`plugin-v1/p10-worker-session-vault`) so the two branches converge.
+ */
+export const AUTHORIZATION_EXPIRED_MESSAGE =
+  "authorization_expired: Robynn did not accept this connection's current credentials. Retry the request; if it keeps failing, reconnect Robynn.";
+
+export class UpstreamAuthorizationExpiredError extends RobynnApiError {
+  constructor() {
+    super(401, 'authorization_expired', AUTHORIZATION_EXPIRED_MESSAGE, true);
+    this.name = 'UpstreamAuthorizationExpiredError';
+    this.message = AUTHORIZATION_EXPIRED_MESSAGE;
+  }
+}
+
 function pickString(record: Record<string, unknown>, ...keys: string[]) {
   for (const key of keys) {
     const value = record[key];
@@ -318,6 +335,10 @@ export class RobynnClient {
           refresh_available: Boolean(this.options.refreshAccessToken),
           already_refreshed: hasRefreshedAuth,
         });
+      }
+
+      if (status === 401 && !this.options.refreshAccessToken) {
+        throw new UpstreamAuthorizationExpiredError();
       }
 
       if (status === 401 && !hasRefreshedAuth && this.options.refreshAccessToken) {
@@ -868,7 +889,10 @@ export class RobynnClient {
     while (Date.now() - start < effectiveTimeoutMs) {
       const result = await this.getRun(runId);
 
-      if (result.data?.status === 'completed' || result.data?.status === 'failed') {
+      // The app reports failed and cancelled runs as a terminal 200
+      // (`status: "failed"`, P11 review B2); `cancelled` is accepted too.
+      const status = result.data?.status;
+      if (status === 'completed' || status === 'failed' || status === 'cancelled') {
         return result;
       }
 

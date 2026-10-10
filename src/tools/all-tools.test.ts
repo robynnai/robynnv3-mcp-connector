@@ -1289,7 +1289,12 @@ describe("RobynnClient retry logic", () => {
     });
 
     const client = new RobynnClient("https://robynn.test", "tok");
-    await expect(client.getStatus()).rejects.toThrow("API error 401");
+    // P10: no in-session refresh; a fixed authorization_expired error that
+    // never echoes the upstream body.
+    const error = await client.getStatus().catch((err: Error) => err);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/^authorization_expired: /);
+    expect((error as Error).message).not.toContain("Unauthorized");
     expect(callCount).toBe(1);
   });
 

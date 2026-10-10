@@ -135,6 +135,8 @@ const CALLS: Record<string, Call> = {
 const NOT_SINGLE_OPERATIONS = new Set(["pollRun"]);
 const PRIVATE_METHODS = new Set([
   "constructor",
+  // P10 adds setAccessToken (sends no request).
+  "setAccessToken",
   "withQuery",
   "fetch",
   "fetchWithRetry",
