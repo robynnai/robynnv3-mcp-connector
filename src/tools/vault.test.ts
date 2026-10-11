@@ -292,6 +292,7 @@ async function callGated(
   const args = tool === "robynn_vault_list" ? { prefix: "brand/" } : { path: "brand/voice-attribute/direct.md" };
   const result = (await handlers.get(tool)!(args, extra)) as {
     isError?: boolean;
+    content: Array<{ type: string; text: string }>;
     structuredContent?: { error?: { code: string; retryable: boolean } };
   };
   return { result, calls };
@@ -306,6 +307,7 @@ describe("registerVaultTools — P10 authorization gate (fails closed before R2)
       const { result, calls } = await callGated(tool, undefined, stamped([tool]));
       expect(result.isError).toBe(true);
       expect(result.structuredContent?.error).toMatchObject({ code: "authorization_unavailable", retryable: true });
+      expect(result.content[0]).toMatchObject({ type: "text", text: expect.stringMatching(/^authorization_unavailable: /) });
       expect(calls).toEqual([]);
     },
   );

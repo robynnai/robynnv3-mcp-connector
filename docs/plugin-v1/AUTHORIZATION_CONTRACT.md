@@ -278,6 +278,8 @@ Every denial is decided **before** any business work, charge, object read or ext
 
 `structuredContent.error = { code, message, required_scope?, retryable }`. Messages are host-neutral and never echo upstream bodies.
 
+The text content repeats the code as `<code>: <message>` (P18). Claude Code passes only the text content to the model, not `structuredContent`, and the server instructions tell the model what to do for `insufficient_scope`, `authorization_expired` and `authorization_unavailable`.
+
 | Code | App HTTP | Meaning / user guidance |
 |---|---|---|
 | `insufficient_scope` | 403 | "This connection is read-only. Reconnect Robynn and allow execution to use this tool." |
