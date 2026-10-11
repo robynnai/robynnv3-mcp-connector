@@ -2934,15 +2934,15 @@
       "appRoutes": [
         {
           "method": "R2",
-          "path": "VAULT binding: list {organizationId}/…",
+          "path": "VAULT binding: list orgs/{organizationId}/…",
           "file": null,
-          "authHelper": "none — props.organizationId only (M src/index.ts:127-130)"
+          "authHelper": "Worker preflight (P10): per-call introspection of grant, membership and scope; createVaultGate refuses any R2 call without that call's preflight stamp"
         }
       ],
       "sideEffects": "none",
       "charges": "none",
       "externalAccess": "Cloudflare R2 (internal)",
-      "objectOwnership": "prefix-scoped to props.organizationId; no current grant/membership check",
+      "objectOwnership": "prefix-scoped to orgs/{props.organizationId}/; re-authorized on every call by the P10 preflight; user-private and session memory paths answer not found (P16)",
       "retrySafe": true,
       "pairedWith": [
         "robynn_vault_read"
@@ -2984,15 +2984,15 @@
       "appRoutes": [
         {
           "method": "R2",
-          "path": "VAULT binding: get {organizationId}/{path}",
+          "path": "VAULT binding: get orgs/{organizationId}/{path}",
           "file": null,
-          "authHelper": "none — props.organizationId only (M src/index.ts:127-130)"
+          "authHelper": "Worker preflight (P10): per-call introspection of grant, membership and scope; createVaultGate refuses any R2 call without that call's preflight stamp"
         }
       ],
       "sideEffects": "none",
       "charges": "none",
       "externalAccess": "Cloudflare R2 (internal)",
-      "objectOwnership": "prefix-scoped to props.organizationId; path checks in vault-r2.ts",
+      "objectOwnership": "prefix-scoped to orgs/{props.organizationId}/ with path checks in vault-r2.ts; re-authorized on every call by the P10 preflight; user-private and session memory paths answer not found (P16)",
       "retrySafe": true,
       "pairedWith": [
         "robynn_vault_list"

@@ -87,8 +87,8 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 | 44 | `robynn_memory_write` | Save a Memory | tools:execute | F/F/F | F/T/F/F | destructive | POST `/api/cli/memory` | **no** | yes |
 | 45 | `robynn_memory_get` | Get a Memory | brand:read | T/F/F | T/F/F/T | — | GET `/api/cli/memory` | yes | yes |
 | 46 | `robynn_memory_search` | Search Memories | brand:read | T/F/F | T/F/F/T | — | POST `/api/cli/memory/search` | yes | yes |
-| 47 | `robynn_vault_list` | List Vault Files | brand:read | T/F/F | T/F/F/T | — | R2 `VAULT binding: list {organizationId}/…` | yes | no |
-| 48 | `robynn_vault_read` | Read a Vault File | brand:read | T/F/F | T/F/F/T | — | R2 `VAULT binding: get {organizationId}/{path}` | yes | no |
+| 47 | `robynn_vault_list` | List Vault Files | brand:read | T/F/F | T/F/F/T | — | R2 `VAULT binding: list orgs/{organizationId}/…` | yes | no |
+| 48 | `robynn_vault_read` | Read a Vault File | brand:read | T/F/F | T/F/F/T | — | R2 `VAULT binding: get orgs/{organizationId}/{path}` | yes | no |
 
 ## 3. Evidence per tool
 
@@ -475,7 +475,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/vault.ts`. **App auth today:** none — props.organizationId only (M src/index.ts:127-130).
 - **Hint evidence:** R2 list under the org prefix (vault-r2.ts).
 - **Side effects:** none. **Charges:** none. **External access:** Cloudflare R2 (internal).
-- **Object ownership:** prefix-scoped to props.organizationId; no current grant/membership check. **Gate:** requires VAULT binding + organizationId in props. **Paired with:** `robynn_vault_read`.
+- **Object ownership:** prefix-scoped to `orgs/{props.organizationId}/`; re-authorized on every call by the P10 preflight (grant, membership, scope) and refused at R2 without that call's preflight stamp; user-private and session memory paths answer not found (P16). **Gate:** requires VAULT binding + organizationId in props. **Paired with:** `robynn_vault_read`. *(Corrected in P19; this row predated P10.)*
 - **Gaps:** P10 — `mcp:src/tools/vault.ts` `registerVaultTools`: authorize (introspection) before every R2 operation; fail closed; object-size bounds.
 
 ### `robynn_vault_read`
@@ -483,7 +483,7 @@ Summary of the changes: P01 proposed that **27 of 48 tools** change at least one
 - **Registrar:** M `src/tools/vault.ts`. **App auth today:** none — props.organizationId only (M src/index.ts:127-130).
 - **Hint evidence:** R2 get of one object under the org prefix.
 - **Side effects:** none. **Charges:** none. **External access:** Cloudflare R2 (internal).
-- **Object ownership:** prefix-scoped to props.organizationId; path checks in vault-r2.ts. **Gate:** requires VAULT binding + organizationId in props. **Paired with:** `robynn_vault_list`.
+- **Object ownership:** prefix-scoped to `orgs/{props.organizationId}/` with path checks in vault-r2.ts; re-authorized on every call by the P10 preflight and refused at R2 without that call's preflight stamp; user-private and session memory paths answer not found (P16). **Gate:** requires VAULT binding + organizationId in props. **Paired with:** `robynn_vault_list`. *(Corrected in P19; this row predated P10.)*
 - **Gaps:** P10 — `mcp:src/tools/vault.ts` `registerVaultTools`: authorize before every R2 operation; fail closed; object-size bounds.
 
 ## 4. Starter → poller pairs
