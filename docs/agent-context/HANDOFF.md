@@ -99,3 +99,6 @@ P13 (Beads `robynn_mcp_server-b1o`, branch `plugin-v1/p13-catalog-contract`, sta
 - **Tests:** `robynn_status` reports the intersected permissions of a host token narrowed by refresh (P17 review N4); catalog guard for the thread wording; host-neutral report runtime.
 - **Docs:** AUTHORIZATION_CONTRACT §5 marks `user_disabled` as reserved (not emitted in v1) and §8.3 lists the codes the app actually ships; the route map and TOOL_CONTRACT Vault rows describe the P10 preflight and the `orgs/{org}/` prefix.
 - **RC review and GO/NO-GO:** `cos-share/reports/plugin/P19-rc-review.md`. **Full handoff:** `cos-share/reports/plugin/P19-handoff.md`.
+- **Review round 1 (P19 review):**
+  - The four run tools add that anything the run saves as a Robynn artifact is visible to the organization (review R-D1); the thread privacy claim covers the thread only. Snapshot regenerated; the plugin repository re-pins it.
+  - Live suite: the log-canary check requires non-empty app and Worker logs; the fixture has no `*` graph and the whole-run check fails on any unregistered graph id; `robynn_brand_context_search` is asserted on `snippets`, with one synthetic brand rule per org added in `beforeAll` (review N4).

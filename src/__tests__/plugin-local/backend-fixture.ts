@@ -144,6 +144,11 @@ export class BackendFixture {
     run.status = status;
   }
 
+  /** Whether a graph id was registered explicitly (no "*" default). */
+  isRegisteredGraph(assistantId: string) {
+    return this.graphs.has(assistantId);
+  }
+
   runsFor(assistantId: string) {
     return [...this.runs.values()].filter((r) => r.assistantId === assistantId);
   }

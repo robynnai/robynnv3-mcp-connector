@@ -31,7 +31,8 @@ export interface GraphHooks {
 
 export function registerFixtureGraphs(fixture: BackendFixture, hooks: GraphHooks) {
   // Instant Agent / CMO (runs.ts): thread state with text, decision card and artifact manifest.
-  for (const id of ["cmo_v3", "cmo_v2", "auto", "*"]) fixture.graph(id, cmoOutput);
+  // No "*" default (P19 review N4): an unexpected graph id must fail the run.
+  for (const id of ["cmo_v3", "cmo_v2", "auto"]) fixture.graph(id, cmoOutput);
 
   // GEO (agents/geo/execute: threads → runs → poll → state values).
   fixture.graph("geo_researcher", () => ({
