@@ -310,4 +310,44 @@ describe("chain negatives that span both token layers", () => {
     expect(removed.status).toBe(401);
     expect((await refreshHost(h, conn.refresh_token)).status).toBe(400);
   });
+
+  // P19 (P17 review N4): robynn_status reports the permissions this call was
+  // actually authorized with (host token ∩ grant ∩ props ∩ introspection),
+  // not the upstream grant's. A host token narrowed to brand:read by refresh
+  // must not be told it can execute.
+  it("robynn_status reports the intersected permissions of a host token narrowed by refresh", async () => {
+    const h = await createHarness();
+    const conn = await connectThroughFrontDoor(h, {
+      userId: USER_A,
+      organizationId: ORG_A,
+      requested: "brand:read tools:execute",
+      granted: ["brand:read", "tools:execute"],
+    });
+    const { sessionId } = await initialize(h, conn.access_token);
+    const full = await callTool(h, conn.access_token, sessionId, "robynn_status");
+    expect(full.json.result.structuredContent.connection).toMatchObject({
+      permissions: ["brand:read", "tools:execute"],
+      can_execute: true,
+    });
+
+    const narrowed = await refreshHost(h, conn.refresh_token, "brand:read");
+    expect(narrowed.status).toBe(200);
+    const next = (await narrowed.json()) as Record<string, string>;
+    expect(next.scope).toBe("brand:read");
+
+    const status = await callTool(h, next.access_token, sessionId, "robynn_status");
+    expect(status.json.result.isError).toBeFalsy();
+    expect(status.json.result.structuredContent.connection).toEqual({
+      organization: { id: ORG_A, name: "Harness Org ✓" },
+      permissions: ["brand:read"],
+      can_execute: false,
+    });
+    // The upstream grant still holds both scopes; execution stays refused.
+    const write = await callTool(h, next.access_token, sessionId, "robynn_memory_write", {
+      scope: "user",
+      key: "k",
+      content: "v",
+    });
+    expect(write.json.result.structuredContent.error.code).toBe("insufficient_scope");
+  });
 });
