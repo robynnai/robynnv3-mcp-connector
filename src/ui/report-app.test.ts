@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { REPORT_APP_SCRIPT } from "./report-app-script";
+
 import {
   REPORT_RESOURCE_URIS,
   buildReportAppHtml,
@@ -95,5 +97,14 @@ describe("report-app helpers", () => {
     expect(html).toContain('"reportType":"cmoAgui"');
     expect(html).toContain("Robynn CMO Result");
     expect(html).toContain("robynn_cmo_agent");
+  });
+
+  // P19 (P06 review N7; plan §5 host-neutral copy): the report runtime is
+  // shown inside whichever host renders MCP Apps, so it names no host.
+  it("uses host-neutral copy in the report runtime", () => {
+    expect(REPORT_APP_SCRIPT).not.toMatch(/\bClaude\b|\bCodex\b|\bChatGPT\b/);
+    expect(REPORT_APP_SCRIPT).toContain(
+      "Run this report from your AI assistant to see the interactive view here.",
+    );
   });
 });
