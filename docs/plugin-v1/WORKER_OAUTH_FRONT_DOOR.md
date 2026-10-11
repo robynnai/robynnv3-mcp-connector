@@ -33,6 +33,7 @@ On success the Worker:
 - stores a transaction in KV (`oauth_state:<state>`, TTL 600 s). The transaction holds the parsed host request, the requested scopes, the normalized DCR `client_name`, the Worker callback URL and `sha256(browser nonce)`.
 - sets the cookie `__Host-robynn_oauth_<state>=<nonce>; Path=/; Max-Age=600; HttpOnly; SameSite=Lax; Secure`. On plain-HTTP loopback dev the `__Host-` prefix and `Secure` are dropped.
 - redirects to the app's `/oauth/authorize` with `client_id=robynn-mcp-worker`, `redirect_uri={base}/callback`, `state`, `scope=<exactly the requested set>`, `response_type=code`, and `client_name` when the client has one.
+- adds the **signed consent destination** (P19b, P19 RC review R3): `redirect_origin`, the origin of the host redirect URI the provider validated for this client (`<scheme>://<host[:port]>`, or `<scheme>:` for a native app link), and `consent_sig`, an HMAC over it bound to `state`. The consent page shows "After you approve, you'll be redirected to <host>", and warns when the host is not loopback. Without `MCP_INTERNAL_AUTH_SECRET` both are omitted and logged (`oauth.authorize.destination_unsigned`); the app then shows the destination as unconfirmed. Format: `INTERNAL_AUTH_SIGNING.md` §6.
 
 `state` is 32 random bytes in base64url (43 characters), which fits the app's `MCP_STATE_PATTERN` (P04).
 

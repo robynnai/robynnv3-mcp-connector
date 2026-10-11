@@ -26,6 +26,12 @@ import {
   readUpstreamGrantCandidate,
 } from "./authorization/upstream-grant";
 import { AUTHORIZE_REDIRECT_PROP } from "./authorization/token-binding";
+import {
+  CONSENT_DESTINATION_PARAM,
+  CONSENT_SIGNATURE_PARAM,
+  redirectOrigin,
+  signConsentDestination,
+} from "./authorization/consent-destination";
 import { errorKind, safeLog } from "./safe-log";
 
 type HonoEnv = { Bindings: Env };
@@ -564,6 +570,23 @@ app.get("/authorize", async (c) => {
   authorizeUrl.searchParams.set("scope", validation.scopes.join(" "));
   authorizeUrl.searchParams.set("response_type", "code");
   if (clientName) authorizeUrl.searchParams.set("client_name", clientName);
+  // Tell the consent page where the browser goes after approval (P19 RC
+  // review R3: open DCR lets any https client call itself "Claude Code").
+  // Signed and bound to this state; without the secret the app shows the
+  // destination as unconfirmed, and the callback fails as before.
+  const origin = redirectOrigin(oauthRequest.redirectUri);
+  const internalAuthSecret = getInternalAuthSecret(c.env);
+  if (origin && internalAuthSecret) {
+    authorizeUrl.searchParams.set(CONSENT_DESTINATION_PARAM, origin);
+    authorizeUrl.searchParams.set(
+      CONSENT_SIGNATURE_PARAM,
+      await signConsentDestination(internalAuthSecret, { state, origin }),
+    );
+  } else {
+    safeLog.warn("oauth.authorize.destination_unsigned", {
+      reason: origin ? "internal_auth_secret_missing" : "origin_unavailable",
+    });
+  }
 
   safeLog.info("oauth.authorize.forwarded", {
     scopeCount: validation.scopes.length,

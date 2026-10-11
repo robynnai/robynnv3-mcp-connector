@@ -9,7 +9,7 @@
  * and the Robynn app (global `fetch`) are stubbed. In-memory KV, no network,
  * synthetic identities only.
  */
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({
@@ -421,6 +421,53 @@ describe("/authorize — scope is forwarded exactly, never widened (F7)", () => 
     const clientId = await register(h, [HOST_CALLBACK], "Evil‮Host\u0000 <b>x</b>");
     const { consent } = await startAuthorization(h, clientId, { client_name: "Spoofed" } as never);
     expect(consent.searchParams.get("client_name")).toBe("EvilHost <b>x</b>");
+  });
+});
+
+describe("/authorize — signed consent destination (P19 RC review R3)", () => {
+  function expectedSignature(state: string, origin: string, exp: number) {
+    return createHmac("sha256", SECRET)
+      .update(JSON.stringify(["robynn-consent-destination", "v1", exp, state, origin]))
+      .digest("base64url");
+  }
+
+  it.each([
+    ["a loopback host callback", [HOST_CALLBACK], "Claude Code", "http://127.0.0.1:43123"],
+    ["an https callback named like a trusted host", ["https://claude.ai@evil.example/cb?x=1"], "Claude Code", "https://evil.example"],
+    ["a native app link", ["cursor://anysphere.cursor-retrieval/oauth/callback"], "Cursor", "cursor:"],
+  ])("%s: the consent URL carries the validated, signed redirect origin", async (_label, uris, name, origin) => {
+    const h = createHarness();
+    const clientId = await register(h, uris, name);
+    const before = Math.floor(Date.now() / 1000);
+    const { consent, state } = await startAuthorization(h, clientId, { redirect_uri: uris[0] });
+    expect(consent.searchParams.getAll("redirect_origin")).toEqual([origin]);
+    const [version, exp, mac] = consent.searchParams.get("consent_sig")!.split(".");
+    expect(version).toBe("v1");
+    expect(Number(exp)).toBeGreaterThanOrEqual(before + 600);
+    expect(Number(exp)).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 600);
+    // Bound to the Worker transaction state the consent page carries, not the host's.
+    expect(mac).toBe(expectedSignature(state, origin, Number(exp)));
+  });
+
+  it("ignores a request-supplied redirect_origin or consent_sig", async () => {
+    const h = createHarness();
+    const clientId = await register(h);
+    const { consent } = await startAuthorization(h, clientId, {
+      redirect_origin: "http://127.0.0.1:1",
+      consent_sig: "v1.9999999999.forged",
+    } as never);
+    expect(consent.searchParams.getAll("redirect_origin")).toEqual(["http://127.0.0.1:43123"]);
+    expect(consent.searchParams.getAll("consent_sig")).toHaveLength(1);
+    expect(consent.searchParams.get("consent_sig")).not.toContain("forged");
+  });
+
+  it("without MCP_INTERNAL_AUTH_SECRET sends no destination (the app shows it as unconfirmed)", async () => {
+    const h = createHarness();
+    delete (h.env as { MCP_INTERNAL_AUTH_SECRET?: string }).MCP_INTERNAL_AUTH_SECRET;
+    const clientId = await register(h);
+    const { consent } = await startAuthorization(h, clientId);
+    expect(consent.searchParams.has("redirect_origin")).toBe(false);
+    expect(consent.searchParams.has("consent_sig")).toBe(false);
   });
 });
 
