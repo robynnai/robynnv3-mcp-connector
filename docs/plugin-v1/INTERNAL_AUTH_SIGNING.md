@@ -132,3 +132,34 @@ Agent-run tokens use `aud=robynn-api:agent-run`, so neither token type validates
 3. **Expect reconnects.** App deploy invalidates every upstream JWT at once. That triggers the pre-existing DO/provider refresh split-brain (contract D6, F13, F18) for all active sessions together, so some users may need to reconnect unless P10 ships alongside.
 4. **Keep the Worker-first window short.** Between the Worker and app deploys, code exchanges lose the token-endpoint rate-limit bypass (`mcpTokenRateLimiter`, 60/h per IP+UA).
 5. **In-flight Instant Agent runs.** Completion webhooks for runs in flight at deploy return 401, because their tokens lack the new `aud`. Those runs finish through the poll and recovery finalization paths.
+
+## 6. Consent destination (P19b, P19 RC review R3)
+
+The consent page shows where the browser goes after approval. With open DCR, a client can register any https redirect and call itself "Claude Code". The Worker puts the destination in the `/oauth/authorize` redirect and signs it with the same secret under its own label, so it cannot be confused with a v2 request signature.
+
+```text
+redirect_origin = "<scheme>://<host[:port]>"   http(s): from new URL(redirect_uri).host, so userinfo is dropped and IDN is punycode
+                = "<scheme>:"                  any other scheme (native app link)
+exp             = floor(now / 1000) + 600      the authorization transaction's lifetime
+payload         = JSON.stringify(["robynn-consent-destination", "v1", exp, state, redirect_origin])
+consent_sig     = "v1." + exp + "." + base64url(HMAC-SHA256(MCP_INTERNAL_AUTH_SECRET, payload))
+```
+
+- **`state`** is the Worker's transaction state, the same `state` query parameter the consent page receives.
+- **Worker:** `src/authorization/consent-destination.ts`. **App:** `src/lib/server/oauth/consent-destination.ts`.
+- **App verifier rules:**
+  - both parameters absent: the destination is shown as unconfirmed, in warning style;
+  - exactly one present, malformed, expired (more than 60 s past `exp`, or `exp` more than 660 s ahead), a bad MAC, or the secret unset: the request is refused;
+  - otherwise the host is shown. It is in warning style unless it is loopback (`localhost`, `127.x.x.x`, `[::1]`).
+- **Not a credential:** it authorizes display only and is never consumed. The code exchange is still the v2-signed `POST /api/oauth/token`.
+
+Shared test vector (both repos: `consent-destination.test.ts`):
+
+```text
+secret    p19b-test-vector-secret-not-a-real-secret
+state     AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-AbCd0
+origin    https://evil.example
+now       1760200000000   (exp 1760200600)
+signature v1.1760200600.E3B_PAGLdf6oCfrSjedEYXMcEDl16M6D7ng1zof-Iyo
+```
+

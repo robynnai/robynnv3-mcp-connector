@@ -181,6 +181,7 @@ All steps live in a new M `src/authorization/` module, invoked from the default 
 2. Scope: omitted ⇒ `["brand:read"]`; any unknown item ⇒ redirect `error=invalid_scope` (F7). Pass the **requested** scope set to the app consent (replace fixed `DEFAULT_OAUTH_SCOPE_STRING` at `auth-handler.ts:247`).
 3. `resource`: accept only the approved aliases `{base}` and `{base}/mcp`; reject anything else with `invalid_target` and do not merge foreign values (`normalizeOAuthRequestResource`, `auth-handler.ts:46-66`). `{base}/sse` is **not** an approved alias in v1 (D10, F19): stop emitting it from `getProtectedResourceAliases` (`auth-handler.ts:35-44`) and `endpoints.sse` in the landing JSON (`:400`) behind `ADVERTISE_SSE=false`. For backwards compatibility a host that still sends `resource={base}/sse` may be mapped to `{base}/mcp` rather than rejected — P06 records the choice; it must never widen the audience.
 4. State: random, stored in KV with the parsed request, the authorize-time `redirect_uri`, and a browser-binding nonce set as an `HttpOnly; Secure; SameSite=Lax` cookie; consumed with delete-before-use.
+5. Consent destination (P19b, P19 RC review R3): the consent redirect also carries `redirect_origin` (the origin of the provider-validated host `redirect_uri`) and `consent_sig` (HMAC with `MCP_INTERNAL_AUTH_SECRET`, bound to the state, 600 s). The app shows the destination, in warning style unless loopback, and refuses a partial, expired or badly signed one. Format: `INTERNAL_AUTH_SIGNING.md` §6.
 
 ### 6.2 `/callback` (P06)
 
