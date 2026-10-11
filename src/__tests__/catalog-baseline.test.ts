@@ -355,6 +355,11 @@ describe("P12 tool metadata (real tools/list)", () => {
       const description = worker.find((t) => t.name === name)?.description ?? "";
       expect(description, name).toContain("private to you on plugin connections");
       expect(description, name).not.toMatch(/thread visible to your organization/);
+      // Run artifacts are brand_hub_docs rows, readable org-wide (vault,
+      // dashboard): the privacy claim covers the thread only (P19 review R-D1).
+      if (name !== "robynn_conversations") {
+        expect(description, name).toContain("anything the run saves as a Robynn artifact is visible to your organization");
+      }
     }
   });
 });

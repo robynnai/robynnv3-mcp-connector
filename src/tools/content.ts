@@ -24,7 +24,7 @@ export function registerContentTools(server: McpServer, client: RobynnClient) {
         idempotentHint: false,
       }),
       description:
-        "Draft marketing content in your brand voice with the Robynn CMO agent. Starts an agent run that uses Robynn credits, saves the conversation to a Robynn thread (a new one unless thread_id is given; a new thread is private to you on plugin connections and visible to your organization with a CLI API key), and may use your organization's connected apps. Each call starts a new run. If the run is still going after a short wait, returns run_id; poll it with robynn_run_status.",
+        "Draft marketing content in your brand voice with the Robynn CMO agent. Starts an agent run that uses Robynn credits, saves the conversation to a Robynn thread (a new one unless thread_id is given; a new thread is private to you on plugin connections and visible to your organization with a CLI API key; anything the run saves as a Robynn artifact is visible to your organization), and may use your organization's connected apps. Each call starts a new run. If the run is still going after a short wait, returns run_id; poll it with robynn_run_status.",
       inputSchema: {
         type: z
           .enum([
