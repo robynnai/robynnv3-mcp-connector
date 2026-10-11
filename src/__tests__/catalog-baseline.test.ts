@@ -338,4 +338,23 @@ describe("P12 tool metadata (real tools/list)", () => {
     expect(exportTool.description).toMatch(/^Export /);
     expect(exportTool.description).toContain("not a publication");
   });
+
+  // P19: the app makes a thread started over a plugin (OAuth) connection
+  // private to the user (P09 PLUGIN_OAUTH_CMO_THREAD_VISIBILITY, on both the
+  // threads route and cmo/run). The tools must not promise organization-wide
+  // sharing to plugin users.
+  it("describes new CMO threads as private on plugin connections", async () => {
+    const { worker } = catalog;
+    for (const name of [
+      "robynn_create_content",
+      "robynn_research",
+      "robynn_assist",
+      "robynn_cmo_agent",
+      "robynn_conversations",
+    ]) {
+      const description = worker.find((t) => t.name === name)?.description ?? "";
+      expect(description, name).toContain("private to you on plugin connections");
+      expect(description, name).not.toMatch(/thread visible to your organization/);
+    }
+  });
 });

@@ -55,7 +55,7 @@ export function registerAssistTools(server: McpServer, client: RobynnClient) {
         idempotentHint: false,
       }),
       description:
-        "Send a general request to the Robynn CMO assistant and let Robynn choose the best routing, keeping thread history and caller hints. Starts an agent run that uses Robynn credits, saves the conversation to a thread visible to your organization (a new one unless thread_id is given), and may use your organization's connected apps. Each call starts a new run. May return response_blocks; if the run is still going after a short wait, returns run_id; poll it with robynn_run_status.",
+        "Send a general request to the Robynn CMO assistant and let Robynn choose the best routing, keeping thread history and caller hints. Starts an agent run that uses Robynn credits, saves the conversation to a Robynn thread (a new one unless thread_id is given; a new thread is private to you on plugin connections and visible to your organization with a CLI API key), and may use your organization's connected apps. Each call starts a new run. May return response_blocks; if the run is still going after a short wait, returns run_id; poll it with robynn_run_status.",
       inputSchema: {
         message: z.string().describe("The user message or request to send to Robynn"),
         thread_id: z.string().optional().describe("Continue in an existing conversation thread"),

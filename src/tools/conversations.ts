@@ -17,7 +17,7 @@ export function registerConversationTools(
         idempotentHint: false,
       }),
       description:
-        "List your organization's Robynn CMO conversation threads (action=list, read-only) or create a new thread (action=create, visible to your organization; each call creates another thread).",
+        "List your organization's Robynn CMO conversation threads (action=list, read-only) or create a new thread (action=create; each call creates another thread, private to you on plugin connections and visible to your organization with a CLI API key).",
       inputSchema: {
         action: z
           .enum(["list", "create"])
