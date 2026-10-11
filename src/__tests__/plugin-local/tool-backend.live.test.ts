@@ -590,6 +590,8 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
       const created = await call(full, "robynn_conversations", { action: "create", title });
       expectOk(created, "conversations create");
       expect(sql(`select count(*) from public.instant_agent_threads where organization_id=${lit(ORG_A)} and user_id=${lit(ALPHA.id)} and title=${q(title)}`)).toBe("1");
+      // P19: a thread created over a plugin connection is private (P09 rule).
+      expect(sql(`select visibility from public.instant_agent_threads where organization_id=${lit(ORG_A)} and title=${q(title)}`)).toBe("private");
       const listed = await call(ro, "robynn_conversations", { action: "list" });
       expectOk(listed, "conversations list");
       expect(text(listed)).toContain(title);
@@ -610,6 +612,7 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
         expect(text(reply)).toContain(FIXTURE_MARKER);
         contentRun = { run_id: data(reply).run_id, thread_id: data(reply).thread_id };
         expect(contentRun.run_id).toBeTruthy();
+        expect(sql(`select visibility from public.instant_agent_threads where id=${lit(contentRun.thread_id)}`)).toBe("private");
         const calls = fixture.since(mark);
         expect(calls.some((c) => c.method === "POST" && /\/threads\/[^/]+\/runs$/.test(c.path))).toBe(true);
         expect(calls.every((c) => c.apiKey === FIXTURE_API_KEY)).toBe(true);
@@ -677,6 +680,8 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
         expectOk(reply, "cmo_agent");
         cover("robynn_cmo_agent", "success");
         let state = data(reply);
+        // P19: cli/mcp/cmo/run now follows the private plugin thread rule too.
+        expect(sql(`select visibility from public.instant_agent_threads where id=${lit(String(state.thread_id))}`)).toBe("private");
         if (state.status === "pending") {
           const polled = await until(
             () => call(full, "robynn_run_status", { run_id: state.run_id }),
@@ -906,6 +911,7 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
 
         const unknown = await call(ro, "robynn_website_audit_v2_status", { scan_id: randomUUID() });
         expectToolError(unknown, "audit_v2_status unknown");
+        expect(text(unknown)).toContain("(not_found)"); // P19: contract §8.3, not a 500
         cover("robynn_website_audit_v2_status", "error");
       },
       LONG,
@@ -937,6 +943,7 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
 
         const unknown = await call(ro, "robynn_website_optimization_audit_status", { run_id: randomUUID() });
         expectToolError(unknown, "optimization_status unknown");
+        expect(text(unknown)).toContain("(not_found)"); // P19: contract §8.3, not a 500
         cover("robynn_website_optimization_audit_status", "error");
       },
       LONG,
@@ -965,6 +972,7 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
 
         const unknown = await call(ro, "robynn_website_audit_orchestrator_status", { run_id: randomUUID() });
         expectToolError(unknown, "orchestrator_status unknown");
+        expect(text(unknown)).toContain("(not_found)"); // P19: contract §8.3, not a 500
         cover("robynn_website_audit_orchestrator_status", "error");
       },
       LONG,
