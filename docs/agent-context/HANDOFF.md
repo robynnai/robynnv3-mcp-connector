@@ -82,3 +82,10 @@ P13 (Beads `robynn_mcp_server-b1o`, branch `plugin-v1/p13-catalog-contract`, sta
   - `robynn_status` adds `connection: { organization, permissions, can_execute }` from the preflight stamp (`src/authorization/preflight-stamp.ts`, which also feeds the Vault gate).
 - **Test hardening:** `PLUGIN_LOCAL_LIVE=1` never skips silently (`PLUGIN_LOCAL_SKIP=vault` to opt out); per-tool error canaries; `catalog-baseline` denies all network.
 - **Full handoff:** `cos-share/reports/plugin/P17-handoff.md`.
+
+## COS-PLUGIN-001 P18: Claude Code and Codex host acceptance (2026-10-10)
+
+- **Branch:** `plugin-v1/p18-acceptance`, stacked on `plugin-v1/p17-tool-integration`. Beads `robynn_mcp_server-265`.
+- **Host acceptance:** the local marketplace build (`robynn-local`, `http://localhost:8787/mcp`) was installed into Claude Code 2.1.296 and Codex CLI 0.162 and driven through OAuth, reads, a refused write, an approved write and read-back, refresh, revocation, org B isolation and uninstall against plugin-local. The harness lives in the plugin repository (`scripts/host-acceptance/`, `docs/host-acceptance.md`).
+- **Behaviour change:** Worker tool-level denials (`insufficient_scope`, `unsupported_memory_scope`, `tool_not_permitted`, `authorization_unavailable`, and the Vault gate) now put the code in the text content as `<code>: <message>`. Claude Code passes only text content to the model, so it never saw the `structuredContent.error.code` that the server instructions refer to. `structuredContent` is unchanged.
+- **Full handoff:** `cos-share/reports/plugin/P18-handoff.md`.

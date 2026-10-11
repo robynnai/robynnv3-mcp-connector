@@ -35,7 +35,7 @@ const VAULT_DENIED_MESSAGE =
 
 export function vaultDeniedResult() {
   return {
-    content: [{ type: "text" as const, text: VAULT_DENIED_MESSAGE }],
+    content: [{ type: "text" as const, text: `authorization_unavailable: ${VAULT_DENIED_MESSAGE}` }],
     structuredContent: {
       error: { code: "authorization_unavailable", message: VAULT_DENIED_MESSAGE, retryable: true },
     } as Record<string, unknown>,

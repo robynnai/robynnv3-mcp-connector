@@ -102,7 +102,10 @@ function toolErrorResult(code: ToolErrorCode, requiredScope?: OAuthScope) {
     ...(requiredScope ? { required_scope: requiredScope } : {}),
   };
   return {
-    content: [{ type: "text", text: message }],
+    // Hosts differ in what reaches the model: Claude Code passes only the
+    // text content, not structuredContent (P18). Lead with the code the
+    // server instructions name, as robynn-client's authorization_expired does.
+    content: [{ type: "text", text: `${code}: ${message}` }],
     structuredContent: { error },
     isError: true,
   };

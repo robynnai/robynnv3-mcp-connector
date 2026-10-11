@@ -314,6 +314,7 @@ describe("per-call reauthorization (contract §6.4 step 5)", () => {
     expect(out.status).toBe(200);
     expect(out.json.result.isError).toBe(true);
     expect(out.json.result.structuredContent.error).toMatchObject({ code: "authorization_unavailable", retryable: true });
+    expect(out.json.result.content[0].text).toMatch(/^authorization_unavailable: /);
     expect(businessCalls(h)).toEqual([]);
     expect(doEvents.filter((e) => e.kind === "upgrade")).toEqual([]);
     // Not revoked: a transient outage must not end the connection.
@@ -335,6 +336,8 @@ describe("per-call reauthorization (contract §6.4 step 5)", () => {
       const out = await callTool(h, a.access, sessionId, name, args);
       expect(out.json.result.isError).toBe(true);
       expect(out.json.result.structuredContent.error).toMatchObject({ code: "insufficient_scope", required_scope: "tools:execute" });
+      // Text-only hosts (Claude Code) must still see the code the server instructions name.
+      expect(out.json.result.content[0].text).toMatch(/^insufficient_scope: This connection is read-only\./);
     }
     expect(businessCalls(h)).toEqual([]);
 
@@ -349,6 +352,7 @@ describe("per-call reauthorization (contract §6.4 step 5)", () => {
     h.app.calls.length = 0;
     const session = await callTool(h, a.access, sessionId, "robynn_memory_get", { scope: "session", key: "k" });
     expect(session.json.result.structuredContent.error.code).toBe("unsupported_memory_scope");
+    expect(session.json.result.content[0].text).toMatch(/^unsupported_memory_scope: /);
     const unknown = await callTool(h, a.access, sessionId, "robynn_admin_everything");
     expect(unknown.json.result.structuredContent.error.code).toBe("tool_not_permitted");
     expect(businessCalls(h)).toEqual([]);
