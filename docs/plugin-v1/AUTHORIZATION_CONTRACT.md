@@ -167,6 +167,8 @@ type RobynnCredential =
 
 `reason` ∈ `grant_not_found`, `grant_revoked`, `grant_expired`, `identity_mismatch` (tuple doesn't match the stored grant), `membership_inactive`, `user_disabled`, `credential_version_stale` (request `credential_version` ≠ `oauth_grants.credential_version`).
 
+**P19 note (`user_disabled`):** reserved and **not emitted in v1**. Neither introspection nor the app's route guard checks Supabase Auth bans (`auth.users.banned_until`). Banning an auth user therefore does not by itself end a plugin connection: offboarding must remove the membership (`membership_inactive`) or revoke the grant (`/api/user/connected-apps`, admin revocation), which takes effect at the connection's next tool call. Hard deletion of the user removes the grant and its memberships. A Worker that receives `user_disabled` treats it like any other inactive reason (revoke, `401`).
+
 **Errors:** `401 invalid_client` (signature), `400 invalid_request` (malformed body), `429` (rate limit), `5xx` ⇒ Worker treats as `authorization_unavailable` (fail closed, retryable).
 
 ## 6. Worker request pipeline (P06 + P10)
@@ -290,9 +292,18 @@ The text content repeats the code as `<code>: <message>` (P18). Claude Code pass
 | `authorization_expired` | 401 | upstream token expired mid-session; host refresh will renew |
 | `not_found` | 404 | object id not found **or not owned by the bound org/user** (no ownership oracle) |
 | `unsupported_memory_scope` | 400 | `scope:"session"` via OAuth |
-| `tool_not_permitted` | — (Worker) | tool absent from the policy map |
-| `idempotency_conflict` | 409 | reused idempotency key with a different payload (P11) |
+| `user_identity_required` | 400 | user-scoped memory requested with an organization master key, which has no user (P09) |
+| `unsupported_message_role` | 400 | `robynn_thread_append` with a role plugin connections may not write, e.g. `system` (P09) |
+| `thread_key_conflict` | 409 | the Hermes host/session key already belongs to another user's thread in this org (P09) |
+| `tool_not_permitted` | — (Worker), 403 (app) | tool absent from the policy map; app `/api/publish`: a platform other than the Strapi draft hop (P07, `error_code: platform_not_permitted`) |
+| `idempotency_key_reused` | 409 | connector action key reused with a different request or by a different user; nothing replayed or executed (P11) |
+| `idempotency_in_progress` | 409 | the same request is still executing; resend the same request to poll (retryable, P11) |
+| `idempotency_outcome_unknown` | 409 | an earlier attempt may have reached the provider; check the app before using a new key (P11) |
+| `connector_outcome_unknown` | 502 | the provider call failed after it may have applied (P11) |
+| `connector_unavailable` | 503 | failed before any provider call; safe to resend the same key (P11) |
 | `environment_not_eligible` | 403 | existing `robynn-ai` environment gate (not an authorization substitute) |
+
+P19 replaced the placeholder `idempotency_conflict` row with the codes P11 shipped. `not_found` now also covers the website scan pollers (`robynn_website_audit_v2_status`, `robynn_website_optimization_audit_status`, `robynn_website_audit_orchestrator_status`) and a foreign `site_id` on the website audit starters; they used to answer 500.
 
 ## 9. Test obligations handed to later packages
 

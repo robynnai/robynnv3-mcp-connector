@@ -167,4 +167,4 @@ Round 1 hardening (P06 review B1):
 - **P12:** tool metadata.
 - **Model-facing errors:** `RobynnClient` still throws `API error <status>: <body>` into tool results (`src/robynn-client.ts`). Sanitizing tool errors belongs to P11, which owns that file, or to P10/P12.
 - **`RobynnClient` logs:** its raw `console.*` calls log the request `path` including query strings (`src/robynn-client.ts:132-165`), for example memory scope/key or audit ids. Owner: P11.
-- **Report app copy:** `src/ui/report-app-script.ts` still says "Run a report from Claude…". Owner: P12/P15 (host-neutral copy).
+- **Report app copy:** fixed in P19. The empty state in `src/ui/report-app-script.ts` now reads "Run this report from your AI assistant…" and `src/ui/report-app.test.ts` keeps the runtime free of host names.

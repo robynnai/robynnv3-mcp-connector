@@ -22,7 +22,7 @@ App counterpart: robynnv3 `POST /api/oauth/introspect` (branch `plugin-v1/p10-in
 
    | Introspection | Result |
    |---|---|
-   | inactive (`grant_revoked`, `grant_expired`, `grant_not_found`, `identity_mismatch`, `membership_inactive`, `user_disabled`) | provider grant revoked; `401 invalid_token` |
+   | inactive (`grant_revoked`, `grant_expired`, `grant_not_found`, `identity_mismatch`, `membership_inactive`, `user_disabled`; the last is reserved and not emitted by the app in v1, see AUTHORIZATION_CONTRACT §5) | provider grant revoked; `401 invalid_token` |
    | inactive `credential_version_stale` | `401 invalid_token`; the grant is **kept**, so the host's refresh picks up the new version |
    | unavailable (network, non-200, malformed, secret unset) | MCP tool error `authorization_unavailable` (retryable); nothing is forwarded; nothing is revoked |
    | active, but the tool's scope ∉ `effective` | tool error `insufficient_scope` with `required_scope` |

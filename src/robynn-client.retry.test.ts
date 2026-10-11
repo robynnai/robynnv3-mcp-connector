@@ -25,8 +25,8 @@ const MAP = JSON.parse(
 // Routes the map lists that the Worker never calls directly: R2 bindings and
 // app-internal hops made by another app route.
 const NOT_CALLED_BY_CLIENT = new Set([
-  "R2 VAULT binding: list {organizationId}/…",
-  "R2 VAULT binding: get {organizationId}/{path}",
+  "R2 VAULT binding: list orgs/{organizationId}/…",
+  "R2 VAULT binding: get orgs/{organizationId}/{path}",
   "POST /api/agents/geo/execute",
   "POST /api/agents/seo/execute",
   "POST /api/publish",

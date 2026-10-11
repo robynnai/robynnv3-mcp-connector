@@ -869,7 +869,7 @@ export const REPORT_APP_SCRIPT = String.raw`
     }
 
     if (!state.result) {
-      return '<section class="report-section"><div class="empty-state">Run a report from Claude to see the interactive view here.</div></section>';
+      return '<section class="report-section"><div class="empty-state">Run this report from your AI assistant to see the interactive view here.</div></section>';
     }
 
     if (config.reportType === 'geo') return renderGeoReport(state.result);

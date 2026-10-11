@@ -28,7 +28,7 @@
  */
 import { createCipheriv, randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -336,6 +336,17 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
     sql(`update public.organizations set purchased_tokens = 100000, subscription_tokens = 0, token_balance = 0 where id in (${lit(ORG_A)}, ${lit(ORG_B)})`);
     // Re-runnable: a previous run's 5-minute reflections cooldown would refuse the first trigger.
     sql(`delete from public.brand_hub_docs_changelog_trigger_rate_limits where organization_id in (${lit(ORG_A)}, ${lit(ORG_B)})`);
+    // P19 review N4 (P18 finding 2): the P02 seed has nothing the brand-context
+    // search can rank. One synthetic, active brand rule per org, local DB only.
+    sql(`delete from public.brand_hub_docs where document_name = 'Brand Rule' and document_value like 'P19 live fixture:%'`);
+    for (const [org, marker, phrase] of [
+      [ORG_A, "COSPLUGIN-MARKER-ORG-A", "heliotrope packet routing"],
+      [ORG_B, "COSPLUGIN-MARKER-ORG-B", "cobalt orchard telemetry"],
+    ] as const) {
+      sql(
+        `insert into public.brand_hub_docs (organization_id, document_name, document_label, document_mime, document_value, document_metadata) values (${lit(org)}, 'Brand Rule', 'Brand Rule', 'text/plain', ${q(`P19 live fixture: ${marker} always describe the product as ${phrase}.`)}, '{"rule_number": 1, "is_active": true}'::jsonb)`,
+      );
+    }
     sql(
       `insert into public.organization_websites (id, organization_id, label, base_url, hostname, is_primary, created_by) values (${lit(P17.website)}, ${lit(ORG_A)}, 'P17 synthetic site', ${q(PUBLIC_SITE_URL)}, ${q(PUBLIC_SITE_HOST)}, true, ${lit(ALPHA.id)}) on conflict (id) do nothing`,
     );
@@ -469,7 +480,10 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
     it("robynn_brand_context_search: finds the org A fixture phrase, never org B's; a blank query is refused", async () => {
       const reply = await call(ro, "robynn_brand_context_search", { query: "heliotrope packet routing" });
       expectOk(reply, "search");
-      expect(text(reply)).toMatch(/heliotrope packet routing/i);
+      // Assert on the retrieved snippets, not the echoed query (P19 review N4).
+      const snippets = (data(reply).snippets ?? []) as { content: string }[];
+      expect(snippets.some((s) => /heliotrope packet routing/i.test(s.content)), text(reply).slice(0, 600)).toBe(true);
+      expect(snippets.some((s) => /cobalt orchard telemetry|COSPLUGIN-MARKER-ORG-B/i.test(s.content))).toBe(false);
       expect(text(reply)).not.toMatch(/cobalt orchard telemetry|COSPLUGIN-MARKER-ORG-B/i);
       cover("robynn_brand_context_search", "success");
 
@@ -590,6 +604,8 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
       const created = await call(full, "robynn_conversations", { action: "create", title });
       expectOk(created, "conversations create");
       expect(sql(`select count(*) from public.instant_agent_threads where organization_id=${lit(ORG_A)} and user_id=${lit(ALPHA.id)} and title=${q(title)}`)).toBe("1");
+      // P19: a thread created over a plugin connection is private (P09 rule).
+      expect(sql(`select visibility from public.instant_agent_threads where organization_id=${lit(ORG_A)} and title=${q(title)}`)).toBe("private");
       const listed = await call(ro, "robynn_conversations", { action: "list" });
       expectOk(listed, "conversations list");
       expect(text(listed)).toContain(title);
@@ -610,6 +626,7 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
         expect(text(reply)).toContain(FIXTURE_MARKER);
         contentRun = { run_id: data(reply).run_id, thread_id: data(reply).thread_id };
         expect(contentRun.run_id).toBeTruthy();
+        expect(sql(`select visibility from public.instant_agent_threads where id=${lit(contentRun.thread_id)}`)).toBe("private");
         const calls = fixture.since(mark);
         expect(calls.some((c) => c.method === "POST" && /\/threads\/[^/]+\/runs$/.test(c.path))).toBe(true);
         expect(calls.every((c) => c.apiKey === FIXTURE_API_KEY)).toBe(true);
@@ -677,6 +694,8 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
         expectOk(reply, "cmo_agent");
         cover("robynn_cmo_agent", "success");
         let state = data(reply);
+        // P19: cli/mcp/cmo/run now follows the private plugin thread rule too.
+        expect(sql(`select visibility from public.instant_agent_threads where id=${lit(String(state.thread_id))}`)).toBe("private");
         if (state.status === "pending") {
           const polled = await until(
             () => call(full, "robynn_run_status", { run_id: state.run_id }),
@@ -906,6 +925,7 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
 
         const unknown = await call(ro, "robynn_website_audit_v2_status", { scan_id: randomUUID() });
         expectToolError(unknown, "audit_v2_status unknown");
+        expect(text(unknown)).toContain("(not_found)"); // P19: contract §8.3, not a 500
         cover("robynn_website_audit_v2_status", "error");
       },
       LONG,
@@ -937,6 +957,7 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
 
         const unknown = await call(ro, "robynn_website_optimization_audit_status", { run_id: randomUUID() });
         expectToolError(unknown, "optimization_status unknown");
+        expect(text(unknown)).toContain("(not_found)"); // P19: contract §8.3, not a 500
         cover("robynn_website_optimization_audit_status", "error");
       },
       LONG,
@@ -965,6 +986,7 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
 
         const unknown = await call(ro, "robynn_website_audit_orchestrator_status", { run_id: randomUUID() });
         expectToolError(unknown, "orchestrator_status unknown");
+        expect(text(unknown)).toContain("(not_found)"); // P19: contract §8.3, not a 500
         cover("robynn_website_audit_orchestrator_status", "error");
       },
       LONG,
@@ -1241,12 +1263,21 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
       const graphCalls = fixture.requests.filter((r) => !r.egress && !r.path.startsWith("/api/v3/") && !r.path.startsWith("/strapi/"));
       expect(graphCalls.length).toBeGreaterThan(0);
       for (const r of graphCalls) expect(r.apiKey, `${r.method} ${r.path}`).toBe(FIXTURE_API_KEY);
-      const unknown = [...fixture.runs.values()].filter((r) => r.assistantId === "unknown");
-      expect(unknown.map((r) => r.runId)).toEqual([]);
+      // Every run named a graph registered explicitly in fixture-graphs.ts; the
+      // fixture has no "*" default any more (P19 review N4, P17 review N3).
+      const unregistered = [...fixture.runs.values()].filter((r) => !fixture.isRegisteredGraph(r.assistantId));
+      expect(unregistered.map((r) => r.assistantId)).toEqual([]);
     });
 
     it("no code, state, cookie, token, password, signature or local secret seen by this suite appears in the app or Worker logs", () => {
       expect(STATE_DIR).not.toBe("");
+      // Not vacuous (P19 review N4): the app and Worker logs exist and are non-empty.
+      const logs = join(STATE_DIR, "logs");
+      expect(existsSync(logs), logs).toBe(true);
+      for (const name of ["robynnv3.log", "robynn-mcp-server.log"]) {
+        expect(existsSync(join(logs, name)), name).toBe(true);
+        expect(statSync(join(logs, name)).size, name).toBeGreaterThan(0);
+      }
       expect(logsContainingSensitiveValues()).toEqual([]);
     });
   });

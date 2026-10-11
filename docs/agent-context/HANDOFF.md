@@ -89,3 +89,16 @@ P13 (Beads `robynn_mcp_server-b1o`, branch `plugin-v1/p13-catalog-contract`, sta
 - **Host acceptance:** the local marketplace build (`robynn-local`, `http://localhost:8787/mcp`) was installed into Claude Code 2.1.296 and Codex CLI 0.162 and driven through OAuth, reads, a refused write, an approved write and read-back, refresh, revocation, org B isolation and uninstall against plugin-local. The harness lives in the plugin repository (`scripts/host-acceptance/`, `docs/host-acceptance.md`).
 - **Behaviour change:** Worker tool-level denials (`insufficient_scope`, `unsupported_memory_scope`, `tool_not_permitted`, `authorization_unavailable`, and the Vault gate) now put the code in the text content as `<code>: <message>`. Claude Code passes only text content to the model, so it never saw the `structuredContent.error.code` that the server instructions refer to. `structuredContent` is unchanged.
 - **Full handoff:** `cos-share/reports/plugin/P18-handoff.md`.
+
+## COS-PLUGIN-001 P19: release-candidate review fixes (2026-10-11)
+
+- **Branch:** `plugin-v1/p19-rc`, stacked on `plugin-v1/p18-acceptance`. Pairs with robynnv3 `plugin-v1/p19-rc`. Beads `robynn_mcp_server-cub`.
+- **Behaviour/metadata changes:**
+  - `robynn_create_content`, `robynn_research`, `robynn_assist`, `robynn_cmo_agent` and `robynn_conversations` say a new thread is private to the user on plugin connections (the app's P09 rule; robynnv3 P19 applies it to `cmo/run` too). `contracts/mcp-tools.json` regenerated; the plugin repository re-pins it.
+  - The MCP Apps report runtime no longer names a host in its empty state.
+- **Tests:** `robynn_status` reports the intersected permissions of a host token narrowed by refresh (P17 review N4); catalog guard for the thread wording; host-neutral report runtime.
+- **Docs:** AUTHORIZATION_CONTRACT §5 marks `user_disabled` as reserved (not emitted in v1) and §8.3 lists the codes the app actually ships; the route map and TOOL_CONTRACT Vault rows describe the P10 preflight and the `orgs/{org}/` prefix.
+- **RC review and GO/NO-GO:** `cos-share/reports/plugin/P19-rc-review.md`. **Full handoff:** `cos-share/reports/plugin/P19-handoff.md`.
+- **Review round 1 (P19 review):**
+  - The four run tools add that anything the run saves as a Robynn artifact is visible to the organization (review R-D1); the thread privacy claim covers the thread only. Snapshot regenerated; the plugin repository re-pins it.
+  - Live suite: the log-canary check requires non-empty app and Worker logs; the fixture has no `*` graph and the whole-run check fails on any unregistered graph id; `robynn_brand_context_search` is asserted on `snippets`, with one synthetic brand rule per org added in `beforeAll` (review N4).
