@@ -116,6 +116,8 @@ describe.skipIf(!LIVE || explicitlySkipped("discoverability-m1"))("M1: discovera
     expect(out.geo.unit).toBe("percentage_points");
     expect(out.geo.estimate).not.toBeNull();
     expect(out.geo.clusters).toBe(35);
+    // Review round 1 (B1): fixed equal prompt/engine weights, never pooled.
+    expect(out.geo.method).toBe("fixed-weight-prompt-engine-diff-pp-t90-v1");
     expect(out.crawl.status).toBe("unknown");
     expect(out.freshness).toMatchObject({ status: "partial", reason: "unavailable_sections:crawl" });
     expect(out.issues.map((i: { code: string }) => i.code)).toContain("crawl_history_unavailable");

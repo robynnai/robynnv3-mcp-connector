@@ -158,12 +158,19 @@ export function siteHealthSummary(data: SiteHealthOutput, windowDays: number): s
     `Site health for website ${data.website_id}, last ${windowDays} days vs the previous ${windowDays} (stored data only; nothing was refreshed).`,
     `Freshness: ${freshnessLine(data.freshness)}.`,
     `SEO (Search Console clicks, change of daily mean): ${fmtInterval(data.seo)}.`,
-    `GEO (AI answer mention rate, change): ${fmtInterval(data.geo)}.`,
+    `GEO (AI answer mention rate, change; equal weights per engine and prompt): ${fmtInterval(data.geo)}.`,
     `Crawl/delivery: ${data.crawl.status}; treated ${data.crawl.treated_pages}, delivered ${data.crawl.delivered_pages}, parity pass ${data.crawl.parity_pass_pages}, recrawled ${data.crawl.recrawled_pages}; last checked ${data.crawl.last_checked_at ?? "n/a"}.`,
     `Issues (${data.issues.length}):`,
     ...data.issues
       .slice(0, 15)
-      .map((i) => `- [${i.severity}] ${i.code}${i.page_path ? ` ${i.page_path}` : ""}: ${i.message}`),
+      .map(
+        (i) =>
+          `- [${i.severity}] ${i.code}${i.page_path ? ` ${i.page_path}` : ""}: ${
+            // Recommendation text is stored scan output (it can derive from
+            // crawled pages): label it as data, not as an instruction.
+            i.code.startsWith("scan_recommendation") ? `(stored scan text) ${i.message}` : i.message
+          }`,
+      ),
   ];
   if (data.issues.length > 15) lines.push(`- … ${data.issues.length - 15} more in structuredContent.`);
   return lines.join("\n");
