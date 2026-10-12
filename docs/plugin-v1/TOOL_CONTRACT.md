@@ -1,6 +1,6 @@
 # Robynn plugin v1 — tool contract (COS-PLUGIN-001 P01)
 
-Status: **baseline + P12 applied + P13 contract suite** (titles, hints and descriptions ship from `plugin-v1/p12-tool-metadata`, see §6; P01 review fixes B2 and notes 5–6 merged; the P13 catalog contract suite and committed `tools/list` snapshot are in §7). Machine-readable twin: [`contracts/tool-route-map.json`](../../contracts/tool-route-map.json).
+Status: **baseline + P12 applied + P13 contract suite + COS-PLUGIN-002 WP2-06 read tools (§8)** (titles, hints and descriptions ship from `plugin-v1/p12-tool-metadata`, see §6; P01 review fixes B2 and notes 5–6 merged; the P13 catalog contract suite and committed `tools/list` snapshot are in §7). Machine-readable twin: [`contracts/tool-route-map.json`](../../contracts/tool-route-map.json).
 Baseline: MCP Worker `85d7781`, app `6dd04bb`. Authorization rules: [`AUTHORIZATION_CONTRACT.md`](./AUTHORIZATION_CONTRACT.md).
 App-side per-route detail and owning packages: app repo `docs/plugin-v1/MCP_ROUTE_MATRIX.md`.
 
@@ -666,3 +666,23 @@ So a client path no tool reaches, a mapped route no tool calls, and a tool calli
 - **Upstream bodies in tool errors.** Tool errors echo the app's response body verbatim (`API error 403: {...}`, via `RobynnClient.fetchWithRetry`). This is already the plan §5 MUST ("sanitize tool errors"), owned by P06/P11. Add canaries to this matrix when it lands.
 - **Unauthenticated fallback.** It is still unannotated, untitled and Claude-specific; it is pinned in the snapshot's `unauthenticatedFallback`. P10 wires `registerUnauthenticatedStatusTool` and regenerates the snapshot.
 - **No annotation looked wrong** against the fixtures. The † tools remain as P12 shipped them.
+
+## 8. COS-PLUGIN-002 WP2-06: named discoverability read tools
+
+Phase 2 adds three named, read-only tools (WP2-01 `tool-contracts.md`; wire schemas vendored verbatim as [`contracts/discoverability-tools.v1.json`](../../contracts/discoverability-tools.v1.json)). The catalog is now **51** (Worker with Vault) / **49** (without Vault) / **43** (CLI); the unauthenticated fallback is still 1. The other seven Phase 2 tools (WP2-09/11) are not registered, so the preflight refuses them with `tool_not_permitted`.
+
+| # | Tool | Title | Scope | RO/D/OW/Idem | App route | Retry-safe | CLI |
+|---:|---|---|---|---|---|---|---|
+| 49 | `robynn_site_health` | Get Site Health | brand:read | T/F/F/T | POST `/api/cli/mcp/discoverability/site-health` | yes | yes |
+| 50 | `robynn_ai_visibility_trend` | Get AI Visibility Trend | brand:read | T/F/F/T | POST `/api/cli/mcp/discoverability/ai-visibility-trend` | yes | yes |
+| 51 | `robynn_site_learnings` | Get Site Learnings | brand:read | T/F/F/T | POST `/api/cli/mcp/discoverability/site-learnings` | yes | yes |
+
+- **Registrar:** M `src/tools/discoverability.ts` (Zod schemas in `src/tools/discoverability-schemas.ts`), called after the weekly visibility tools on the Worker and the CLI.
+- **Inputs are closed** (`.strict()` ⇒ `additionalProperties: false`): unknown arguments, identity arguments (`organization_id`, `user_id`, ...), bad UUIDs and out-of-range windows are refused by the SDK before any request. Defaults: `window_days` 28, `limit` 20.
+- **Outputs** are the bare success objects of the spec (no `ok`/`data` envelope), declared as `outputSchema` and validated by the SDK server-side; an app reply that does not match is not returned as success.
+- **Errors** use the §8.3 shape: `structuredContent.error = {code, message, retryable, required_scope?}` with `<code>: <message>` as text. The app's denial codes are preserved (`membership_inactive`, `role_forbidden`, `grant_revoked`, `tool_not_permitted`, `insufficient_scope` with `required_scope`, `not_found`, `invalid_request`, `authorization_unavailable`); other statuses map to `authorization_expired` (401), `validation_failed` (422), `conflict` (409) or `internal_error` (5xx/network, retryable for 429/502/503/504/network). Messages are fixed per code except the app's short `invalid_request` detail; upstream bodies, stacks and credentials never appear.
+- **Side effects:** none. The app answers from stored projections only (no refresh, provider call, charge, write, enqueue, alert or memory write). **External access:** none. **Charges:** none.
+- **Text content** summarises the numbers (hosts such as Claude Code pass only text to the model, P18); the full object is in `structuredContent`.
+- **Schema equivalence** (`src/tools/discoverability.test.ts`): one positive/negative corpus is checked against the Zod schemas, the published draft-07 `tools/list` schemas and the spec's 2020-12 bundle; all three agree. Known gap: `uniqueItems` on `competitors` cannot be emitted by zod-to-json-schema, so the published schema omits it while Zod (Worker) and the app reject duplicates; the test pins this.
+- **Live proof:** `src/__tests__/plugin-local/discoverability-m1.live.test.ts` (Milestone 1) and the three per-tool cases in `tool-backend.live.test.ts`.
+
