@@ -358,6 +358,54 @@ describe("per-call reauthorization (contract §6.4 step 5)", () => {
     expect(businessCalls(h)).toEqual([]);
   });
 
+  it("COS-PLUGIN-002 discoverability reads: brand:read admits; a scope set without brand:read and unregistered Phase 2 tools are refused before the app", async () => {
+    const h = await createHarness();
+    const a = await connect(h, { userId: USER_A, organizationId: ORG_A, appGrantId: APP_GRANT_A, scopes: ["brand:read"] });
+    const { sessionId } = await initialize(h, a.access);
+    const website_id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+    h.app.calls.length = 0;
+    for (const name of ["robynn_site_health", "robynn_ai_visibility_trend", "robynn_site_learnings"]) {
+      const ok = await callTool(h, a.access, sessionId, name, { website_id });
+      expect(ok.json.result.isError, name).toBeFalsy();
+      expect(ok.json.result.structuredContent.website_id, name).toBe(website_id);
+      expect(ok.json.result.structuredContent.freshness.status, name).toBe("unavailable");
+    }
+    expect(businessCalls(h).map((c) => c.path)).toEqual([
+      "/api/cli/mcp/discoverability/site-health",
+      "/api/cli/mcp/discoverability/ai-visibility-trend",
+      "/api/cli/mcp/discoverability/site-learnings",
+    ]);
+    // Identity is never an argument: only website_id (+ defaults) reaches the app.
+    expect(businessCalls(h)[0].body).toEqual({ website_id, window_days: 28 });
+
+    // The app reports an effective set without brand:read: the exact Phase 1
+    // preflight error, no request_id, nothing forwarded.
+    h.app.grants.get(APP_GRANT_A)!.scopes = ["tools:execute"];
+    h.app.calls.length = 0;
+    const denied = await callTool(h, a.access, sessionId, "robynn_site_health", { website_id });
+    expect(denied.json.result.isError).toBe(true);
+    expect(denied.json.result.structuredContent).toEqual({
+      error: {
+        code: "insufficient_scope",
+        message: "This connection does not include the brand:read permission. Reconnect Robynn to use this tool.",
+        retryable: false,
+        required_scope: "brand:read",
+      },
+    });
+    expect(denied.json.result.content[0].text).toMatch(/^insufficient_scope: /);
+
+    // The other seven Phase 2 tools are not registered yet: tool_not_permitted.
+    h.app.grants.get(APP_GRANT_A)!.scopes = ["brand:read", "tools:execute"];
+    for (const name of ["robynn_propose_experiments", "robynn_create_experiment", "robynn_rollback_experiment"]) {
+      const unknown = await callTool(h, a.access, sessionId, name, { website_id });
+      expect(unknown.json.result.structuredContent, name).toEqual({
+        error: { code: "tool_not_permitted", message: "This tool is not available on this Robynn connection.", retryable: false },
+      });
+    }
+    expect(businessCalls(h)).toEqual([]);
+  });
+
   it("intersects host-token, grant and current app scopes: a narrower role or a downscoped host token denies execute", async () => {
     const h = await createHarness();
     const a = await connect(h, { userId: USER_A, organizationId: ORG_A, appGrantId: APP_GRANT_A, scopes: ["brand:read", "tools:execute"] });
@@ -408,7 +456,7 @@ describe("per-call reauthorization (contract §6.4 step 5)", () => {
     const { sessionId } = await initialize(h, a.access);
     const list = await mcp(h, a.access, { jsonrpc: "2.0", id: 5, method: "tools/list", params: {} }, { "mcp-session-id": sessionId });
     expect(list.status).toBe(200);
-    expect(list.json.result.tools).toHaveLength(48);
+    expect(list.json.result.tools).toHaveLength(51);
     expect(h.app.calls).toEqual([]);
   });
 });

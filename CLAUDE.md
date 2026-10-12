@@ -214,6 +214,7 @@ GEO, SEO, battlecard, brand-book, website audit/strategy, content plan, weekly v
 | `src/tools/seo.ts` | `robynn_seo_opportunities` (app tool) |
 | `src/tools/brand-book.ts` | Brand book tools (app tools) |
 | `src/tools/website.ts` | Website audit/strategy tools (app tools) |
+| `src/tools/discoverability.ts` | COS-PLUGIN-002 named read tools `robynn_site_health`, `robynn_ai_visibility_trend`, `robynn_site_learnings` (stored projections only; schemas in `discoverability-schemas.ts`, spec bundle `contracts/discoverability-tools.v1.json`) |
 | `src/tools/cmo-text.ts` | Text fallback summarizer for AGUI `response_blocks` |
 | `src/ui/report-app.ts` | Registers MCP App report resources (`ui://reports/*.html`) + `REPORT_RESOURCE_URIS` |
 | `src/ui/report-app-script.ts` | Shared browser runtime for the interactive report apps |

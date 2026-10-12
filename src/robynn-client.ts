@@ -62,6 +62,14 @@ import type {
   StrapiDraftPublishRequest,
   StrapiDraftPublishResult,
 } from './types';
+import type {
+  AiVisibilityTrendInput,
+  AiVisibilityTrendOutput,
+  SiteHealthInput,
+  SiteHealthOutput,
+  SiteLearningsInput,
+  SiteLearningsOutput,
+} from './tools/discoverability-schemas';
 
 import { errorKind, redactLogString, safeLog } from './safe-log';
 
@@ -725,6 +733,36 @@ export class RobynnClient {
       method: "POST",
       body: JSON.stringify(payload),
     }, POLL_TIMEOUT_MS, RETRY_SAFE);
+  }
+
+  /**
+   * COS-PLUGIN-002 discoverability reads (stored projections only). The app
+   * answers with the bare success object (no `{ success, data }` envelope);
+   * failures throw RobynnApiError with the app's status and code.
+   */
+  async discoverabilitySiteHealth(payload: SiteHealthInput): Promise<SiteHealthOutput> {
+    return this.fetch("/api/cli/mcp/discoverability/site-health", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, READ_TIMEOUT_MS, RETRY_SAFE);
+  }
+
+  async discoverabilityAiVisibilityTrend(
+    payload: AiVisibilityTrendInput
+  ): Promise<AiVisibilityTrendOutput> {
+    return this.fetch("/api/cli/mcp/discoverability/ai-visibility-trend", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, READ_TIMEOUT_MS, RETRY_SAFE);
+  }
+
+  async discoverabilitySiteLearnings(
+    payload: SiteLearningsInput
+  ): Promise<SiteLearningsOutput> {
+    return this.fetch("/api/cli/mcp/discoverability/site-learnings", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, READ_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** Create a new conversation thread */

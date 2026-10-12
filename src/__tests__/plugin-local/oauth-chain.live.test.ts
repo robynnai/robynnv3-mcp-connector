@@ -168,7 +168,7 @@ describe.skipIf(!LIVE)("plugin-local: host OAuth chain end to end (real app, Wor
       const session = await openSession(conn.access);
       conn = { ...conn, session };
       const tools = await listTools(conn.access, session);
-      expect(tools.json?.result?.tools?.length).toBe(48);
+      expect(tools.json?.result?.tools?.length).toBe(51);
       const context = await callTool(conn.access, session, "robynn_brand_context", { scope: "summary" });
       expect(toolOk(context)).toBe(true);
       const text = JSON.stringify(context.json?.result);

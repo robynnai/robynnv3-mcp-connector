@@ -11,7 +11,7 @@
  * a Strapi endpoint and the app's egress proxy (deterministic outputs; no
  * real agent, LLM or provider; nothing leaves the machine).
  *
- * For each of the 48 tools:
+ * For each of the 51 tools (48 Phase 1 + 3 COS-PLUGIN-002 reads):
  *   - success: a real call, its result checked, and selected persistence read
  *     back from Postgres;
  *   - error: a deterministic failure (bad input refused by the app or Worker,
@@ -307,7 +307,7 @@ async function until<T>(probe: () => Promise<T>, done: (value: T) => boolean, ti
   return value;
 }
 
-describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and deterministic backends (P17)", () => {
+describe.skipIf(!LIVE)("plugin-local: all 51 tools against the real app, DB and deterministic backends (P17)", () => {
   beforeAll(async () => {
     // The fixture env must be in the running app (else LangGraph/Composio calls would be keyless or leave the machine).
     // The dummy LangGraph key is remembered as a log canary; the rest is non-secret config.
@@ -823,6 +823,27 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
       expect(text(unknown)).toMatch(/not.?found|404/i);
       cover("robynn_weekly_visibility_report", "error");
     });
+
+    // COS-PLUGIN-002 WP2-06: stored-projection reads. The P17 website has no
+    // discoverability history, so success is an honest "unavailable" answer;
+    // M1 history is proven in discoverability-m1.live.test.ts.
+    it.each(["robynn_site_health", "robynn_ai_visibility_trend", "robynn_site_learnings"])(
+      "%s: stored-projection read (read-only grant) writes nothing; an unknown website is not_found",
+      async (tool) => {
+        const before = businessSnapshot();
+        const reply = await call(ro, tool, { website_id: P17.website });
+        expectOk(reply, tool);
+        expect(data(reply).website_id).toBe(P17.website);
+        expect(data(reply).freshness.status).toBe("unavailable");
+        cover(tool, "success");
+
+        const unknown = await call(ro, tool, { website_id: randomUUID() });
+        expectToolError(unknown, `${tool} unknown`);
+        expect(toolErrorCode(unknown)).toBe("not_found");
+        cover(tool, "error");
+        expect(businessSnapshot()).toEqual(before);
+      },
+    );
   });
 
   // =========================================================================
@@ -1245,8 +1266,8 @@ describe.skipIf(!LIVE)("plugin-local: all 48 tools against the real app, DB and 
   // =========================================================================
 
   describe("whole run", () => {
-    it("every one of the 48 tools proved success, error and permission-denied live", () => {
-      expect(ALL_TOOLS).toHaveLength(48);
+    it("every one of the 51 tools proved success, error and permission-denied live", () => {
+      expect(ALL_TOOLS).toHaveLength(51);
       const missing = ALL_TOOLS.flatMap((tool) =>
         (["success", "error", "denied"] as const).filter((o) => !covered.get(tool)!.has(o)).map((o) => `${tool}:${o}`),
       );

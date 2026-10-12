@@ -1,5 +1,5 @@
 {
-  "$comment": "COS-PLUGIN-001 tool → app route map (P01, updated by P12 and P13). Verified against the real tools/list by src/__tests__/catalog-baseline.test.ts and src/__tests__/catalog-contract.test.ts (P13), which also check that each tool calls exactly its appRoutes; the sanitized tools/list snapshot is contracts/mcp-tools.json. Paths in appRoutes[].file are relative to the robynnv3 app repo unless prefixed 'mcp:' in gaps. titleProposal = the shipped tool title (top-level and annotations.title). currentHints = annotations the code declares; proposedHints = target against today's backend (equal to currentHints after P12); hintsAfterP07 / requiredScopeAfterP07 = target once P07 removes the write named in `conditional` (the five † tools). pairedWith is an array of tool names. inputSchemaDigest = sha256 of the tools/list inputSchema with every string-valued 'description' key removed (sorted-key compact JSON).",
+  "$comment": "COS-PLUGIN-001 tool → app route map (P01, updated by P12 and P13). Verified against the real tools/list by src/__tests__/catalog-baseline.test.ts and src/__tests__/catalog-contract.test.ts (P13), which also check that each tool calls exactly its appRoutes; the sanitized tools/list snapshot is contracts/mcp-tools.json. Paths in appRoutes[].file are relative to the robynnv3 app repo unless prefixed 'mcp:' in gaps. titleProposal = the shipped tool title (top-level and annotations.title). currentHints = annotations the code declares; proposedHints = target against today's backend (equal to currentHints after P12); hintsAfterP07 / requiredScopeAfterP07 = target once P07 removes the write named in `conditional` (the five † tools). pairedWith is an array of tool names. inputSchemaDigest = sha256 of the tools/list inputSchema with every string-valued 'description' key removed (sorted-key compact JSON). COS-PLUGIN-002 WP2-06 added robynn_site_health, robynn_ai_visibility_trend and robynn_site_learnings (WP2-01 tool-contracts.md route-map additions; app policy rows in MCP_ROUTE_POLICIES).",
   "baseline": {
     "mcpWorker": "85d7781add2914815e7fc48459645c2b4edb4095",
     "app": "6dd04bb315f20ca53612cd0a2aa0951da020ed78",
@@ -7,9 +7,9 @@
     "p12": "titles, hints and descriptions applied (plugin-v1/p12-tool-metadata)"
   },
   "counts": {
-    "worker": 48,
-    "workerWithoutVault": 46,
-    "cli": 40
+    "worker": 51,
+    "workerWithoutVault": 49,
+    "cli": 43
   },
   "scopes": {
     "brand:read": "approved reads of existing org data; no charge; no third-party writes",
@@ -2098,6 +2098,129 @@
           "resolution": "fixed in P12: openWorldHint true; description discloses live Google Search Console/GA4 reads"
         }
       ]
+    },
+    {
+      "name": "robynn_site_health",
+      "titleProposal": "Get Site Health",
+      "registrar": "src/tools/discoverability.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "inputSchemaDigest": "sha256:ba1d9f34fd25b5ac5e58212471ad5d4d1271bb56d168e89986296166b97f802d",
+      "hintEvidence": "Stored projections or deterministic in-memory validation only; no product writes, provider calls or billing.",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/discoverability/site-health",
+          "file": "src/routes/api/cli/mcp/discoverability/site-health/+server.ts",
+          "authHelper": "requireMcpOperation"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none; provider cost is an estimate for later approved work",
+      "externalAccess": "none",
+      "objectOwnership": "bound org, canonical website, all referenced objects same site",
+      "retrySafe": true,
+      "pairedWith": [],
+      "environmentGate": null,
+      "gaps": []
+    },
+    {
+      "name": "robynn_ai_visibility_trend",
+      "titleProposal": "Get AI Visibility Trend",
+      "registrar": "src/tools/discoverability.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "inputSchemaDigest": "sha256:76513924ce05f36bc93d499fe66c7e2a2f8a539d89588e8f469598efeebff479",
+      "hintEvidence": "Stored projections or deterministic in-memory validation only; no product writes, provider calls or billing.",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/discoverability/ai-visibility-trend",
+          "file": "src/routes/api/cli/mcp/discoverability/ai-visibility-trend/+server.ts",
+          "authHelper": "requireMcpOperation"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none; provider cost is an estimate for later approved work",
+      "externalAccess": "none",
+      "objectOwnership": "bound org, canonical website, all referenced objects same site",
+      "retrySafe": true,
+      "pairedWith": [],
+      "environmentGate": null,
+      "gaps": []
+    },
+    {
+      "name": "robynn_site_learnings",
+      "titleProposal": "Get Site Learnings",
+      "registrar": "src/tools/discoverability.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "inputSchemaDigest": "sha256:22f1674e6659698d955f747218ef21ced49641d7113a0f050786e391120062a8",
+      "hintEvidence": "Stored projections or deterministic in-memory validation only; no product writes, provider calls or billing.",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/discoverability/site-learnings",
+          "file": "src/routes/api/cli/mcp/discoverability/site-learnings/+server.ts",
+          "authHelper": "requireMcpOperation"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none; provider cost is an estimate for later approved work",
+      "externalAccess": "none",
+      "objectOwnership": "bound org, canonical website, all referenced objects same site",
+      "retrySafe": true,
+      "pairedWith": [],
+      "environmentGate": null,
+      "gaps": []
     },
     {
       "name": "robynn_capabilities",

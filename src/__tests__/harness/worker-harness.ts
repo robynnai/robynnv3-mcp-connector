@@ -298,6 +298,10 @@ export function installAppFetch(app: App) {
       if (url.pathname === "/api/cli/context/summary") {
         return Response.json({ success: true, data: { name: "Synthetic Org" } });
       }
+      if (url.pathname.startsWith("/api/cli/mcp/discoverability/")) {
+        // COS-PLUGIN-002 WP2-06: a valid bare "nothing stored" answer.
+        return Response.json(discoverabilityNothingStored(url.pathname, body?.website_id));
+      }
       if (url.pathname === "/api/cli/mcp/memory" || url.pathname.startsWith("/api/cli/")) {
         return Response.json({ success: true, data: {} });
       }
@@ -306,6 +310,46 @@ export function installAppFetch(app: App) {
   );
 }
 
+
+const UNAVAILABLE = { generated_at: null, as_of: null, status: "unavailable", reason: "projection_missing" };
+const EMPTY_INTERVAL = {
+  estimate: null,
+  lower90: null,
+  upper90: null,
+  unit: "fraction",
+  method: "unavailable:projection_missing",
+  evidence_label: "descriptive",
+  expected_n: 0,
+  observed_n: 0,
+  clusters: 0,
+};
+
+/** Bare success objects of the three discoverability read routes with nothing stored. */
+export function discoverabilityNothingStored(pathname: string, websiteId: unknown) {
+  const website_id = typeof websiteId === "string" ? websiteId : "00000000-0000-4000-8000-000000000000";
+  if (pathname.endsWith("/site-health")) {
+    return {
+      website_id,
+      issues: [],
+      seo: { ...EMPTY_INTERVAL, unit: "percent" },
+      geo: { ...EMPTY_INTERVAL, unit: "percentage_points" },
+      crawl: {
+        treated_pages: 0,
+        delivered_pages: 0,
+        parity_pass_pages: 0,
+        recrawled_pages: 0,
+        exposure_eligible_pages: 0,
+        status: "unknown",
+        last_checked_at: null,
+      },
+      freshness: UNAVAILABLE,
+    };
+  }
+  if (pathname.endsWith("/ai-visibility-trend")) {
+    return { website_id, panel_id: null, series: [], provider_snapshots: [], freshness: UNAVAILABLE };
+  }
+  return { website_id, items: [], next_cursor: null, freshness: UNAVAILABLE };
+}
 
 /**
  * The app's consent action for a signed-in member (P04/P05): creates the
