@@ -31,6 +31,89 @@ export interface ToolFixture extends Omit<ToolCall, "label"> {
   reply?: (request: AppRequest) => unknown;
 }
 
+const PANEL_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const FRESH = {
+  generated_at: "2026-10-09T00:00:00.000Z",
+  as_of: "2026-10-08T22:01:00.000Z",
+  status: "available",
+  reason: null,
+};
+const interval = (estimate: number | null, unit = "fraction") => ({
+  estimate,
+  lower90: estimate,
+  upper90: estimate,
+  unit,
+  method: "prompt-clustered-ratio-t90-v1",
+  evidence_label: "descriptive",
+  expected_n: 12,
+  observed_n: 12,
+  clusters: 4,
+});
+
+/**
+ * COS-PLUGIN-002 WP2-06: bare success objects of the discoverability read
+ * routes (no `{ success, data }` envelope); they must satisfy the tools'
+ * output schemas, which the SDK validates server-side.
+ */
+export const discoverabilityReplies = {
+  siteHealth: () => ({
+    website_id: WEBSITE_ID,
+    issues: [{ code: "seo_history_unavailable", severity: "info", page_path: null, message: P13_MARKER, evidence: [] }],
+    seo: interval(4.2, "percent"),
+    geo: interval(-1.5, "percentage_points"),
+    crawl: {
+      treated_pages: 0,
+      delivered_pages: 0,
+      parity_pass_pages: 0,
+      recrawled_pages: 0,
+      exposure_eligible_pages: 0,
+      status: "unknown",
+      last_checked_at: null,
+    },
+    freshness: FRESH,
+  }),
+  aiVisibilityTrend: () => ({
+    website_id: WEBSITE_ID,
+    panel_id: PANEL_ID,
+    series: [
+      {
+        engine: "perplexity",
+        topic: P13_MARKER,
+        observation_kind: "fresh_answer_run",
+        mention: interval(0.4),
+        citation: interval(0.2),
+        share_of_voice: interval(0.5),
+        fact_errors: 0,
+        freshness: FRESH,
+        entity_domain: "acme.example",
+        metric_coverage: { expected: 12, mention_observed: 12, citation_observed: 10 },
+      },
+    ],
+    provider_snapshots: [
+      { platform: "google", observation_kind: "provider_snapshot", distinct_records: 2, provider_observed_at: null, freshness: FRESH },
+    ],
+    freshness: FRESH,
+  }),
+  siteLearnings: () => ({
+    website_id: WEBSITE_ID,
+    items: [
+      {
+        id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+        experiment_id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+        type: "faq",
+        page_types: ["blog"],
+        summary: P13_MARKER,
+        effect: interval(6, "percentage_points"),
+        evidence: [],
+        memory_status: "written",
+        created_at: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    next_cursor: null,
+    freshness: FRESH,
+  }),
+};
+
 /** The `{ success, data }` envelope most `/api/cli/*` and CMO routes return. */
 export const genericSuccess = () => ({
   success: true,
@@ -130,6 +213,41 @@ export const TOOL_FIXTURES: Record<string, ToolFixture> = {
         next_steps: [],
       },
     }),
+  },
+  robynn_site_health: {
+    args: { website_id: WEBSITE_ID },
+    variants: [{ label: "focus and window", args: { website_id: WEBSITE_ID, focus: "geo", window_days: 7 }, forwards: [WEBSITE_ID, "geo"] }],
+    reply: discoverabilityReplies.siteHealth,
+    rejected: [
+      { label: "unknown argument", args: { website_id: WEBSITE_ID, organization_id: WEBSITE_ID }, reason: schemaRejects("organization_id") },
+      { label: "window below 7 days", args: { website_id: WEBSITE_ID, window_days: 6 }, reason: schemaRejects("window_days") },
+      { label: "non-uuid website", args: { website_id: "not-a-uuid" }, reason: schemaRejects("website_id") },
+    ],
+  },
+  robynn_ai_visibility_trend: {
+    args: { website_id: WEBSITE_ID },
+    variants: [
+      {
+        label: "filters",
+        args: { website_id: WEBSITE_ID, panel_id: PANEL_ID, engines: ["perplexity"], competitors: ["rival.example"] },
+        forwards: [WEBSITE_ID, PANEL_ID, "perplexity", "rival.example"],
+      },
+    ],
+    reply: discoverabilityReplies.aiVisibilityTrend,
+    rejected: [
+      { label: "unknown engine", args: { website_id: WEBSITE_ID, engines: ["bing"] }, reason: schemaRejects("engines") },
+      { label: "empty competitor list", args: { website_id: WEBSITE_ID, competitors: [] }, reason: schemaRejects("competitors") },
+      { label: "duplicate competitors", args: { website_id: WEBSITE_ID, competitors: ["a.example", "a.example"] }, reason: schemaRejects("competitors") },
+    ],
+  },
+  robynn_site_learnings: {
+    args: { website_id: WEBSITE_ID },
+    variants: [{ label: "filters and page", args: { website_id: WEBSITE_ID, type: "faq", page_type: "blog", limit: 5, cursor: "opaque-cursor" } }],
+    reply: discoverabilityReplies.siteLearnings,
+    rejected: [
+      { label: "limit above 50", args: { website_id: WEBSITE_ID, limit: 51 }, reason: schemaRejects("limit") },
+      { label: "unknown type", args: { website_id: WEBSITE_ID, type: "popup" }, reason: schemaRejects("type") },
+    ],
   },
   robynn_capabilities: { args: {} },
   robynn_brand_source_add: {

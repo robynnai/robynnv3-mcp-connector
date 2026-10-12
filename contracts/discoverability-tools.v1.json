@@ -1,0 +1,1774 @@
+{
+  "$comment": "COS-PLUGIN-002 WP2-01 tool-contracts.md semantic JSON Schema bundle (Draft 2020-12, draft-07-compatible subset), copied verbatim from cos-share/plans/plugin2/specs/tool-contracts.md revision r1 (file sha256 e0c97d0a789fd4d3bfc023719dfce10704df6e915748343604a9bf13e76a5dcd). Source of truth for the discoverability tools' semantics; src/tools/discoverability.test.ts checks the registered Zod schemas and the generated tools/list schemas against it with one corpus. Do not edit by hand; re-copy from the spec.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:robynn:discoverability:tools:v1",
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "engine": {
+      "type": "string",
+      "enum": [
+        "chatgpt",
+        "claude",
+        "gemini",
+        "perplexity"
+      ]
+    },
+    "experiment_type": {
+      "type": "string",
+      "enum": [
+        "title_meta",
+        "answer_first",
+        "evidence_block",
+        "faq",
+        "brand_fact",
+        "structured_data",
+        "internal_links",
+        "comparison_page"
+      ]
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^/(?!/)[^?#\\\\]*$"
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "scan",
+            "gsc",
+            "panel",
+            "crawl",
+            "claim",
+            "experiment"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "observed_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "summary",
+        "observed_at"
+      ],
+      "additionalProperties": false
+    },
+    "freshness": {
+      "type": "object",
+      "properties": {
+        "generated_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "as_of": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "available",
+            "stale",
+            "partial",
+            "unavailable"
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "generated_at",
+        "as_of",
+        "status",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "interval": {
+      "type": "object",
+      "properties": {
+        "estimate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lower90": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "upper90": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "percent",
+            "percentage_points",
+            "fraction",
+            "count"
+          ]
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "evidence_label": {
+          "type": "string",
+          "enum": [
+            "randomized",
+            "observational",
+            "descriptive"
+          ]
+        },
+        "expected_n": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "observed_n": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "clusters": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "estimate",
+        "lower90",
+        "upper90",
+        "unit",
+        "method",
+        "evidence_label",
+        "expected_n",
+        "observed_n",
+        "clusters"
+      ],
+      "additionalProperties": false
+    },
+    "issue": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warning",
+            "blocker"
+          ]
+        },
+        "page_path": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/path"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          },
+          "minItems": 0,
+          "maxItems": 20
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "page_path",
+        "message",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "valid": {
+          "type": "boolean"
+        },
+        "report_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "validator_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/issue"
+          },
+          "minItems": 0,
+          "maxItems": 100
+        },
+        "claim_version_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 0,
+          "maxItems": 100
+        },
+        "content_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "evidence_freshness": {
+          "$ref": "#/$defs/freshness"
+        }
+      },
+      "required": [
+        "valid",
+        "report_hash",
+        "validator_version",
+        "issues",
+        "claim_version_ids",
+        "content_hash",
+        "evidence_freshness"
+      ],
+      "additionalProperties": false
+    },
+    "cost": {
+      "type": "object",
+      "properties": {
+        "currency": {
+          "const": "USD"
+        },
+        "estimated_microusd": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maximum_microusd": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "budget_remaining_microusd": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rate_card_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "credits_charged": {
+          "const": false
+        }
+      },
+      "required": [
+        "currency",
+        "estimated_microusd",
+        "maximum_microusd",
+        "budget_remaining_microusd",
+        "rate_card_version",
+        "credits_charged"
+      ],
+      "additionalProperties": false
+    },
+    "change": {
+      "type": "object",
+      "properties": {
+        "page_path": {
+          "$ref": "#/$defs/path"
+        },
+        "field": {
+          "type": "string",
+          "enum": [
+            "title",
+            "meta_description",
+            "h1",
+            "intro",
+            "body_block",
+            "faq",
+            "schema_jsonld",
+            "internal_link",
+            "new_page"
+          ]
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100000
+        },
+        "selector": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "before_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "delivery_binding_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "claim_version_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 0,
+          "maxItems": 50
+        }
+      },
+      "required": [
+        "page_path",
+        "field",
+        "content",
+        "before_hash",
+        "delivery_binding_id"
+      ],
+      "additionalProperties": false
+    },
+    "proposal": {
+      "type": "object",
+      "properties": {
+        "proposal_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "diagnostic_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "title_meta",
+            "answer_first",
+            "evidence_block",
+            "faq",
+            "brand_fact",
+            "structured_data",
+            "internal_links",
+            "comparison_page"
+          ]
+        },
+        "hypothesis": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/path"
+          },
+          "minItems": 1,
+          "maxItems": 25
+        },
+        "design": {
+          "type": "string",
+          "enum": [
+            "A",
+            "B",
+            "C"
+          ]
+        },
+        "evidence_label": {
+          "type": "string",
+          "enum": [
+            "randomized",
+            "observational",
+            "descriptive"
+          ]
+        },
+        "expected_impact": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "minimum_days": {
+          "type": "integer",
+          "minimum": 21,
+          "maximum": 84
+        },
+        "cost": {
+          "$ref": "#/$defs/cost"
+        },
+        "eligibility_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "minItems": 0,
+          "maxItems": 30
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          },
+          "minItems": 0,
+          "maxItems": 20
+        }
+      },
+      "required": [
+        "proposal_id",
+        "diagnostic_hash",
+        "type",
+        "hypothesis",
+        "pages",
+        "design",
+        "evidence_label",
+        "expected_impact",
+        "minimum_days",
+        "cost",
+        "eligibility_reasons",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "guardrail": {
+      "type": "object",
+      "properties": {
+        "metric": {
+          "type": "string",
+          "enum": [
+            "conversion_rate",
+            "untreated_clicks",
+            "fact_accuracy"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "regressed",
+            "unknown"
+          ]
+        },
+        "margin": {
+          "type": "number"
+        },
+        "interval": {
+          "$ref": "#/$defs/interval"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "metric",
+        "status",
+        "margin",
+        "interval",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "delivery": {
+      "type": "object",
+      "properties": {
+        "treated_pages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "delivered_pages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "parity_pass_pages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "recrawled_pages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "exposure_eligible_pages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "verified",
+            "failed",
+            "unknown"
+          ]
+        },
+        "last_checked_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "treated_pages",
+        "delivered_pages",
+        "parity_pass_pages",
+        "recrawled_pages",
+        "exposure_eligible_pages",
+        "status",
+        "last_checked_at"
+      ],
+      "additionalProperties": false
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "pending_approval",
+        "approved",
+        "queued",
+        "delivering",
+        "measuring",
+        "paused",
+        "completed",
+        "cancelled",
+        "rollback_requested",
+        "rolling_back",
+        "rolled_back",
+        "failed"
+      ]
+    },
+    "learning": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "experiment_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "title_meta",
+            "answer_first",
+            "evidence_block",
+            "faq",
+            "brand_fact",
+            "structured_data",
+            "internal_links",
+            "comparison_page"
+          ]
+        },
+        "page_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "minItems": 0,
+          "maxItems": 30
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "effect": {
+          "$ref": "#/$defs/interval"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          },
+          "minItems": 0,
+          "maxItems": 20
+        },
+        "memory_status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "written",
+            "failed"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "experiment_id",
+        "type",
+        "page_types",
+        "summary",
+        "effect",
+        "evidence",
+        "memory_status",
+        "created_at"
+      ],
+      "additionalProperties": false
+    },
+    "status_item": {
+      "type": "object",
+      "properties": {
+        "experiment_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "website_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "days_elapsed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "post_start": {
+          "type": "string",
+          "format": "date"
+        },
+        "post_end": {
+          "type": "string",
+          "format": "date"
+        },
+        "delivery": {
+          "$ref": "#/$defs/delivery"
+        },
+        "interim": {
+          "$ref": "#/$defs/interval"
+        },
+        "conclusive": {
+          "const": false
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "minItems": 0,
+          "maxItems": 100
+        },
+        "freshness": {
+          "$ref": "#/$defs/freshness"
+        }
+      },
+      "required": [
+        "experiment_id",
+        "website_id",
+        "state",
+        "days_elapsed",
+        "post_start",
+        "post_end",
+        "delivery",
+        "interim",
+        "conclusive",
+        "warnings",
+        "freshness"
+      ],
+      "additionalProperties": false
+    },
+    "approval_link": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 2048
+    },
+    "error": {
+      "type": "object",
+      "required": [
+        "error"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "enum": [
+                "invalid_token",
+                "insufficient_scope",
+                "membership_inactive",
+                "role_forbidden",
+                "grant_revoked",
+                "authorization_expired",
+                "authorization_unavailable",
+                "tool_not_permitted",
+                "not_found",
+                "idempotency_key_reused",
+                "idempotency_in_progress",
+                "idempotency_outcome_unknown",
+                "environment_not_eligible",
+                "invalid_request",
+                "validation_failed",
+                "data_unavailable",
+                "design_ineligible",
+                "proposal_stale",
+                "conflict",
+                "internal_error"
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "required_scope": {
+              "type": "string",
+              "enum": [
+                "brand:read",
+                "tools:execute"
+              ]
+            },
+            "request_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "message",
+            "retryable"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "robynn_site_health",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "website_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "focus": {
+            "type": "string",
+            "enum": [
+              "seo",
+              "geo",
+              "both"
+            ]
+          },
+          "window_days": {
+            "type": "integer",
+            "minimum": 7,
+            "maximum": 180,
+            "default": 28
+          }
+        },
+        "required": [
+          "website_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "website_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/issue"
+            },
+            "minItems": 0,
+            "maxItems": 100
+          },
+          "seo": {
+            "$ref": "#/$defs/interval"
+          },
+          "geo": {
+            "$ref": "#/$defs/interval"
+          },
+          "crawl": {
+            "$ref": "#/$defs/delivery"
+          },
+          "freshness": {
+            "$ref": "#/$defs/freshness"
+          }
+        },
+        "required": [
+          "website_id",
+          "issues",
+          "seo",
+          "geo",
+          "crawl",
+          "freshness"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "robynn_ai_visibility_trend",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "website_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "panel_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "engines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/engine"
+            },
+            "minItems": 1,
+            "maxItems": 4
+          },
+          "window_days": {
+            "type": "integer",
+            "minimum": 7,
+            "maximum": 180,
+            "default": 28
+          },
+          "competitors": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253
+            },
+            "minItems": 1,
+            "maxItems": 10,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "website_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "website_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "panel_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "engine": {
+                  "$ref": "#/$defs/engine"
+                },
+                "topic": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "observation_kind": {
+                  "const": "fresh_answer_run"
+                },
+                "mention": {
+                  "$ref": "#/$defs/interval"
+                },
+                "citation": {
+                  "$ref": "#/$defs/interval"
+                },
+                "share_of_voice": {
+                  "$ref": "#/$defs/interval"
+                },
+                "fact_errors": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "freshness": {
+                  "$ref": "#/$defs/freshness"
+                },
+                "entity_domain": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 253
+                },
+                "metric_coverage": {
+                  "type": "object",
+                  "properties": {
+                    "expected": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "mention_observed": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "citation_observed": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "expected",
+                    "mention_observed",
+                    "citation_observed"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "engine",
+                "topic",
+                "observation_kind",
+                "mention",
+                "citation",
+                "share_of_voice",
+                "fact_errors",
+                "freshness",
+                "entity_domain",
+                "metric_coverage"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 0,
+            "maxItems": 500
+          },
+          "provider_snapshots": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "platform": {
+                  "type": "string",
+                  "enum": [
+                    "google",
+                    "chat_gpt"
+                  ]
+                },
+                "observation_kind": {
+                  "const": "provider_snapshot"
+                },
+                "distinct_records": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "provider_observed_at": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "freshness": {
+                  "$ref": "#/$defs/freshness"
+                }
+              },
+              "required": [
+                "platform",
+                "observation_kind",
+                "distinct_records",
+                "provider_observed_at",
+                "freshness"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 0,
+            "maxItems": 20
+          },
+          "freshness": {
+            "$ref": "#/$defs/freshness"
+          }
+        },
+        "required": [
+          "website_id",
+          "panel_id",
+          "series",
+          "provider_snapshots",
+          "freshness"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "robynn_propose_experiments",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "website_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "goal": {
+            "type": "string",
+            "enum": [
+              "seo_clicks",
+              "seo_ctr",
+              "geo_citation_rate",
+              "geo_mention_rate"
+            ]
+          },
+          "types": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "title_meta",
+                "answer_first",
+                "evidence_block",
+                "faq",
+                "brand_fact",
+                "structured_data",
+                "internal_links",
+                "comparison_page"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 8
+          },
+          "max": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 5
+          }
+        },
+        "required": [
+          "website_id",
+          "goal"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "website_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "proposals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/proposal"
+            },
+            "minItems": 0,
+            "maxItems": 10
+          },
+          "freshness": {
+            "$ref": "#/$defs/freshness"
+          }
+        },
+        "required": [
+          "website_id",
+          "proposals",
+          "freshness"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "robynn_check_page_content",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "website_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "page_path": {
+            "$ref": "#/$defs/path"
+          },
+          "draft": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100000
+          }
+        },
+        "required": [
+          "website_id",
+          "page_path",
+          "draft"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "$ref": "#/$defs/validation"
+      }
+    },
+    {
+      "name": "robynn_create_experiment",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "website_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "proposal_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "title_meta",
+              "answer_first",
+              "evidence_block",
+              "faq",
+              "brand_fact",
+              "structured_data",
+              "internal_links",
+              "comparison_page"
+            ]
+          },
+          "hypothesis": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/change"
+            },
+            "minItems": 1,
+            "maxItems": 100
+          },
+          "primary_metric": {
+            "type": "string",
+            "enum": [
+              "seo_clicks",
+              "seo_ctr",
+              "geo_citation_rate",
+              "geo_mention_rate"
+            ]
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          }
+        },
+        "required": [
+          "website_id",
+          "type",
+          "hypothesis",
+          "changes",
+          "idempotency_key"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "experiment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "const": "pending_approval"
+          },
+          "validation": {
+            "$ref": "#/$defs/validation"
+          },
+          "design": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ]
+          },
+          "analysis_plan_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "change_set_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "duration_days": {
+            "type": "integer",
+            "minimum": 21,
+            "maximum": 84
+          },
+          "cost": {
+            "$ref": "#/$defs/cost"
+          },
+          "approval_link": {
+            "$ref": "#/$defs/approval_link"
+          },
+          "approval_expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "state",
+          "validation",
+          "design",
+          "analysis_plan_hash",
+          "change_set_hash",
+          "duration_days",
+          "cost",
+          "approval_link",
+          "approval_expires_at"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "robynn_experiment_status",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "experiment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "website_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          },
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "required": [
+              "experiment_id"
+            ],
+            "not": {
+              "required": [
+                "website_id"
+              ]
+            }
+          },
+          {
+            "required": [
+              "website_id"
+            ],
+            "not": {
+              "required": [
+                "experiment_id"
+              ]
+            }
+          }
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/status_item"
+            },
+            "minItems": 0,
+            "maxItems": 50
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "robynn_experiment_results",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "experiment_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "experiment_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "experiment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "measuring",
+              "win",
+              "loss",
+              "neutral",
+              "inconclusive",
+              "invalid"
+            ]
+          },
+          "is_final": {
+            "type": "boolean"
+          },
+          "primary": {
+            "$ref": "#/$defs/interval"
+          },
+          "guardrails": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/guardrail"
+            },
+            "minItems": 0,
+            "maxItems": 3
+          },
+          "delivery": {
+            "$ref": "#/$defs/delivery"
+          },
+          "units": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "unit_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "arm": {
+                  "type": "string",
+                  "enum": [
+                    "treatment",
+                    "control"
+                  ]
+                },
+                "effect": {
+                  "$ref": "#/$defs/interval"
+                },
+                "warnings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "minItems": 0,
+                  "maxItems": 20
+                }
+              },
+              "required": [
+                "unit_id",
+                "arm",
+                "effect",
+                "warnings"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 0,
+            "maxItems": 100
+          },
+          "learnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/learning"
+            },
+            "minItems": 0,
+            "maxItems": 10
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "minItems": 0,
+            "maxItems": 100
+          },
+          "freshness": {
+            "$ref": "#/$defs/freshness"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "verdict",
+          "is_final",
+          "primary",
+          "guardrails",
+          "delivery",
+          "units",
+          "learnings",
+          "warnings",
+          "freshness"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "robynn_promote_experiment",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "experiment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "treated_pages",
+              "all_similar_pages"
+            ]
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "scope",
+          "idempotency_key"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_experiment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "new_experiment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "const": "pending_approval"
+          },
+          "target_pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/path"
+            },
+            "minItems": 1,
+            "maxItems": 25
+          },
+          "change_set_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "approval_link": {
+            "$ref": "#/$defs/approval_link"
+          },
+          "cost": {
+            "$ref": "#/$defs/cost"
+          }
+        },
+        "required": [
+          "request_id",
+          "source_experiment_id",
+          "new_experiment_id",
+          "state",
+          "target_pages",
+          "change_set_hash",
+          "approval_link",
+          "cost"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "robynn_rollback_experiment",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "experiment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "confirm": {
+            "const": true
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "reason",
+          "confirm",
+          "idempotency_key"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "experiment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "const": "rollback_requested"
+          },
+          "executed": {
+            "const": false
+          },
+          "approval_link": {
+            "$ref": "#/$defs/approval_link"
+          }
+        },
+        "required": [
+          "request_id",
+          "experiment_id",
+          "state",
+          "executed",
+          "approval_link"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "robynn_site_learnings",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "website_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "title_meta",
+              "answer_first",
+              "evidence_block",
+              "faq",
+              "brand_fact",
+              "structured_data",
+              "internal_links",
+              "comparison_page"
+            ]
+          },
+          "page_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          },
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "required": [
+          "website_id"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "website_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/learning"
+            },
+            "minItems": 0,
+            "maxItems": 50
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness": {
+            "$ref": "#/$defs/freshness"
+          }
+        },
+        "required": [
+          "website_id",
+          "items",
+          "next_cursor",
+          "freshness"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

@@ -149,13 +149,14 @@ const STARTER_POLLERS: Array<[starter: string, poller: string]> = [
 
 
 describe("P01 catalog baseline (real tools/list)", () => {
-  it("counts 48 Worker tools with Vault, 46 without, 40 in the local CLI", async () => {
+  it("counts 51 Worker tools with Vault, 49 without, 43 in the local CLI", async () => {
     const { worker, noVault, cli } = catalog;
 
-    expect(worker).toHaveLength(48);
-    expect(noVault).toHaveLength(46);
-    expect(cli).toHaveLength(40);
-    expect(new Set(worker.map((t) => t.name)).size).toBe(48);
+    // COS-PLUGIN-002 WP2-06 added the three discoverability read tools to every surface.
+    expect(worker).toHaveLength(51);
+    expect(noVault).toHaveLength(49);
+    expect(cli).toHaveLength(43);
+    expect(new Set(worker.map((t) => t.name)).size).toBe(51);
 
     const cliNames = new Set(cli.map((t) => t.name));
     const workerOnly = worker.map((t) => t.name).filter((n) => !cliNames.has(n)).sort();
@@ -171,16 +172,17 @@ describe("P01 catalog baseline (real tools/list)", () => {
     ]);
   });
 
-  it("records the P12 annotation catalog: 20/28 readOnly (25/23 after P07), 7 destructive, 19 openWorld, 26/16 idempotent, 48 titles", async () => {
+  it("records the annotation catalog: 23/28 readOnly (28/23 after P07), 7 destructive, 19 openWorld, 29/16 idempotent, 51 titles", async () => {
     const { worker } = catalog;
     const count = (pred: (t: (typeof worker)[number]) => boolean) => worker.filter(pred).length;
 
     // 25/23 once P07 removes both hidden writes; as shipped all five † tools are pending (20/28).
-    expect(count((t) => t.annotations?.readOnlyHint === true)).toBe(25 - PENDING_P07_COUNT);
+    // COS-PLUGIN-002 WP2-06: +3 read-only, closed-world, idempotent discoverability tools.
+    expect(count((t) => t.annotations?.readOnlyHint === true)).toBe(28 - PENDING_P07_COUNT);
     expect(count((t) => t.annotations?.readOnlyHint === false)).toBe(23 + PENDING_P07_COUNT);
     expect(count((t) => t.annotations?.destructiveHint === true)).toBe(7);
     expect(count((t) => t.annotations?.openWorldHint === true)).toBe(19);
-    expect(count((t) => t.annotations?.idempotentHint === true)).toBe(26);
+    expect(count((t) => t.annotations?.idempotentHint === true)).toBe(29);
     expect(count((t) => t.annotations?.idempotentHint === false)).toBe(16);
     expect(count((t) => t.annotations?.idempotentHint === undefined)).toBe(6);
     expect(
@@ -190,9 +192,9 @@ describe("P01 catalog baseline (real tools/list)", () => {
           typeof t.annotations?.destructiveHint === "boolean" &&
           typeof t.annotations?.openWorldHint === "boolean",
       ),
-    ).toBe(48);
-    expect(count((t) => Boolean(t.title) && t.annotations?.title === t.title)).toBe(48);
-    expect(new Set(worker.map((t) => t.title)).size).toBe(48);
+    ).toBe(51);
+    expect(count((t) => Boolean(t.title) && t.annotations?.title === t.title)).toBe(51);
+    expect(new Set(worker.map((t) => t.title)).size).toBe(51);
   });
 
   it("contracts/tool-route-map.json maps every registered tool exactly once with matching hints, title, input schema and surfaces", async () => {
@@ -200,7 +202,7 @@ describe("P01 catalog baseline (real tools/list)", () => {
     const noVault = new Set(catalog.noVault.map((t) => t.name));
     const cli = new Set(catalog.cli.map((t) => t.name));
 
-    expect(routeMap.counts).toEqual({ worker: 48, workerWithoutVault: 46, cli: 40 });
+    expect(routeMap.counts).toEqual({ worker: 51, workerWithoutVault: 49, cli: 43 });
     expect(routeMap.tools.map((t) => t.name).sort()).toEqual(worker.map((t) => t.name).sort());
 
     for (const tool of worker) {

@@ -22,6 +22,7 @@ import { registerCmoDecideTools } from '../tools/cmo-decide';
 import { registerWebsiteTools } from '../tools/website';
 import { registerContentPlanTools } from '../tools/content-plan';
 import { registerWeeklyVisibilityTools } from '../tools/weekly-visibility';
+import { registerDiscoverabilityTools } from '../tools/discoverability';
 import { registerConnectorTools } from '../tools/connectors';
 import { registerCapabilityTools } from '../tools/capabilities';
 import { registerBrandOperationTools } from '../tools/brand-operations';
@@ -163,6 +164,7 @@ program
     registerWebsiteTools(server, client, { family: "core" });
     registerContentPlanTools(server, client);
     registerWeeklyVisibilityTools(server, client);
+    registerDiscoverabilityTools(server, client);
     registerCapabilityTools(server, client);
     registerBrandOperationTools(server, client);
     registerConnectorTools(server, client);
