@@ -41,7 +41,7 @@ vi.mock("cloudflare:email", () => ({ EmailMessage: class {} }));
 
 import { APP_BASE_URL, FakeApp, startWorkerSession, type AppReply, type AppRequest } from "../__tests__/catalog-harness";
 import { discoverabilityWriteReplies, WP2_11_IDS } from "../__tests__/catalog-contract.fixtures";
-import { WRITE_DISCLOSURE } from "./discoverability";
+import { WRITE_DISCLOSURE, contentCheckSummary } from "./discoverability";
 import {
   checkPageContentInputSchema,
   checkPageContentOutputSchema,
@@ -513,3 +513,31 @@ describe("robynn_experiment_status selection is refused before any request", () 
     expect(s.requests()).toHaveLength(0);
   });
 });
+
+describe("review S4: the snapshot handles always reach the text a model sees", () => {
+  it("are listed even when 25 blockers precede them (they sort last as info)", () => {
+    const base = R.checkPageContent();
+    const blockers = Array.from({ length: 25 }, (_, i) => ({
+      code: "unsupported_claim",
+      severity: "blocker" as const,
+      page_path: "/blog/a",
+      message: `Claim ${i} needs evidence.`,
+      evidence: [],
+    }));
+    const handle = {
+      code: "stored_page_snapshot",
+      severity: "info" as const,
+      page_path: "/blog/a",
+      message: `Stored snapshot of the faq field: delivery_binding_id ${B}, before_hash ${H}, selector "#faq".`,
+      evidence: [],
+    };
+    const text = contentCheckSummary({ ...base, valid: false, issues: [...blockers, handle] } as never);
+    expect(text).toContain(`delivery_binding_id ${B}, before_hash ${H}`);
+    expect(text).toContain("… 5 more in structuredContent.");
+  });
+
+  it("says when no snapshot is stored for the page", () => {
+    expect(contentCheckSummary({ ...R.checkPageContent(), issues: [] } as never)).toMatch(/No stored page snapshot for this page/);
+  });
+});
+
