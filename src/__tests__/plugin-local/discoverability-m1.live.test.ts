@@ -93,7 +93,7 @@ describe.skipIf(!LIVE || explicitlySkipped("discoverability-m1"))("M1: discovera
   it("tools/list: the three named read tools with T/F/F/T annotations on a brand:read connection", async () => {
     const list = await listTools(alpha.access, alpha.session);
     const tools = list.json?.result?.tools as Array<{ name: string; title: string; annotations: Record<string, unknown>; outputSchema?: unknown }>;
-    expect(tools).toHaveLength(51);
+    expect(tools).toHaveLength(58);
     for (const name of TOOLS) {
       const tool = tools.find((t) => t.name === name)!;
       expect(tool, name).toBeDefined();

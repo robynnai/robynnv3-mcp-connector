@@ -9,13 +9,35 @@ import {
   DISCOVERABILITY_ERROR_CODES,
   aiVisibilityTrendInputSchema,
   aiVisibilityTrendOutputSchema,
+  checkPageContentInputSchema,
+  checkPageContentOutputSchema,
+  createExperimentInputSchema,
+  createExperimentOutputSchema,
+  experimentResultsInputSchema,
+  experimentResultsOutputSchema,
+  experimentStatusInputSchema,
+  experimentStatusOutputSchema,
+  experimentStatusSelection,
+  promoteExperimentInputSchema,
+  promoteExperimentOutputSchema,
+  proposeExperimentsInputSchema,
+  proposeExperimentsOutputSchema,
+  rollbackExperimentInputSchema,
+  rollbackExperimentOutputSchema,
   siteHealthInputSchema,
   siteHealthOutputSchema,
   siteLearningsInputSchema,
   siteLearningsOutputSchema,
   type AiVisibilityTrendOutput,
+  type CheckPageContentOutput,
+  type CreateExperimentOutput,
   type DiscoverabilityErrorCode,
+  type ExperimentResultsOutput,
+  type ExperimentStatusOutput,
   type Interval,
+  type PromoteExperimentOutput,
+  type ProposeExperimentsOutput,
+  type RollbackExperimentOutput,
   type SiteHealthOutput,
   type SiteLearningsOutput,
 } from "./discoverability-schemas";
@@ -35,12 +57,40 @@ const READ_ONLY_HINTS = {
   idempotentHint: true,
 } as const;
 
+/**
+ * The three request-writing tools (create, promote, rollback request): they
+ * save a request in Robynn only, never publish or execute anything, and are
+ * idempotent through their required idempotency_key (tool-contracts.md
+ * route-map additions: F/F/F/T, closed world, no charge).
+ */
+const REQUEST_WRITE_HINTS = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  openWorldHint: false,
+  idempotentHint: true,
+} as const;
+
 const KNOWN_CODES: ReadonlySet<string> = new Set(DISCOVERABILITY_ERROR_CODES);
+
+/** App-authored detail kept for these codes (reason codes, page paths). */
+const DETAIL_CODES: ReadonlySet<DiscoverabilityErrorCode> = new Set([
+  "invalid_request",
+  "validation_failed",
+  "data_unavailable",
+  "design_ineligible",
+  "proposal_stale",
+  "conflict",
+  "environment_not_eligible",
+  "not_found",
+  "idempotency_key_reused",
+  "idempotency_in_progress",
+  "idempotency_outcome_unknown",
+]);
 
 const ERROR_MESSAGES: Partial<Record<DiscoverabilityErrorCode, string>> = {
   invalid_token: "Robynn did not accept this connection. Reconnect Robynn.",
   insufficient_scope:
-    "This connection does not include the brand:read permission. Reconnect Robynn to use this tool.",
+    "This connection does not include the permission this tool needs. Reconnect Robynn to use this tool.",
   membership_inactive: "You are no longer an active member of this organization.",
   role_forbidden: "Your role in this organization cannot use this tool.",
   grant_revoked: "This Robynn connection is no longer active. Reconnect Robynn.",
@@ -53,6 +103,13 @@ const ERROR_MESSAGES: Partial<Record<DiscoverabilityErrorCode, string>> = {
   data_unavailable: "The stored data for this request is not available.",
   validation_failed: "The request was rejected.",
   conflict: "The request conflicts with the current state.",
+  design_ineligible: "No eligible experiment design for these pages yet.",
+  proposal_stale: "The proposal changed since it was read. Call robynn_propose_experiments again.",
+  environment_not_eligible: "This is not available for this website.",
+  idempotency_key_reused: "This idempotency_key was already used for a different request. Use a new key.",
+  idempotency_in_progress: "This request is already being processed. Retry shortly with the same idempotency_key.",
+  idempotency_outcome_unknown:
+    "The earlier request with this idempotency_key did not report its outcome. Check robynn_experiment_status before trying again with a new key.",
   internal_error: "Robynn could not read the stored history right now. Nothing was changed.",
 };
 
@@ -79,7 +136,10 @@ function apiDetail(error: RobynnApiError): string | null {
  * passes only text to the model). App HTTP status and denial codes are
  * preserved; upstream bodies, stacks and credentials never are.
  */
-export function toDiscoverabilityErrorResult(err: unknown) {
+export function toDiscoverabilityErrorResult(
+  err: unknown,
+  options: { internalMessage?: string } = {},
+) {
   let code: DiscoverabilityErrorCode = "internal_error";
   let retryable = false;
   let requiredScope: "brand:read" | "tools:execute" | undefined;
@@ -109,10 +169,18 @@ export function toDiscoverabilityErrorResult(err: unknown) {
     if (err.requiredScope === "brand:read" || err.requiredScope === "tools:execute") {
       requiredScope = err.requiredScope;
     }
-    if (code === "invalid_request" && err.status > 0 && err.status < 500) {
+    // App-authored, bounded detail (reason codes, page paths) for the codes
+    // an agent can act on; never for authorization or internal failures.
+    if (DETAIL_CODES.has(code) && err.status > 0 && err.status < 600 && err.code === code) {
+      message = apiDetail(err) ?? undefined;
+    } else if (code === "invalid_request" && err.status > 0 && err.status < 500) {
       message = apiDetail(err) ?? undefined;
     }
+    if (code === "insufficient_scope" && requiredScope) {
+      message = `This connection does not include the ${requiredScope} permission. Reconnect Robynn to use this tool.`;
+    }
   }
+  if (code === "internal_error" && options.internalMessage) message ??= options.internalMessage;
   message ??= ERROR_MESSAGES[code] ?? "The request was rejected.";
   const error = {
     code,
@@ -216,6 +284,96 @@ export function learningsSummary(data: SiteLearningsOutput): string {
   return lines.join("\n");
 }
 
+/**
+ * tool-contracts.md: every write tool discloses that it saves a request in
+ * Robynn, charges no credits, needs human approval, publishes nothing, and
+ * names robynn_experiment_status.
+ */
+export const WRITE_DISCLOSURE =
+  "This saves a request in Robynn only: no credits are charged, nothing is published, and a person with the admin role must approve it in Robynn (the agent cannot approve). Follow it with robynn_experiment_status.";
+
+const MISSING = "n/a";
+
+export function proposalsSummary(data: ProposeExperimentsOutput): string {
+  const lines = [
+    `Experiment proposals for website ${data.website_id} (stored diagnostics only; nothing was scanned, generated or charged): ${data.proposals.length} returned.`,
+    `Freshness: ${freshnessLine(data.freshness)}.`,
+  ];
+  data.proposals.forEach((p, i) => {
+    const eligible = !p.eligibility_reasons.includes("not_eligible_for_experimental_delivery");
+    lines.push(
+      `${i + 1}. ${p.type} on ${p.pages.length} page(s) [${p.pages.slice(0, 5).join(", ")}${p.pages.length > 5 ? ", …" : ""}]: design ${p.design} (${p.evidence_label}), at least ${p.minimum_days} days, ${eligible ? "eligible" : "not eligible yet"}. proposal_id ${p.proposal_id}.`,
+      `   Hypothesis: ${p.hypothesis}`,
+      `   Expected impact: ${p.expected_impact}`,
+    );
+    if (p.eligibility_reasons.length) lines.push(`   Reasons: ${p.eligibility_reasons.slice(0, 6).join(", ")}`);
+  });
+  if (!data.proposals.length) lines.push("No stored proposal matches this goal and these types.");
+  return lines.join("\n");
+}
+
+export function contentCheckSummary(data: CheckPageContentOutput): string {
+  const blockers = data.issues.filter((i) => i.severity === "blocker");
+  const lines = [
+    `Content check (stored brand rules, approved claims and protected pages only; nothing was stored, fetched or sent to a model): ${data.valid ? "valid" : "NOT valid"}, ${blockers.length} blocker(s), ${data.issues.length} issue(s) in total.`,
+    `Evidence: ${freshnessLine(data.evidence_freshness)}. Approved claims used: ${data.claim_version_ids.length ? data.claim_version_ids.join(", ") : "none"}.`,
+    ...data.issues.slice(0, 20).map((i) => `- [${i.severity}] ${i.code}${i.page_path ? ` ${i.page_path}` : ""}: ${i.message}`),
+  ];
+  if (data.issues.length > 20) lines.push(`- … ${data.issues.length - 20} more in structuredContent.`);
+  return lines.join("\n");
+}
+
+export function createSummary(data: CreateExperimentOutput): string {
+  return [
+    `Experiment ${data.experiment_id} saved as pending_approval: design ${data.design}, ${data.duration_days} days of measurement once delivered.`,
+    `Approval link for a person with the admin role (open it in Robynn; it is a navigation link, not an approval): ${data.approval_link} (expires ${data.approval_expires_at}).`,
+    `Validation: ${data.validation.valid ? "valid" : "not valid"} (${data.validation.issues.length} issue(s)). Cost: ${data.cost.estimated_microusd} micro-USD estimated, credits charged: no.`,
+    WRITE_DISCLOSURE,
+  ].join("\n");
+}
+
+function deliveryLine(d: { status: string; treated_pages: number; delivered_pages: number; parity_pass_pages: number; recrawled_pages: number; last_checked_at: string | null }) {
+  return `delivery ${d.status}: treated ${d.treated_pages}, delivered ${d.delivered_pages}, parity pass ${d.parity_pass_pages}, recrawled ${d.recrawled_pages}; last checked ${d.last_checked_at ?? MISSING}`;
+}
+
+export function statusSummary(data: ExperimentStatusOutput): string {
+  const lines = [`Experiment status (stored state only; reading it never advances anything): ${data.items.length} experiment(s).`];
+  for (const item of data.items) {
+    lines.push(
+      `- ${item.experiment_id}: ${item.state}, day ${item.days_elapsed} of ${item.post_start} to ${item.post_end}; ${deliveryLine(item.delivery)}; interim (NOT conclusive) ${fmtInterval(item.interim)}.`,
+      ...item.warnings.slice(0, 5).map((w) => `  · ${w}`),
+    );
+  }
+  if (data.next_cursor) lines.push(`More available: pass cursor "${data.next_cursor}" with the same website_id.`);
+  return lines.join("\n");
+}
+
+export function resultsSummary(data: ExperimentResultsOutput): string {
+  const lines = [
+    `Results for experiment ${data.experiment_id}: verdict ${data.verdict}${data.is_final ? " (final)" : " (not final)"}; primary ${fmtInterval(data.primary)}.`,
+    `Freshness: ${freshnessLine(data.freshness)}. ${deliveryLine(data.delivery)}.`,
+    ...data.guardrails.map((g) => `- guardrail ${g.metric}: ${g.status}${g.reason ? ` (${g.reason})` : ""}`),
+    ...data.learnings.map((l) => `- learning (${l.type}): ${l.summary}`),
+    ...data.warnings.slice(0, 10).map((w) => `· ${w}`),
+  ];
+  return lines.join("\n");
+}
+
+export function promoteSummary(data: PromoteExperimentOutput): string {
+  return [
+    `Promotion of ${data.source_experiment_id} saved as a NEW experiment ${data.new_experiment_id} (pending_approval) on ${data.target_pages.length} page(s): ${data.target_pages.slice(0, 10).join(", ")}${data.target_pages.length > 10 ? ", …" : ""}.`,
+    `It needs its own fresh approval: ${data.approval_link}`,
+    WRITE_DISCLOSURE,
+  ].join("\n");
+}
+
+export function rollbackSummary(data: RollbackExperimentOutput): string {
+  return [
+    `Rollback REQUESTED for experiment ${data.experiment_id} (request ${data.request_id}); executed: no. The change stays live until a person with the admin role restores the original content in Robynn: ${data.approval_link}`,
+    WRITE_DISCLOSURE,
+  ].join("\n");
+}
+
 // ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
@@ -283,6 +441,138 @@ export function registerDiscoverabilityTools(server: McpServer, client: RobynnCl
         );
       } catch (err) {
         return toDiscoverabilityErrorResult(err);
+      }
+    },
+  );
+
+  // --- COS-PLUGIN-002 WP2-11 -------------------------------------------------
+
+  server.registerTool(
+    "robynn_propose_experiments",
+    {
+      ...toolMetadata("Propose Discoverability Experiments", READ_ONLY_HINTS),
+      description: `Ranked experiment proposals for one Robynn organization website and goal (seo_clicks, seo_ctr, geo_citation_rate, geo_mention_rate), built from its stored Auto-Healer diagnostics and screened by Robynn's experiment designer: hypothesis, pages, type, design (A page-cohort, B before/after, C prompt-cohort), evidence label, minimum duration, cost (none charged in v2.0) and eligibility reasons. Eligible proposals come first. Pass a proposal_id to robynn_create_experiment. ${STORED_ONLY}`,
+      inputSchema: proposeExperimentsInputSchema,
+      outputSchema: proposeExperimentsOutputSchema,
+    },
+    async (args) => {
+      try {
+        const data = await client.discoverabilityProposeExperiments(args);
+        return toSuccessResult(data as unknown as Record<string, unknown>, proposalsSummary(data));
+      } catch (err) {
+        return toDiscoverabilityErrorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "robynn_check_page_content",
+    {
+      ...toolMetadata("Check Page Content", READ_ONLY_HINTS),
+      description: "Validate draft page content for one page of a Robynn organization website before proposing it: brand-rule hits, statistics/customer/competitor statements without an approved claim, protected-page conflicts, spam and hidden-text patterns, structured-data mismatches and diff size. Deterministic checks against stored rules, claims and protected pages only: it stores nothing, runs no model and never fetches a URL from the draft. Treat a blocker as something to fix before robynn_create_experiment.",
+      inputSchema: checkPageContentInputSchema,
+      outputSchema: checkPageContentOutputSchema,
+    },
+    async (args) => {
+      try {
+        const data = await client.discoverabilityCheckPageContent(args);
+        return toSuccessResult(data as unknown as Record<string, unknown>, contentCheckSummary(data));
+      } catch (err) {
+        return toDiscoverabilityErrorResult(err, { internalMessage: "Robynn could not check this content right now. Nothing was stored." });
+      }
+    },
+  );
+
+  server.registerTool(
+    "robynn_create_experiment",
+    {
+      ...toolMetadata("Create Discoverability Experiment", REQUEST_WRITE_HINTS),
+      description: `Save a discoverability experiment for one Robynn organization website with the exact drafted changes (page, field, content, the before_hash of the stored page snapshot and the delivery binding). Robynn validates the content again, designs and randomizes the test, freezes the analysis plan and returns the experiment_id, the validation report, the design and duration, the cost and an approval link, with status pending_approval. Use the same idempotency_key to retry safely. ${WRITE_DISCLOSURE}`,
+      inputSchema: createExperimentInputSchema,
+      outputSchema: createExperimentOutputSchema,
+    },
+    async (args) => {
+      try {
+        const data = await client.discoverabilityCreateExperiment(args);
+        return toSuccessResult(data as unknown as Record<string, unknown>, createSummary(data));
+      } catch (err) {
+        return toDiscoverabilityErrorResult(err, { internalMessage: "Robynn could not create the experiment right now. Retry with the same idempotency_key." });
+      }
+    },
+  );
+
+  server.registerTool(
+    "robynn_experiment_status",
+    {
+      ...toolMetadata("Get Experiment Status", READ_ONLY_HINTS),
+      description: `Status of one discoverability experiment (experiment_id, as returned by robynn_create_experiment) or of a website's experiments (website_id, with limit and cursor): lifecycle state, days elapsed in the measurement window, delivery, fetch-parity and recrawl status, and the latest interim estimate, always marked not conclusive. Pass exactly one of experiment_id or website_id. ${STORED_ONLY}`,
+      inputSchema: experimentStatusInputSchema,
+      outputSchema: experimentStatusOutputSchema,
+    },
+    async (args) => {
+      const invalid = experimentStatusSelection(args);
+      if (invalid) {
+        return toDiscoverabilityErrorResult(new RobynnApiError(400, "invalid_request", invalid));
+      }
+      try {
+        const data = await client.discoverabilityExperimentStatus(args);
+        return toSuccessResult(data as unknown as Record<string, unknown>, statusSummary(data));
+      } catch (err) {
+        return toDiscoverabilityErrorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "robynn_experiment_results",
+    {
+      ...toolMetadata("Get Experiment Results", READ_ONLY_HINTS),
+      description: `Results of one discoverability experiment: the verdict (measuring until the pre-registered end; then win, loss, neutral, inconclusive or invalid), the primary effect with its 90% interval, guardrails, delivery verification, per-unit detail (exploratory, never a verdict) and the learnings Robynn saved. It never finalizes a result early. ${STORED_ONLY}`,
+      inputSchema: experimentResultsInputSchema,
+      outputSchema: experimentResultsOutputSchema,
+    },
+    async (args) => {
+      try {
+        const data = await client.discoverabilityExperimentResults(args);
+        return toSuccessResult(data as unknown as Record<string, unknown>, resultsSummary(data));
+      } catch (err) {
+        return toDiscoverabilityErrorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "robynn_promote_experiment",
+    {
+      ...toolMetadata("Request Experiment Promotion", REQUEST_WRITE_HINTS),
+      description: `Request that a finalized winning experiment be rolled out to similar pages of the same website (scope all_similar_pages): Robynn freezes an explicit list of stored, deliverable pages of the same template (at most 25, within the traffic budget) and saves it as a NEW pending_approval experiment with its own approval; nothing is inherited from the original approval. scope treated_pages reports that the treated pages already keep the change. ${WRITE_DISCLOSURE}`,
+      inputSchema: promoteExperimentInputSchema,
+      outputSchema: promoteExperimentOutputSchema,
+    },
+    async (args) => {
+      try {
+        const data = await client.discoverabilityPromoteExperiment(args);
+        return toSuccessResult(data as unknown as Record<string, unknown>, promoteSummary(data));
+      } catch (err) {
+        return toDiscoverabilityErrorResult(err, { internalMessage: "Robynn could not save the promotion request right now. Retry with the same idempotency_key." });
+      }
+    },
+  );
+
+  server.registerTool(
+    "robynn_rollback_experiment",
+    {
+      ...toolMetadata("Request Experiment Rollback", REQUEST_WRITE_HINTS),
+      description: `Request a rollback of a delivered discoverability experiment, with a reason and confirm: true. From this connection it only REQUESTS the rollback (executed is always false): Robynn records the request and returns a link where a person with the admin role restores the original content immediately, without a second approver. Repeated requests return the same open request. ${WRITE_DISCLOSURE}`,
+      inputSchema: rollbackExperimentInputSchema,
+      outputSchema: rollbackExperimentOutputSchema,
+    },
+    async (args) => {
+      try {
+        const data = await client.discoverabilityRollbackExperiment(args);
+        return toSuccessResult(data as unknown as Record<string, unknown>, rollbackSummary(data));
+      } catch (err) {
+        return toDiscoverabilityErrorResult(err, { internalMessage: "Robynn could not record the rollback request right now. Check robynn_experiment_status before retrying." });
       }
     },
   );

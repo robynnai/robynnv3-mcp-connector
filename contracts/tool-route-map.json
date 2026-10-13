@@ -1,5 +1,5 @@
 {
-  "$comment": "COS-PLUGIN-001 tool → app route map (P01, updated by P12 and P13). Verified against the real tools/list by src/__tests__/catalog-baseline.test.ts and src/__tests__/catalog-contract.test.ts (P13), which also check that each tool calls exactly its appRoutes; the sanitized tools/list snapshot is contracts/mcp-tools.json. Paths in appRoutes[].file are relative to the robynnv3 app repo unless prefixed 'mcp:' in gaps. titleProposal = the shipped tool title (top-level and annotations.title). currentHints = annotations the code declares; proposedHints = target against today's backend (equal to currentHints after P12); hintsAfterP07 / requiredScopeAfterP07 = target once P07 removes the write named in `conditional` (the five † tools). pairedWith is an array of tool names. inputSchemaDigest = sha256 of the tools/list inputSchema with every string-valued 'description' key removed (sorted-key compact JSON). COS-PLUGIN-002 WP2-06 added robynn_site_health, robynn_ai_visibility_trend and robynn_site_learnings (WP2-01 tool-contracts.md route-map additions; app policy rows in MCP_ROUTE_POLICIES).",
+  "$comment": "COS-PLUGIN-001 tool → app route map (P01, updated by P12 and P13). Verified against the real tools/list by src/__tests__/catalog-baseline.test.ts and src/__tests__/catalog-contract.test.ts (P13), which also check that each tool calls exactly its appRoutes; the sanitized tools/list snapshot is contracts/mcp-tools.json. Paths in appRoutes[].file are relative to the robynnv3 app repo unless prefixed 'mcp:' in gaps. titleProposal = the shipped tool title (top-level and annotations.title). currentHints = annotations the code declares; proposedHints = target against today's backend (equal to currentHints after P12); hintsAfterP07 / requiredScopeAfterP07 = target once P07 removes the write named in `conditional` (the five † tools). pairedWith is an array of tool names. inputSchemaDigest = sha256 of the tools/list inputSchema with every string-valued 'description' key removed (sorted-key compact JSON). COS-PLUGIN-002 WP2-06 added robynn_site_health, robynn_ai_visibility_trend and robynn_site_learnings; WP2-11 added robynn_propose_experiments, robynn_check_page_content, robynn_create_experiment, robynn_experiment_status, robynn_experiment_results, robynn_promote_experiment and robynn_rollback_experiment (WP2-01 tool-contracts.md route-map additions; app policy rows in MCP_ROUTE_POLICIES).",
   "baseline": {
     "mcpWorker": "85d7781add2914815e7fc48459645c2b4edb4095",
     "app": "6dd04bb315f20ca53612cd0a2aa0951da020ed78",
@@ -7,9 +7,9 @@
     "p12": "titles, hints and descriptions applied (plugin-v1/p12-tool-metadata)"
   },
   "counts": {
-    "worker": 51,
-    "workerWithoutVault": 49,
-    "cli": 43
+    "worker": 58,
+    "workerWithoutVault": 56,
+    "cli": 50
   },
   "scopes": {
     "brand:read": "approved reads of existing org data; no charge; no third-party writes",
@@ -2219,6 +2219,299 @@
       "objectOwnership": "bound org, canonical website, all referenced objects same site",
       "retrySafe": true,
       "pairedWith": [],
+      "environmentGate": null,
+      "gaps": []
+    },
+    {
+      "name": "robynn_propose_experiments",
+      "titleProposal": "Propose Discoverability Experiments",
+      "registrar": "src/tools/discoverability.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "inputSchemaDigest": "sha256:46d332496c07cea6ca565a03e2558c59735c1f293b0b9f7a1b173a1bf1a7aa9e",
+      "hintEvidence": "Stored projections or deterministic in-memory validation only; no product writes, provider calls or billing.",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/discoverability/propose-experiments",
+          "file": "src/routes/api/cli/mcp/discoverability/propose-experiments/+server.ts",
+          "authHelper": "requireMcpOperation"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none; provider cost is an estimate for later approved work",
+      "externalAccess": "none",
+      "objectOwnership": "bound org, canonical website, all referenced objects same site",
+      "retrySafe": true,
+      "pairedWith": [],
+      "environmentGate": "comparison_page candidates only for the verified robynn.ai dogfood site",
+      "gaps": []
+    },
+    {
+      "name": "robynn_check_page_content",
+      "titleProposal": "Check Page Content",
+      "registrar": "src/tools/discoverability.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "inputSchemaDigest": "sha256:33a56ad86d262a58d1ae0d3b3eaba7ccf54b6d9ef41feafeacbfe474f871b837",
+      "hintEvidence": "Stored projections or deterministic in-memory validation only; no product writes, provider calls or billing.",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/discoverability/check-page-content",
+          "file": "src/routes/api/cli/mcp/discoverability/check-page-content/+server.ts",
+          "authHelper": "requireMcpOperation"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none; provider cost is an estimate for later approved work",
+      "externalAccess": "none",
+      "objectOwnership": "bound org, canonical website, all referenced objects same site",
+      "retrySafe": true,
+      "pairedWith": [],
+      "environmentGate": null,
+      "gaps": []
+    },
+    {
+      "name": "robynn_create_experiment",
+      "titleProposal": "Create Discoverability Experiment",
+      "registrar": "src/tools/discoverability.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "inputSchemaDigest": "sha256:4d5781e42964edfa89c661441251d879bcd00e5db85893bfde2903543c7d1058",
+      "hintEvidence": "Persists an idempotent human-review request and audit only; never publishes, approves, executes rollback or charges credits.",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/discoverability/create-experiment",
+          "file": "src/routes/api/cli/mcp/discoverability/create-experiment/+server.ts",
+          "authHelper": "requireMcpOperation"
+        }
+      ],
+      "sideEffects": "idempotent Robynn proposal/request and audit persistence only",
+      "charges": "none; provider cost is an estimate for later approved work",
+      "externalAccess": "none",
+      "objectOwnership": "bound org, canonical website, all referenced objects same site",
+      "retrySafe": true,
+      "pairedWith": [
+        "robynn_experiment_status"
+      ],
+      "environmentGate": "type=comparison_page only for the verified robynn.ai dogfood site",
+      "gaps": []
+    },
+    {
+      "name": "robynn_experiment_status",
+      "titleProposal": "Get Experiment Status",
+      "registrar": "src/tools/discoverability.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "inputSchemaDigest": "sha256:687dc2b19afd686e9eb869af0e760597d4b184bc1c04e173812c51451930d14d",
+      "hintEvidence": "Stored projections or deterministic in-memory validation only; no product writes, provider calls or billing.",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/discoverability/experiment-status",
+          "file": "src/routes/api/cli/mcp/discoverability/experiment-status/+server.ts",
+          "authHelper": "requireMcpOperation"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none; provider cost is an estimate for later approved work",
+      "externalAccess": "none",
+      "objectOwnership": "bound org, canonical website, all referenced objects same site",
+      "retrySafe": true,
+      "pairedWith": [],
+      "environmentGate": null,
+      "gaps": []
+    },
+    {
+      "name": "robynn_experiment_results",
+      "titleProposal": "Get Experiment Results",
+      "registrar": "src/tools/discoverability.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "brand:read",
+      "currentHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "inputSchemaDigest": "sha256:e3baee2e44ac01593c6d7ee8b456e96981bae6538b92dbde8c7f736bf41ed231",
+      "hintEvidence": "Stored projections or deterministic in-memory validation only; no product writes, provider calls or billing.",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/discoverability/experiment-results",
+          "file": "src/routes/api/cli/mcp/discoverability/experiment-results/+server.ts",
+          "authHelper": "requireMcpOperation"
+        }
+      ],
+      "sideEffects": "none",
+      "charges": "none; provider cost is an estimate for later approved work",
+      "externalAccess": "none",
+      "objectOwnership": "bound org, canonical website, all referenced objects same site",
+      "retrySafe": true,
+      "pairedWith": [],
+      "environmentGate": null,
+      "gaps": []
+    },
+    {
+      "name": "robynn_promote_experiment",
+      "titleProposal": "Request Experiment Promotion",
+      "registrar": "src/tools/discoverability.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "inputSchemaDigest": "sha256:e041bfdb48b36ccd8939803e2ba06264009306063f9e6c8033ae83f8159fe73d",
+      "hintEvidence": "Persists an idempotent human-review request and audit only; never publishes, approves, executes rollback or charges credits.",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/discoverability/promote-experiment",
+          "file": "src/routes/api/cli/mcp/discoverability/promote-experiment/+server.ts",
+          "authHelper": "requireMcpOperation"
+        }
+      ],
+      "sideEffects": "idempotent Robynn proposal/request and audit persistence only",
+      "charges": "none; provider cost is an estimate for later approved work",
+      "externalAccess": "none",
+      "objectOwnership": "bound org, canonical website, all referenced objects same site",
+      "retrySafe": true,
+      "pairedWith": [
+        "robynn_experiment_status"
+      ],
+      "environmentGate": "stored source experiment type=comparison_page only for the verified robynn.ai dogfood site",
+      "gaps": []
+    },
+    {
+      "name": "robynn_rollback_experiment",
+      "titleProposal": "Request Experiment Rollback",
+      "registrar": "src/tools/discoverability.ts",
+      "surfaces": {
+        "worker": true,
+        "workerWithoutVault": true,
+        "cli": true
+      },
+      "requiredScope": "tools:execute",
+      "currentHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "proposedHints": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false,
+        "idempotentHint": true
+      },
+      "inputSchemaDigest": "sha256:fd0332679481cd7702d208bb5a2a0307cb1c3356de319428369115c78ab37ca2",
+      "hintEvidence": "Persists an idempotent human-review request and audit only; never publishes, approves, executes rollback or charges credits.",
+      "appRoutes": [
+        {
+          "method": "POST",
+          "path": "/api/cli/mcp/discoverability/rollback-experiment",
+          "file": "src/routes/api/cli/mcp/discoverability/rollback-experiment/+server.ts",
+          "authHelper": "requireMcpOperation"
+        }
+      ],
+      "sideEffects": "idempotent Robynn proposal/request and audit persistence only",
+      "charges": "none; provider cost is an estimate for later approved work",
+      "externalAccess": "none",
+      "objectOwnership": "bound org, canonical website, all referenced objects same site",
+      "retrySafe": true,
+      "pairedWith": [
+        "robynn_experiment_status"
+      ],
       "environmentGate": null,
       "gaps": []
     },

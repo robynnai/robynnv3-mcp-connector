@@ -669,7 +669,7 @@ So a client path no tool reaches, a mapped route no tool calls, and a tool calli
 
 ## 8. COS-PLUGIN-002 WP2-06: named discoverability read tools
 
-Phase 2 adds three named, read-only tools (WP2-01 `tool-contracts.md`; wire schemas vendored verbatim as [`contracts/discoverability-tools.v1.json`](../../contracts/discoverability-tools.v1.json)). The catalog is now **51** (Worker with Vault) / **49** (without Vault) / **43** (CLI); the unauthenticated fallback is still 1. The other seven Phase 2 tools (WP2-09/11) are not registered, so the preflight refuses them with `tool_not_permitted`.
+Phase 2 adds three named, read-only tools (WP2-01 `tool-contracts.md`; wire schemas vendored verbatim as [`contracts/discoverability-tools.v1.json`](../../contracts/discoverability-tools.v1.json)). WP2-06 brought the catalog to 51/49/43; WP2-11 (§9) adds the other seven, for **58** (Worker with Vault) / **56** (without Vault) / **50** (CLI); the unauthenticated fallback is still 1.
 
 | # | Tool | Title | Scope | RO/D/OW/Idem | App route | Retry-safe | CLI |
 |---:|---|---|---|---|---|---|---|
@@ -686,3 +686,24 @@ Phase 2 adds three named, read-only tools (WP2-01 `tool-contracts.md`; wire sche
 - **Schema equivalence** (`src/tools/discoverability.test.ts`): one positive/negative corpus is checked against the Zod schemas, the published draft-07 `tools/list` schemas and the spec's 2020-12 bundle; all three agree. Known gap: `uniqueItems` on `competitors` cannot be emitted by zod-to-json-schema, so the published schema omits it while Zod (Worker) and the app reject duplicates; the test pins this.
 - **Live proof:** `src/__tests__/plugin-local/discoverability-m1.live.test.ts` (Milestone 1) and the three per-tool cases in `tool-backend.live.test.ts`.
 
+## 9. COS-PLUGIN-002 WP2-11: the remaining seven discoverability tools
+
+The ten-tool contract is complete (WP2-01 `tool-contracts.md` route-map additions). All seven are registered by the same registrar on all three surfaces (Worker with and without Vault, CLI), one named app route each, with no generic action/provider dispatcher.
+
+| # | Tool | Title | Scope | RO/D/OW/Idem | App route | Retry-safe | CLI |
+|---:|---|---|---|---|---|---|---|
+| 52 | `robynn_propose_experiments` | Propose Discoverability Experiments | brand:read | T/F/F/T | POST `/api/cli/mcp/discoverability/propose-experiments` | yes | yes |
+| 53 | `robynn_check_page_content` | Check Page Content | brand:read | T/F/F/T | POST `/api/cli/mcp/discoverability/check-page-content` | yes | yes |
+| 54 | `robynn_create_experiment` | Create Discoverability Experiment | tools:execute | F/F/F/T | POST `/api/cli/mcp/discoverability/create-experiment` | yes (idempotency key) | yes |
+| 55 | `robynn_experiment_status` | Get Experiment Status | brand:read | T/F/F/T | POST `/api/cli/mcp/discoverability/experiment-status` | yes | yes |
+| 56 | `robynn_experiment_results` | Get Experiment Results | brand:read | T/F/F/T | POST `/api/cli/mcp/discoverability/experiment-results` | yes | yes |
+| 57 | `robynn_promote_experiment` | Request Experiment Promotion | tools:execute | F/F/F/T | POST `/api/cli/mcp/discoverability/promote-experiment` | yes (idempotency key) | yes |
+| 58 | `robynn_rollback_experiment` | Request Experiment Rollback | tools:execute | F/F/F/T | POST `/api/cli/mcp/discoverability/rollback-experiment` | yes (idempotency key) | yes |
+
+- **Annotations follow the spec, not the original plan.** `robynn_rollback_experiment` is F/F/F/T: from a plugin connection it only records a rollback *request* (`executed` is the constant `false`); a signed-in human admin restores the content in Robynn without a second approver (D2/C14). The plan's F/T/T assumed an executable rollback and is superseded by tool-contracts.md.
+- **Writes save a request only.** Create, promote and rollback persist a Robynn request (pending experiment and approval, new promotion experiment, rollback request) plus audit and idempotency rows. They never publish, approve, deliver, send or charge credits. Their descriptions and text results carry the fixed disclosure (`WRITE_DISCLOSURE`): a saved request, no credits, human approval required, nothing published, then `robynn_experiment_status`.
+- **Idempotency.** The three writes require `idempotency_key` (16–128 of `[A-Za-z0-9_-]`). The app binds it to the organization, user, credential kind, identity key (grant id for OAuth, credential key id for CLI), operation and canonical body: the same key and body replays the stored response; anything else is `idempotency_key_reused`. That makes the one automatic client retry on 5xx safe (`retrySafe: true`). Open rollback and promotion requests are also deduplicated across keys.
+- **Approval is never an agent action.** No approve/execute tool exists; the approval and rollback links are same-origin navigation URLs to app-session pages (CSRF, fresh re-authentication, current admin role) that refuse every bearer credential.
+- **Errors** keep the §8 shape. The app's own short detail (reason codes, page paths) is kept for `invalid_request`, `validation_failed`, `data_unavailable`, `design_ineligible`, `proposal_stale`, `conflict`, `environment_not_eligible`, `not_found` and the `idempotency_*` codes when the app names that code; 5xx bodies are never forwarded. `insufficient_scope` names the missing scope.
+- **Known equivalence gap:** `robynn_experiment_status` takes exactly one of `experiment_id` / `website_id` (and `limit`/`cursor` only with `website_id`). The SDK publishes object schemas only, so the published draft-07 schema cannot carry the spec's `oneOf`; the Worker handler refuses those calls with `invalid_request` before any request, and the app refuses them again. `src/tools/discoverability-write.test.ts` pins the gap next to the full Zod / draft-07 / 2020-12 corpus.
+- **Tests:** `src/tools/discoverability-write.test.ts` (schema corpus, tools/list shape, disclosure, no dispatcher, tools/call success and error mapping), the catalog suites (58/56/50, route attribution, snapshot), `worker-session-authorization.test.ts` (brand:read admits the four reads; the three writes get the exact Phase 1 `insufficient_scope` preflight error with `required_scope: tools:execute` and no `request_id`).

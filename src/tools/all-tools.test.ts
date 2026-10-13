@@ -717,9 +717,9 @@ function registerAllTools(
 // This is a PARTIAL handler harness (mocked RobynnClient, no MCP transport). It
 // registers 22 of the Worker's 25 registrars: the 5 Hermes bridge tools are
 // covered by hermes-bridge.test.ts, the 2 Vault tools by vault.test.ts and the
-// 3 COS-PLUGIN-002 discoverability reads by discoverability.test.ts. It does
-// not establish the remote inventory: the real 51 (Vault) / 49 (no Vault) /
-// 43 (CLI) catalog is proven through tools/list in
+// 10 COS-PLUGIN-002 discoverability tools by discoverability*.test.ts. It does
+// not establish the remote inventory: the real 58 (Vault) / 56 (no Vault) /
+// 50 (CLI) catalog is proven through tools/list in
 // src/__tests__/catalog-contract.test.ts (COS-PLUGIN-001 P13).
 const PARTIAL_HARNESS_EXCLUDED_REGISTRARS = [
   "src/tools/hermes-bridge.ts",
@@ -728,7 +728,7 @@ const PARTIAL_HARNESS_EXCLUDED_REGISTRARS = [
 ];
 
 describe("all tools registration (partial handler harness)", () => {
-  it("registers the 41 handler-harness tools: the 51-tool Worker catalog minus 5 Hermes bridge, 2 Vault and 3 discoverability tools", () => {
+  it("registers the 41 handler-harness tools: the 58-tool Worker catalog minus 5 Hermes bridge, 2 Vault and 10 discoverability tools", () => {
     const { server, handlers } = createServerHarness();
     const client = createFullMockClient();
     registerAllTools(server, client);
@@ -739,9 +739,16 @@ describe("all tools registration (partial handler harness)", () => {
     const excluded = routeMap.tools.filter((t) => PARTIAL_HARNESS_EXCLUDED_REGISTRARS.includes(t.registrar));
     expect(excluded.map((t) => t.name).sort()).toEqual([
       "robynn_ai_visibility_trend",
+      "robynn_check_page_content",
+      "robynn_create_experiment",
+      "robynn_experiment_results",
+      "robynn_experiment_status",
       "robynn_memory_get",
       "robynn_memory_search",
       "robynn_memory_write",
+      "robynn_promote_experiment",
+      "robynn_propose_experiments",
+      "robynn_rollback_experiment",
       "robynn_site_health",
       "robynn_site_learnings",
       "robynn_thread_append",
@@ -752,7 +759,7 @@ describe("all tools registration (partial handler harness)", () => {
     expect([...handlers.keys()].sort()).toEqual(
       routeMap.tools.filter((t) => !excluded.includes(t)).map((t) => t.name).sort(),
     );
-    expect(handlers.size).toBe(51 - excluded.length);
+    expect(handlers.size).toBe(58 - excluded.length);
   });
 
   it("registers the expected tool names", () => {

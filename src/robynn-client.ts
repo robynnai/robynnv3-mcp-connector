@@ -65,6 +65,20 @@ import type {
 import type {
   AiVisibilityTrendInput,
   AiVisibilityTrendOutput,
+  CheckPageContentInput,
+  CheckPageContentOutput,
+  CreateExperimentInput,
+  CreateExperimentOutput,
+  ExperimentResultsInput,
+  ExperimentResultsOutput,
+  ExperimentStatusInput,
+  ExperimentStatusOutput,
+  PromoteExperimentInput,
+  PromoteExperimentOutput,
+  ProposeExperimentsInput,
+  ProposeExperimentsOutput,
+  RollbackExperimentInput,
+  RollbackExperimentOutput,
   SiteHealthInput,
   SiteHealthOutput,
   SiteLearningsInput,
@@ -74,6 +88,8 @@ import type {
 import { errorKind, redactLogString, safeLog } from './safe-log';
 
 const READ_TIMEOUT_MS = 10_000;
+/** Discoverability request writes validate and design before one atomic write. */
+const DISCOVERABILITY_WRITE_TIMEOUT_MS = 30_000;
 const POLL_TIMEOUT_MS = 280_000; // Under Claude's 300s timeout
 const POLL_INTERVAL_MS = 2_000;
 const RETRY_DELAY_MS = 1_000;
@@ -763,6 +779,76 @@ export class RobynnClient {
       method: "POST",
       body: JSON.stringify(payload),
     }, READ_TIMEOUT_MS, RETRY_SAFE);
+  }
+
+  /**
+   * COS-PLUGIN-002 WP2-11. Reads (propose, check, status, results) are
+   * stored-data only. The three request writes (create, promote, rollback)
+   * carry a required idempotency_key the app binds to the caller's identity
+   * and body, so one automatic retry replays the stored response instead of
+   * creating a second request (tool-route-map retrySafe: true).
+   */
+  async discoverabilityProposeExperiments(
+    payload: ProposeExperimentsInput
+  ): Promise<ProposeExperimentsOutput> {
+    return this.fetch("/api/cli/mcp/discoverability/propose-experiments", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, READ_TIMEOUT_MS, RETRY_SAFE);
+  }
+
+  async discoverabilityCheckPageContent(
+    payload: CheckPageContentInput
+  ): Promise<CheckPageContentOutput> {
+    return this.fetch("/api/cli/mcp/discoverability/check-page-content", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, READ_TIMEOUT_MS, RETRY_SAFE);
+  }
+
+  async discoverabilityCreateExperiment(
+    payload: CreateExperimentInput
+  ): Promise<CreateExperimentOutput> {
+    return this.fetch("/api/cli/mcp/discoverability/create-experiment", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, DISCOVERABILITY_WRITE_TIMEOUT_MS, RETRY_SAFE);
+  }
+
+  async discoverabilityExperimentStatus(
+    payload: ExperimentStatusInput
+  ): Promise<ExperimentStatusOutput> {
+    return this.fetch("/api/cli/mcp/discoverability/experiment-status", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, READ_TIMEOUT_MS, RETRY_SAFE);
+  }
+
+  async discoverabilityExperimentResults(
+    payload: ExperimentResultsInput
+  ): Promise<ExperimentResultsOutput> {
+    return this.fetch("/api/cli/mcp/discoverability/experiment-results", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, READ_TIMEOUT_MS, RETRY_SAFE);
+  }
+
+  async discoverabilityPromoteExperiment(
+    payload: PromoteExperimentInput
+  ): Promise<PromoteExperimentOutput> {
+    return this.fetch("/api/cli/mcp/discoverability/promote-experiment", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, DISCOVERABILITY_WRITE_TIMEOUT_MS, RETRY_SAFE);
+  }
+
+  async discoverabilityRollbackExperiment(
+    payload: RollbackExperimentInput
+  ): Promise<RollbackExperimentOutput> {
+    return this.fetch("/api/cli/mcp/discoverability/rollback-experiment", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, DISCOVERABILITY_WRITE_TIMEOUT_MS, RETRY_SAFE);
   }
 
   /** Create a new conversation thread */
