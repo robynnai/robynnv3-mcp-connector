@@ -1,8 +1,10 @@
-// COS-PLUGIN-002 WP2-06: Zod wire schemas of the three named discoverability
-// read tools (WP2-01 tool-contracts.md "Wire schemas"). Mirrors the app's
-// src/lib/server/discoverability/read/contracts.ts; both are checked against
-// the spec bundle contracts/discoverability-tools.v1.json with the same
-// positive/negative corpus (src/tools/discoverability.test.ts).
+// COS-PLUGIN-002 WP2-06/WP2-11: Zod wire schemas of the ten named
+// discoverability tools (WP2-01 tool-contracts.md "Wire schemas"). Mirrors the
+// app's src/lib/server/discoverability/read/contracts.ts (reads) and
+// .../tools/contracts.ts, .../experiments/service.ts and
+// .../guardrails/contract.ts (WP2-11 tools); all are checked against the spec
+// bundle contracts/discoverability-tools.v1.json with the same
+// positive/negative corpus (src/tools/discoverability*.test.ts).
 //
 // Inputs are CLOSED objects (`.strict()` → additionalProperties:false), so the
 // SDK rejects unknown arguments before the handler runs. Outputs describe the
@@ -310,3 +312,319 @@ export const discoverabilityErrorSchema = z
       .strict(),
   })
   .strict();
+
+// ---------------------------------------------------------------------------
+// COS-PLUGIN-002 WP2-11: the remaining seven tools
+// ---------------------------------------------------------------------------
+
+export const PRIMARY_METRICS = [
+  "seo_clicks",
+  "seo_ctr",
+  "geo_citation_rate",
+  "geo_mention_rate",
+] as const;
+
+export const EXPERIMENT_STATES = [
+  "pending_approval",
+  "approved",
+  "queued",
+  "delivering",
+  "measuring",
+  "paused",
+  "completed",
+  "cancelled",
+  "rollback_requested",
+  "rolling_back",
+  "rolled_back",
+  "failed",
+] as const;
+
+export const CHANGE_FIELDS = [
+  "title",
+  "meta_description",
+  "h1",
+  "intro",
+  "body_block",
+  "faq",
+  "schema_jsonld",
+  "internal_link",
+  "new_page",
+] as const;
+
+const hash = () => z.string().regex(/^[0-9a-f]{64}$/);
+/** JSON Schema `format: date`. */
+const fullDate = () => z.string().date();
+const idempotencyKey = () =>
+  z
+    .string()
+    .min(16)
+    .max(128)
+    .regex(/^[A-Za-z0-9_-]+$/);
+
+const costSchemaDef = () =>
+  z
+    .object({
+      currency: z.literal("USD"),
+      estimated_microusd: z.number().int().min(0),
+      maximum_microusd: z.number().int().min(0),
+      budget_remaining_microusd: z.number().int().min(0),
+      rate_card_version: z.string().min(1).max(100),
+      credits_charged: z.literal(false),
+    })
+    .strict();
+export const costSchema = costSchemaDef();
+export type Cost = z.infer<typeof costSchema>;
+
+/** $defs/approval_link: absolute same-origin navigation URL (format uri). */
+const approvalLinkDef = () => z.string().url().max(2048);
+
+const validationSchemaDef = () =>
+  z
+    .object({
+      valid: z.boolean(),
+      report_hash: hash(),
+      validator_version: z.string().min(1).max(100),
+      issues: z.array(issueSchemaDef()).min(0).max(100),
+      claim_version_ids: z.array(uuid()).min(0).max(100),
+      content_hash: hash(),
+      evidence_freshness: freshnessSchemaDef(),
+    })
+    .strict();
+export const validationSchema = validationSchemaDef();
+export type Validation = z.infer<typeof validationSchema>;
+
+const changeSchemaDef = () =>
+  z
+    .object({
+      page_path: pagePathSchemaDef(),
+      field: z.enum(CHANGE_FIELDS),
+      content: z.string().min(1).max(100_000),
+      selector: z.string().min(1).max(512).optional(),
+      before_hash: hash(),
+      delivery_binding_id: uuid(),
+      claim_version_ids: z.array(uuid()).min(0).max(50).optional(),
+    })
+    .strict();
+
+const proposalSchemaDef = () =>
+  z
+    .object({
+      proposal_id: hash(),
+      diagnostic_hash: hash(),
+      type: z.enum(EXPERIMENT_TYPES),
+      hypothesis: z.string().min(1).max(2000),
+      pages: z.array(pagePathSchemaDef()).min(1).max(25),
+      design: z.enum(["A", "B", "C"]),
+      evidence_label: z.enum(["randomized", "observational", "descriptive"]),
+      expected_impact: z.string().min(1).max(2000),
+      minimum_days: z.number().int().min(21).max(84),
+      cost: costSchemaDef(),
+      eligibility_reasons: z.array(z.string().min(1).max(200)).min(0).max(30),
+      evidence: z.array(evidenceSchemaDef()).min(0).max(20),
+    })
+    .strict();
+export type Proposal = z.infer<ReturnType<typeof proposalSchemaDef>>;
+
+const guardrailSchemaDef = () =>
+  z
+    .object({
+      metric: z.enum(["conversion_rate", "untreated_clicks", "fact_accuracy"]),
+      status: z.enum(["pass", "regressed", "unknown"]),
+      margin: z.number(),
+      interval: intervalSchemaDef(),
+      reason: z.string().min(1).max(2000).nullable(),
+    })
+    .strict();
+
+const statusItemSchemaDef = () =>
+  z
+    .object({
+      experiment_id: uuid(),
+      website_id: uuid(),
+      state: z.enum(EXPERIMENT_STATES),
+      days_elapsed: z.number().int().min(0),
+      post_start: fullDate(),
+      post_end: fullDate(),
+      delivery: deliverySchemaDef(),
+      interim: intervalSchemaDef(),
+      conclusive: z.literal(false),
+      warnings: z.array(z.string().min(1).max(2000)).min(0).max(100),
+      freshness: freshnessSchemaDef(),
+    })
+    .strict();
+export type StatusItem = z.infer<ReturnType<typeof statusItemSchemaDef>>;
+
+export const DEFAULT_PROPOSALS_MAX = 5;
+export const DEFAULT_STATUS_LIMIT = 20;
+
+export const proposeExperimentsInputSchema = z
+  .object({
+    website_id: uuid(),
+    goal: z.enum(PRIMARY_METRICS),
+    types: z.array(z.enum(EXPERIMENT_TYPES)).min(1).max(8).optional(),
+    max: z.number().int().min(1).max(10).default(DEFAULT_PROPOSALS_MAX),
+  })
+  .strict();
+export type ProposeExperimentsInput = z.infer<typeof proposeExperimentsInputSchema>;
+
+export const checkPageContentInputSchema = z
+  .object({
+    website_id: uuid(),
+    page_path: pagePathSchemaDef(),
+    draft: z.string().min(1).max(100_000),
+  })
+  .strict();
+export type CheckPageContentInput = z.infer<typeof checkPageContentInputSchema>;
+
+export const createExperimentInputSchema = z
+  .object({
+    website_id: uuid(),
+    proposal_id: hash().optional(),
+    type: z.enum(EXPERIMENT_TYPES),
+    hypothesis: z.string().min(1).max(2000),
+    changes: z.array(changeSchemaDef()).min(1).max(100),
+    primary_metric: z.enum(PRIMARY_METRICS).optional(),
+    idempotency_key: idempotencyKey(),
+  })
+  .strict();
+export type CreateExperimentInput = z.infer<typeof createExperimentInputSchema>;
+
+/**
+ * Published shape of robynn_experiment_status. The spec's oneOf (exactly one
+ * of experiment_id / website_id; limit and cursor only with website_id) is
+ * not expressible through the SDK's object-only input conversion, so it is
+ * enforced by `experimentStatusSelection` in the handler (and again by the
+ * app) before any request; the documented equivalence gap is pinned in
+ * discoverability-write.test.ts.
+ */
+export const experimentStatusInputSchema = z
+  .object({
+    experiment_id: uuid().optional(),
+    website_id: uuid().optional(),
+    limit: z.number().int().min(1).max(50).optional(),
+    cursor: z.string().min(1).max(512).optional(),
+  })
+  .strict();
+export type ExperimentStatusInput = z.infer<typeof experimentStatusInputSchema>;
+
+/** The spec's oneOf as a refinement: null when valid, else the reason. */
+export function experimentStatusSelection(input: ExperimentStatusInput): string | null {
+  const byExperiment = input.experiment_id !== undefined;
+  const byWebsite = input.website_id !== undefined;
+  if (byExperiment === byWebsite) return "Pass exactly one of experiment_id or website_id.";
+  if (byExperiment && (input.limit !== undefined || input.cursor !== undefined)) {
+    return "limit and cursor are only valid with website_id.";
+  }
+  return null;
+}
+
+export const experimentResultsInputSchema = z.object({ experiment_id: uuid() }).strict();
+export type ExperimentResultsInput = z.infer<typeof experimentResultsInputSchema>;
+
+export const promoteExperimentInputSchema = z
+  .object({
+    experiment_id: uuid(),
+    scope: z.enum(["treated_pages", "all_similar_pages"]),
+    idempotency_key: idempotencyKey(),
+  })
+  .strict();
+export type PromoteExperimentInput = z.infer<typeof promoteExperimentInputSchema>;
+
+export const rollbackExperimentInputSchema = z
+  .object({
+    experiment_id: uuid(),
+    reason: z.string().min(1).max(2000),
+    confirm: z.literal(true),
+    idempotency_key: idempotencyKey(),
+  })
+  .strict();
+export type RollbackExperimentInput = z.infer<typeof rollbackExperimentInputSchema>;
+
+export const proposeExperimentsOutputSchema = z
+  .object({
+    website_id: uuid(),
+    proposals: z.array(proposalSchemaDef()).min(0).max(10),
+    freshness: freshnessSchemaDef(),
+  })
+  .strict();
+export type ProposeExperimentsOutput = z.infer<typeof proposeExperimentsOutputSchema>;
+
+export const checkPageContentOutputSchema = validationSchemaDef();
+export type CheckPageContentOutput = z.infer<typeof checkPageContentOutputSchema>;
+
+export const createExperimentOutputSchema = z
+  .object({
+    experiment_id: uuid(),
+    state: z.literal("pending_approval"),
+    validation: validationSchemaDef(),
+    design: z.enum(["A", "B", "C"]),
+    analysis_plan_hash: hash(),
+    change_set_hash: hash(),
+    duration_days: z.number().int().min(21).max(84),
+    cost: costSchemaDef(),
+    approval_link: approvalLinkDef(),
+    approval_expires_at: dateTime(),
+  })
+  .strict();
+export type CreateExperimentOutput = z.infer<typeof createExperimentOutputSchema>;
+
+export const experimentStatusOutputSchema = z
+  .object({
+    items: z.array(statusItemSchemaDef()).min(0).max(50),
+    next_cursor: z.string().min(1).max(512).nullable(),
+  })
+  .strict();
+export type ExperimentStatusOutput = z.infer<typeof experimentStatusOutputSchema>;
+
+export const experimentResultsOutputSchema = z
+  .object({
+    experiment_id: uuid(),
+    verdict: z.enum(["measuring", "win", "loss", "neutral", "inconclusive", "invalid"]),
+    is_final: z.boolean(),
+    primary: intervalSchemaDef(),
+    guardrails: z.array(guardrailSchemaDef()).min(0).max(3),
+    delivery: deliverySchemaDef(),
+    units: z
+      .array(
+        z
+          .object({
+            unit_id: uuid(),
+            arm: z.enum(["treatment", "control"]),
+            effect: intervalSchemaDef(),
+            warnings: z.array(z.string().min(1).max(2000)).min(0).max(20),
+          })
+          .strict(),
+      )
+      .min(0)
+      .max(100),
+    learnings: z.array(learningSchemaDef()).min(0).max(10),
+    warnings: z.array(z.string().min(1).max(2000)).min(0).max(100),
+    freshness: freshnessSchemaDef(),
+  })
+  .strict();
+export type ExperimentResultsOutput = z.infer<typeof experimentResultsOutputSchema>;
+
+export const promoteExperimentOutputSchema = z
+  .object({
+    request_id: uuid(),
+    source_experiment_id: uuid(),
+    new_experiment_id: uuid(),
+    state: z.literal("pending_approval"),
+    target_pages: z.array(pagePathSchemaDef()).min(1).max(25),
+    change_set_hash: hash(),
+    approval_link: approvalLinkDef(),
+    cost: costSchemaDef(),
+  })
+  .strict();
+export type PromoteExperimentOutput = z.infer<typeof promoteExperimentOutputSchema>;
+
+export const rollbackExperimentOutputSchema = z
+  .object({
+    request_id: uuid(),
+    experiment_id: uuid(),
+    state: z.literal("rollback_requested"),
+    executed: z.literal(false),
+    approval_link: approvalLinkDef(),
+  })
+  .strict();
+export type RollbackExperimentOutput = z.infer<typeof rollbackExperimentOutputSchema>;

@@ -300,7 +300,7 @@ export function installAppFetch(app: App) {
       }
       if (url.pathname.startsWith("/api/cli/mcp/discoverability/")) {
         // COS-PLUGIN-002 WP2-06: a valid bare "nothing stored" answer.
-        return Response.json(discoverabilityNothingStored(url.pathname, body?.website_id));
+        return Response.json(discoverabilityNothingStored(url.pathname, body?.website_id, body));
       }
       if (url.pathname === "/api/cli/mcp/memory" || url.pathname.startsWith("/api/cli/")) {
         return Response.json({ success: true, data: {} });
@@ -324,9 +324,96 @@ const EMPTY_INTERVAL = {
   clusters: 0,
 };
 
-/** Bare success objects of the three discoverability read routes with nothing stored. */
-export function discoverabilityNothingStored(pathname: string, websiteId: unknown) {
+const SYNTHETIC_HASH = "0".repeat(64);
+const SYNTHETIC_ID = "0e110000-0000-4000-8000-000000000001";
+
+/**
+ * Bare success objects of the discoverability routes: the reads with nothing
+ * stored, and synthetic pending requests for the WP2-11 request writes.
+ */
+export function discoverabilityNothingStored(pathname: string, websiteId: unknown, body?: Record<string, unknown>) {
   const website_id = typeof websiteId === "string" ? websiteId : "00000000-0000-4000-8000-000000000000";
+  const experiment_id = typeof body?.experiment_id === "string" ? body.experiment_id : SYNTHETIC_ID;
+  const cost = {
+    currency: "USD",
+    estimated_microusd: 0,
+    maximum_microusd: 0,
+    budget_remaining_microusd: 0,
+    rate_card_version: "v2_0_no_incremental_provider_spend",
+    credits_charged: false,
+  };
+  const validation = {
+    valid: true,
+    report_hash: SYNTHETIC_HASH,
+    validator_version: "wp2-09.validator.v1",
+    issues: [],
+    claim_version_ids: [],
+    content_hash: SYNTHETIC_HASH,
+    evidence_freshness: UNAVAILABLE,
+  };
+  const link = "https://robynn.test/discoverability/approvals/0e110000-0000-4000-8000-000000000002";
+  if (pathname.endsWith("/propose-experiments")) {
+    return { website_id, proposals: [], freshness: UNAVAILABLE };
+  }
+  if (pathname.endsWith("/check-page-content")) return validation;
+  if (pathname.endsWith("/create-experiment")) {
+    return {
+      experiment_id: SYNTHETIC_ID,
+      state: "pending_approval",
+      validation,
+      design: "C",
+      analysis_plan_hash: SYNTHETIC_HASH,
+      change_set_hash: SYNTHETIC_HASH,
+      duration_days: 28,
+      cost,
+      approval_link: link,
+      approval_expires_at: "2026-10-13T00:00:00.000Z",
+    };
+  }
+  if (pathname.endsWith("/experiment-status")) return { items: [], next_cursor: null };
+  if (pathname.endsWith("/experiment-results")) {
+    return {
+      experiment_id,
+      verdict: "measuring",
+      is_final: false,
+      primary: { ...EMPTY_INTERVAL, unit: "percentage_points" },
+      guardrails: [],
+      delivery: {
+        treated_pages: 0,
+        delivered_pages: 0,
+        parity_pass_pages: 0,
+        recrawled_pages: 0,
+        exposure_eligible_pages: 0,
+        status: "unknown",
+        last_checked_at: null,
+      },
+      units: [],
+      learnings: [],
+      warnings: [],
+      freshness: UNAVAILABLE,
+    };
+  }
+  if (pathname.endsWith("/promote-experiment")) {
+    return {
+      request_id: "0e110000-0000-4000-8000-000000000003",
+      source_experiment_id: experiment_id,
+      new_experiment_id: SYNTHETIC_ID,
+      state: "pending_approval",
+      target_pages: ["/blog/a"],
+      change_set_hash: SYNTHETIC_HASH,
+      approval_link: link,
+      cost,
+    };
+  }
+  if (pathname.endsWith("/rollback-experiment")) {
+    return {
+      request_id: "0e110000-0000-4000-8000-000000000004",
+      experiment_id,
+      state: "rollback_requested",
+      executed: false,
+      approval_link: `https://robynn.test/discoverability/experiments/${experiment_id}/rollback`,
+    };
+  }
   if (pathname.endsWith("/site-health")) {
     return {
       website_id,

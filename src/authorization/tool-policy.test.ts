@@ -13,8 +13,8 @@ const READ_ONLY = ["brand:read"] as const;
 const FULL = ["brand:read", "tools:execute"] as const;
 
 describe("TOOL_POLICY", () => {
-  it("covers exactly the map's 51 tools with the map's required scope", () => {
-    expect(TOOL_POLICY.size).toBe(51);
+  it("covers exactly the map's 58 tools with the map's required scope", () => {
+    expect(TOOL_POLICY.size).toBe(58);
     for (const tool of map.tools) {
       expect(TOOL_POLICY.get(tool.name)?.requiredScope, tool.name).toBe(tool.requiredScope);
     }

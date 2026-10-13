@@ -395,15 +395,75 @@ describe("per-call reauthorization (contract §6.4 step 5)", () => {
     });
     expect(denied.json.result.content[0].text).toMatch(/^insufficient_scope: /);
 
-    // The other seven Phase 2 tools are not registered yet: tool_not_permitted.
+    // There is no approve or execute-rollback tool on any connection (D3,
+    // C14): an invented one is tool_not_permitted before the app.
     h.app.grants.get(APP_GRANT_A)!.scopes = ["brand:read", "tools:execute"];
-    for (const name of ["robynn_propose_experiments", "robynn_create_experiment", "robynn_rollback_experiment"]) {
+    h.app.calls.length = 0;
+    for (const name of ["robynn_approve_experiment", "robynn_execute_rollback", "robynn_discoverability_action"]) {
       const unknown = await callTool(h, a.access, sessionId, name, { website_id });
       expect(unknown.json.result.structuredContent, name).toEqual({
         error: { code: "tool_not_permitted", message: "This tool is not available on this Robynn connection.", retryable: false },
       });
     }
     expect(businessCalls(h)).toEqual([]);
+  });
+
+  it("COS-PLUGIN-002 WP2-11: brand:read admits the four new reads; the three request writes need tools:execute and get the exact Phase 1 preflight error", async () => {
+    const h = await createHarness();
+    const a = await connect(h, { userId: USER_A, organizationId: ORG_A, appGrantId: APP_GRANT_A, scopes: ["brand:read"] });
+    const { sessionId } = await initialize(h, a.access);
+    const website_id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    const experiment_id = "abababab-abab-4bab-8bab-abababababab";
+    const writes = [
+      [
+        "robynn_create_experiment",
+        {
+          website_id,
+          type: "faq",
+          hypothesis: "h",
+          changes: [{ page_path: "/a", field: "faq", content: "c", before_hash: "a".repeat(64), delivery_binding_id: website_id }],
+          idempotency_key: "wp211_session_key_01",
+        },
+      ],
+      ["robynn_promote_experiment", { experiment_id, scope: "all_similar_pages", idempotency_key: "wp211_session_key_02" }],
+      ["robynn_rollback_experiment", { experiment_id, reason: "r", confirm: true, idempotency_key: "wp211_session_key_03" }],
+    ] as const;
+
+    h.app.calls.length = 0;
+    for (const [name, args] of writes) {
+      const out = await callTool(h, a.access, sessionId, name, args);
+      expect(out.json.result.isError, name).toBe(true);
+      expect(out.json.result.structuredContent.error, name).toMatchObject({ code: "insufficient_scope", required_scope: "tools:execute" });
+      expect(out.json.result.structuredContent.error, name).not.toHaveProperty("request_id");
+      expect(out.json.result.content[0].text).toMatch(/^insufficient_scope: This connection is read-only\./);
+    }
+    expect(businessCalls(h)).toEqual([]);
+
+    for (const [name, args, path] of [
+      ["robynn_propose_experiments", { website_id, goal: "seo_ctr" }, "/api/cli/mcp/discoverability/propose-experiments"],
+      ["robynn_check_page_content", { website_id, page_path: "/a", draft: "d" }, "/api/cli/mcp/discoverability/check-page-content"],
+      ["robynn_experiment_status", { experiment_id }, "/api/cli/mcp/discoverability/experiment-status"],
+      ["robynn_experiment_results", { experiment_id }, "/api/cli/mcp/discoverability/experiment-results"],
+    ] as const) {
+      h.app.calls.length = 0;
+      const ok = await callTool(h, a.access, sessionId, name, args);
+      expect(ok.json.result.isError, name).toBeFalsy();
+      expect(businessCalls(h).map((c) => c.path), name).toEqual([path]);
+      expect(Object.keys(businessCalls(h)[0].body as object), name).not.toContain("organization_id");
+    }
+
+    // With tools:execute the request writes reach exactly their routes and
+    // carry only their arguments (identity comes from the token).
+    h.app.grants.get(APP_GRANT_A)!.scopes = ["brand:read", "tools:execute"];
+    const b = await connect(h, { userId: USER_A, organizationId: ORG_A, appGrantId: APP_GRANT_A, scopes: ["brand:read", "tools:execute"] });
+    const s2 = await initialize(h, b.access);
+    for (const [name, args] of writes) {
+      h.app.calls.length = 0;
+      const ok = await callTool(h, b.access, s2.sessionId, name, args);
+      expect(ok.json.result.isError, name).toBeFalsy();
+      expect(businessCalls(h), name).toHaveLength(1);
+      expect(businessCalls(h)[0].body, name).toEqual(args);
+    }
   });
 
   it("intersects host-token, grant and current app scopes: a narrower role or a downscoped host token denies execute", async () => {
@@ -456,7 +516,7 @@ describe("per-call reauthorization (contract §6.4 step 5)", () => {
     const { sessionId } = await initialize(h, a.access);
     const list = await mcp(h, a.access, { jsonrpc: "2.0", id: 5, method: "tools/list", params: {} }, { "mcp-session-id": sessionId });
     expect(list.status).toBe(200);
-    expect(list.json.result.tools).toHaveLength(51);
+    expect(list.json.result.tools).toHaveLength(58);
     expect(h.app.calls).toEqual([]);
   });
 });

@@ -114,6 +114,128 @@ export const discoverabilityReplies = {
   }),
 };
 
+const EXPERIMENT_ID = "abababab-abab-4bab-8bab-abababababab";
+const BINDING_ID = "bcbcbcbc-bcbc-4cbc-8cbc-bcbcbcbcbcbc";
+const HASH_A = "a".repeat(64);
+const HASH_B = "b".repeat(64);
+const COST = {
+  currency: "USD",
+  estimated_microusd: 0,
+  maximum_microusd: 0,
+  budget_remaining_microusd: 0,
+  rate_card_version: "v2_0_no_incremental_provider_spend",
+  credits_charged: false,
+};
+const DELIVERY = {
+  treated_pages: 2,
+  delivered_pages: 1,
+  parity_pass_pages: 1,
+  recrawled_pages: 0,
+  exposure_eligible_pages: 0,
+  status: "pending",
+  last_checked_at: "2026-10-08T22:01:00.000Z",
+};
+const validation = () => ({
+  valid: true,
+  report_hash: HASH_A,
+  validator_version: "wp2-09.validator.v1",
+  issues: [{ code: "page_size_unknown", severity: "info", page_path: "/blog/a", message: P13_MARKER, evidence: [] }],
+  claim_version_ids: [],
+  content_hash: HASH_B,
+  evidence_freshness: FRESH,
+});
+
+/**
+ * COS-PLUGIN-002 WP2-11: bare success objects of the remaining seven
+ * discoverability routes.
+ */
+export const discoverabilityWriteReplies = {
+  proposeExperiments: () => ({
+    website_id: WEBSITE_ID,
+    proposals: [
+      {
+        proposal_id: HASH_A,
+        diagnostic_hash: HASH_B,
+        type: "faq",
+        hypothesis: P13_MARKER,
+        pages: ["/blog/a", "/blog/b"],
+        design: "C",
+        evidence_label: "randomized",
+        expected_impact: "Auto-Healer rated the expected impact high (confidence medium) across 2 pages.",
+        minimum_days: 21,
+        cost: COST,
+        eligibility_reasons: ["calibration_and_power_reports_checked_at_create"],
+        evidence: [{ kind: "scan", id: "scan:1:recommendation:2", summary: "(stored scan text) Add an FAQ", observed_at: null }],
+      },
+    ],
+    freshness: FRESH,
+  }),
+  checkPageContent: validation,
+  createExperiment: () => ({
+    experiment_id: EXPERIMENT_ID,
+    state: "pending_approval",
+    validation: validation(),
+    design: "C",
+    analysis_plan_hash: HASH_A,
+    change_set_hash: HASH_B,
+    duration_days: 28,
+    cost: COST,
+    approval_link: "https://robynn.test/discoverability/approvals/cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd",
+    approval_expires_at: "2026-10-13T00:00:00.000Z",
+  }),
+  experimentStatus: () => ({
+    items: [
+      {
+        experiment_id: EXPERIMENT_ID,
+        website_id: WEBSITE_ID,
+        state: "measuring",
+        days_elapsed: 6,
+        post_start: "2026-10-03",
+        post_end: "2026-10-30",
+        delivery: DELIVERY,
+        interim: interval(2.5, "percentage_points"),
+        conclusive: false,
+        warnings: [P13_MARKER],
+        freshness: FRESH,
+      },
+    ],
+    next_cursor: null,
+  }),
+  experimentResults: () => ({
+    experiment_id: EXPERIMENT_ID,
+    verdict: "win",
+    is_final: true,
+    primary: interval(6.1, "percentage_points"),
+    guardrails: [
+      { metric: "fact_accuracy", status: "pass", margin: 2, interval: interval(0.4, "percentage_points"), reason: null },
+    ],
+    delivery: DELIVERY,
+    units: [{ unit_id: "efefefef-efef-4fef-8fef-efefefefefef", arm: "treatment", effect: interval(null, "percentage_points"), warnings: [] }],
+    learnings: discoverabilityReplies.siteLearnings().items,
+    warnings: [P13_MARKER],
+    freshness: FRESH,
+  }),
+  promoteExperiment: () => ({
+    request_id: "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdc1",
+    source_experiment_id: EXPERIMENT_ID,
+    new_experiment_id: "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdc2",
+    state: "pending_approval",
+    target_pages: ["/blog/c", `/blog/${P13_MARKER}`],
+    change_set_hash: HASH_B,
+    approval_link: "https://robynn.test/discoverability/approvals/cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdc3",
+    cost: COST,
+  }),
+  rollbackExperiment: () => ({
+    request_id: "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdc4",
+    experiment_id: EXPERIMENT_ID,
+    state: "rollback_requested",
+    executed: false,
+    approval_link: `https://robynn.test/discoverability/experiments/${EXPERIMENT_ID}/rollback?ref=${P13_MARKER}`,
+  }),
+};
+
+export const WP2_11_IDS = { EXPERIMENT_ID, BINDING_ID, HASH_A, HASH_B };
+
 /** The `{ success, data }` envelope most `/api/cli/*` and CMO routes return. */
 export const genericSuccess = () => ({
   success: true,
@@ -247,6 +369,72 @@ export const TOOL_FIXTURES: Record<string, ToolFixture> = {
     rejected: [
       { label: "limit above 50", args: { website_id: WEBSITE_ID, limit: 51 }, reason: schemaRejects("limit") },
       { label: "unknown type", args: { website_id: WEBSITE_ID, type: "popup" }, reason: schemaRejects("type") },
+    ],
+  },
+  robynn_propose_experiments: {
+    args: { website_id: WEBSITE_ID, goal: "geo_citation_rate" },
+    variants: [{ label: "types and max", args: { website_id: WEBSITE_ID, goal: "seo_ctr", types: ["title_meta"], max: 3 }, forwards: [WEBSITE_ID, "seo_ctr", "title_meta"] }],
+    reply: discoverabilityWriteReplies.proposeExperiments,
+    rejected: [
+      { label: "missing goal", args: { website_id: WEBSITE_ID }, reason: schemaRejects("goal") },
+      { label: "max above 10", args: { website_id: WEBSITE_ID, goal: "seo_ctr", max: 11 }, reason: schemaRejects("max") },
+      { label: "unknown argument", args: { website_id: WEBSITE_ID, goal: "seo_ctr", refresh: true }, reason: schemaRejects("refresh") },
+    ],
+  },
+  robynn_check_page_content: {
+    args: { website_id: WEBSITE_ID, page_path: "/blog/a", draft: `${P13_ARG}-draft` },
+    reply: discoverabilityWriteReplies.checkPageContent,
+    rejected: [
+      { label: "page path with query", args: { website_id: WEBSITE_ID, page_path: "/blog/a?x=1", draft: "d" }, reason: schemaRejects("page_path") },
+      { label: "draft url argument", args: { website_id: WEBSITE_ID, page_path: "/a", draft: "d", url: "https://evil.example" }, reason: schemaRejects("url") },
+    ],
+  },
+  robynn_create_experiment: {
+    args: {
+      website_id: WEBSITE_ID,
+      type: "faq",
+      hypothesis: `${P13_ARG}-hypothesis`,
+      changes: [
+        { page_path: "/blog/a", field: "faq", content: `${P13_ARG}-content`, selector: "#faq", before_hash: HASH_A, delivery_binding_id: BINDING_ID },
+      ],
+      idempotency_key: "p13_create_key_0001",
+    },
+    reply: discoverabilityWriteReplies.createExperiment,
+    rejected: [
+      { label: "short idempotency key", args: { website_id: WEBSITE_ID, type: "faq", hypothesis: "h", changes: [], idempotency_key: "short" }, reason: schemaRejects("idempotency_key") },
+      {
+        label: "organization_id argument",
+        args: { website_id: WEBSITE_ID, organization_id: WEBSITE_ID, type: "faq", hypothesis: "h", changes: [{ page_path: "/a", field: "faq", content: "c", before_hash: HASH_A, delivery_binding_id: BINDING_ID }], idempotency_key: "p13_create_key_0002" },
+        reason: schemaRejects("organization_id"),
+      },
+    ],
+  },
+  robynn_experiment_status: {
+    args: { experiment_id: EXPERIMENT_ID },
+    variants: [{ label: "website listing", args: { website_id: WEBSITE_ID, limit: 5, cursor: "opaque-cursor" } }],
+    reply: discoverabilityWriteReplies.experimentStatus,
+    rejected: [
+      { label: "both ids", args: { experiment_id: EXPERIMENT_ID, website_id: WEBSITE_ID }, reason: /invalid_request: Pass exactly one of experiment_id or website_id/ },
+      { label: "neither id", args: {}, reason: /invalid_request: Pass exactly one/ },
+      { label: "limit with experiment_id", args: { experiment_id: EXPERIMENT_ID, limit: 5 }, reason: /limit and cursor are only valid with website_id/ },
+    ],
+  },
+  robynn_experiment_results: {
+    args: { experiment_id: EXPERIMENT_ID },
+    reply: discoverabilityWriteReplies.experimentResults,
+    rejected: [{ label: "non-uuid experiment", args: { experiment_id: "exp-1" }, reason: schemaRejects("experiment_id") }],
+  },
+  robynn_promote_experiment: {
+    args: { experiment_id: EXPERIMENT_ID, scope: "all_similar_pages", idempotency_key: "p13_promote_key_001" },
+    reply: discoverabilityWriteReplies.promoteExperiment,
+    rejected: [{ label: "unknown scope", args: { experiment_id: EXPERIMENT_ID, scope: "everything", idempotency_key: "p13_promote_key_001" }, reason: schemaRejects("scope") }],
+  },
+  robynn_rollback_experiment: {
+    args: { experiment_id: EXPERIMENT_ID, reason: `${P13_ARG}-reason`, confirm: true, idempotency_key: "p13_rollback_key_01" },
+    reply: discoverabilityWriteReplies.rollbackExperiment,
+    rejected: [
+      { label: "confirm false", args: { experiment_id: EXPERIMENT_ID, reason: "r", confirm: false, idempotency_key: "p13_rollback_key_01" }, reason: schemaRejects("confirm") },
+      { label: "confirm missing", args: { experiment_id: EXPERIMENT_ID, reason: "r", idempotency_key: "p13_rollback_key_01" }, reason: schemaRejects("confirm") },
     ],
   },
   robynn_capabilities: { args: {} },

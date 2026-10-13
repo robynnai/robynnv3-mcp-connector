@@ -149,14 +149,14 @@ const STARTER_POLLERS: Array<[starter: string, poller: string]> = [
 
 
 describe("P01 catalog baseline (real tools/list)", () => {
-  it("counts 51 Worker tools with Vault, 49 without, 43 in the local CLI", async () => {
+  it("counts 58 Worker tools with Vault, 56 without, 50 in the local CLI", async () => {
     const { worker, noVault, cli } = catalog;
 
-    // COS-PLUGIN-002 WP2-06 added the three discoverability read tools to every surface.
-    expect(worker).toHaveLength(51);
-    expect(noVault).toHaveLength(49);
-    expect(cli).toHaveLength(43);
-    expect(new Set(worker.map((t) => t.name)).size).toBe(51);
+    // COS-PLUGIN-002 WP2-06 added three and WP2-11 seven discoverability tools to every surface.
+    expect(worker).toHaveLength(58);
+    expect(noVault).toHaveLength(56);
+    expect(cli).toHaveLength(50);
+    expect(new Set(worker.map((t) => t.name)).size).toBe(58);
 
     const cliNames = new Set(cli.map((t) => t.name));
     const workerOnly = worker.map((t) => t.name).filter((n) => !cliNames.has(n)).sort();
@@ -172,17 +172,20 @@ describe("P01 catalog baseline (real tools/list)", () => {
     ]);
   });
 
-  it("records the annotation catalog: 23/28 readOnly (28/23 after P07), 7 destructive, 19 openWorld, 29/16 idempotent, 51 titles", async () => {
+  it("records the annotation catalog: 27/31 readOnly (32/26 after P07), 7 destructive, 19 openWorld, 36/16 idempotent, 58 titles", async () => {
     const { worker } = catalog;
     const count = (pred: (t: (typeof worker)[number]) => boolean) => worker.filter(pred).length;
 
     // 25/23 once P07 removes both hidden writes; as shipped all five † tools are pending (20/28).
     // COS-PLUGIN-002 WP2-06: +3 read-only, closed-world, idempotent discoverability tools.
-    expect(count((t) => t.annotations?.readOnlyHint === true)).toBe(28 - PENDING_P07_COUNT);
-    expect(count((t) => t.annotations?.readOnlyHint === false)).toBe(23 + PENDING_P07_COUNT);
+    // WP2-11: +4 read-only (propose, check, status, results) and +3 request
+    // writes (create, promote, rollback request: F/F/F/T, never destructive or
+    // open-world because they only save a Robynn request; tool-contracts.md).
+    expect(count((t) => t.annotations?.readOnlyHint === true)).toBe(32 - PENDING_P07_COUNT);
+    expect(count((t) => t.annotations?.readOnlyHint === false)).toBe(26 + PENDING_P07_COUNT);
     expect(count((t) => t.annotations?.destructiveHint === true)).toBe(7);
     expect(count((t) => t.annotations?.openWorldHint === true)).toBe(19);
-    expect(count((t) => t.annotations?.idempotentHint === true)).toBe(29);
+    expect(count((t) => t.annotations?.idempotentHint === true)).toBe(36);
     expect(count((t) => t.annotations?.idempotentHint === false)).toBe(16);
     expect(count((t) => t.annotations?.idempotentHint === undefined)).toBe(6);
     expect(
@@ -192,9 +195,9 @@ describe("P01 catalog baseline (real tools/list)", () => {
           typeof t.annotations?.destructiveHint === "boolean" &&
           typeof t.annotations?.openWorldHint === "boolean",
       ),
-    ).toBe(51);
-    expect(count((t) => Boolean(t.title) && t.annotations?.title === t.title)).toBe(51);
-    expect(new Set(worker.map((t) => t.title)).size).toBe(51);
+    ).toBe(58);
+    expect(count((t) => Boolean(t.title) && t.annotations?.title === t.title)).toBe(58);
+    expect(new Set(worker.map((t) => t.title)).size).toBe(58);
   });
 
   it("contracts/tool-route-map.json maps every registered tool exactly once with matching hints, title, input schema and surfaces", async () => {
@@ -202,7 +205,7 @@ describe("P01 catalog baseline (real tools/list)", () => {
     const noVault = new Set(catalog.noVault.map((t) => t.name));
     const cli = new Set(catalog.cli.map((t) => t.name));
 
-    expect(routeMap.counts).toEqual({ worker: 51, workerWithoutVault: 49, cli: 43 });
+    expect(routeMap.counts).toEqual({ worker: 58, workerWithoutVault: 56, cli: 50 });
     expect(routeMap.tools.map((t) => t.name).sort()).toEqual(worker.map((t) => t.name).sort());
 
     for (const tool of worker) {
