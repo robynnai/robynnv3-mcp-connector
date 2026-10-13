@@ -80,8 +80,10 @@ describe.skipIf(!LIVE || explicitlySkipped("discoverability-m1"))("M1: discovera
   let before: ReturnType<typeof dbFingerprint>;
 
   beforeAll(async () => {
-    // The app-side M1 run must have produced this website's projections.
-    expect(sql(`select count(*) from public.discoverability_projections where website_id = ${lit(WEBSITE)}`)).toBe("4");
+    // The app-side M1 run must have produced this website's projections:
+    // health, learnings, the panel trend, provider snapshots and (WP2-11)
+    // the stored proposals behind robynn_propose_experiments.
+    expect(sql(`select count(*) from public.discoverability_projections where website_id = ${lit(WEBSITE)}`)).toBe("5");
     before = dbFingerprint();
     alpha = await connect(ALPHA, ORG_A);
   }, 120_000);
