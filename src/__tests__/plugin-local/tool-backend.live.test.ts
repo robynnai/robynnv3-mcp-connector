@@ -11,7 +11,7 @@
  * a Strapi endpoint and the app's egress proxy (deterministic outputs; no
  * real agent, LLM or provider; nothing leaves the machine).
  *
- * For each of the 51 tools (48 Phase 1 + 3 COS-PLUGIN-002 reads):
+ * For each of the 58 tools (48 Phase 1 + 10 COS-PLUGIN-002 discoverability tools):
  *   - success: a real call, its result checked, and selected persistence read
  *     back from Postgres;
  *   - error: a deterministic failure (bad input refused by the app or Worker,
@@ -77,6 +77,19 @@ const MAP_TOOLS = (toolRouteMap as unknown as { tools: MapTool[] }).tools;
 const ALL_TOOLS = MAP_TOOLS.map((t) => t.name);
 const EXECUTE_TOOLS = MAP_TOOLS.filter((t) => t.requiredScope === "tools:execute").map((t) => t.name);
 const READ_TOOLS = MAP_TOOLS.filter((t) => t.requiredScope === "brand:read").map((t) => t.name);
+
+/**
+ * COS-PLUGIN-002 WP2-11 tools whose success needs seeded snapshots,
+ * calibration reports and lifecycle states the P17 seed does not have; their
+ * success is proven against a local database (app
+ * src/lib/server/discoverability/tools/__tests__/write-tools.db.test.ts).
+ */
+const SUCCESS_PROVEN_ELSEWHERE = new Set([
+  "robynn_create_experiment",
+  "robynn_promote_experiment",
+  "robynn_rollback_experiment",
+  "robynn_experiment_results",
+]);
 
 /** Which of the three contract cases each tool has proven live (checked at the end). */
 const covered = new Map<string, Set<Outcome>>(ALL_TOOLS.map((n) => [n, new Set<Outcome>()]));
@@ -307,7 +320,7 @@ async function until<T>(probe: () => Promise<T>, done: (value: T) => boolean, ti
   return value;
 }
 
-describe.skipIf(!LIVE)("plugin-local: all 51 tools against the real app, DB and deterministic backends (P17)", () => {
+describe.skipIf(!LIVE)("plugin-local: all 58 tools against the real app, DB and deterministic backends (P17)", () => {
   beforeAll(async () => {
     // The fixture env must be in the running app (else LangGraph/Composio calls would be keyless or leave the machine).
     // The dummy LangGraph key is remembered as a log canary; the rest is non-secret config.
@@ -844,6 +857,71 @@ describe.skipIf(!LIVE)("plugin-local: all 51 tools against the real app, DB and 
         expect(businessSnapshot()).toEqual(before);
       },
     );
+
+    // COS-PLUGIN-002 WP2-11. The P17 website has no discoverability site,
+    // snapshots or experiments: reads answer honestly (unavailable / empty),
+    // request writes are refused with a structured code, and nothing is
+    // written. Write successes need seeded snapshots, calibration reports and
+    // lifecycle states: they are proven against a local database in the app's
+    // tools/__tests__/write-tools.db.test.ts (SUCCESS_PROVEN_ELSEWHERE below).
+    it("robynn_propose_experiments / robynn_check_page_content / robynn_experiment_status: stored-data reads write nothing; unknown ids are not_found", async () => {
+      const before = businessSnapshot();
+      const propose = await call(ro, "robynn_propose_experiments", { website_id: P17.website, goal: "seo_ctr" });
+      expectOk(propose, "propose");
+      expect(data(propose).proposals).toEqual([]);
+      expect(data(propose).freshness.status).toBe("unavailable");
+      cover("robynn_propose_experiments", "success");
+      const check = await call(ro, "robynn_check_page_content", {
+        website_id: P17.website,
+        page_path: "/product",
+        draft: "<p>Robynn helps small marketing teams plan their week.</p>",
+      });
+      expectOk(check, "check");
+      expect(typeof data(check).valid).toBe("boolean");
+      cover("robynn_check_page_content", "success");
+      const listing = await call(ro, "robynn_experiment_status", { website_id: P17.website });
+      expectOk(listing, "status listing");
+      expect(data(listing).items).toEqual([]);
+      cover("robynn_experiment_status", "success");
+      for (const [tool, args] of [
+        ["robynn_propose_experiments", { website_id: randomUUID(), goal: "seo_ctr" }],
+        ["robynn_check_page_content", { website_id: randomUUID(), page_path: "/a", draft: "x" }],
+        ["robynn_experiment_status", { experiment_id: randomUUID() }],
+        ["robynn_experiment_results", { experiment_id: randomUUID() }],
+      ] as const) {
+        const unknown = await call(ro, tool, args);
+        expectToolError(unknown, `${tool} unknown`);
+        expect(toolErrorCode(unknown)).toBe("not_found");
+        cover(tool, "error");
+      }
+      expect(businessSnapshot()).toEqual(before);
+    });
+
+    it("robynn_create_experiment / robynn_promote_experiment / robynn_rollback_experiment: refused with structured codes, nothing saved", async () => {
+      const before = businessSnapshot();
+      for (const [tool, args, codes] of [
+        [
+          "robynn_create_experiment",
+          {
+            website_id: P17.website,
+            type: "faq",
+            hypothesis: "P17 synthetic",
+            changes: [{ page_path: "/product", field: "faq", content: "<section id=\"faq\">x</section>", selector: "#faq", before_hash: "a".repeat(64), delivery_binding_id: randomUUID() }],
+            idempotency_key: `p17_create_${Date.now()}`,
+          },
+          ["not_found", "validation_failed", "data_unavailable"],
+        ],
+        ["robynn_promote_experiment", { experiment_id: randomUUID(), scope: "all_similar_pages", idempotency_key: `p17_promote_${Date.now()}` }, ["not_found"]],
+        ["robynn_rollback_experiment", { experiment_id: randomUUID(), reason: "P17", confirm: true, idempotency_key: `p17_rollback_${Date.now()}` }, ["not_found"]],
+      ] as const) {
+        const reply = await call(full, tool, args);
+        expectToolError(reply, tool);
+        expect(codes as readonly string[]).toContain(toolErrorCode(reply));
+        expectSanitized(reply);
+        cover(tool, "error");
+      }
+      expect(businessSnapshot()).toEqual(before);
+    });
   });
 
   // =========================================================================
@@ -1266,10 +1344,13 @@ describe.skipIf(!LIVE)("plugin-local: all 51 tools against the real app, DB and 
   // =========================================================================
 
   describe("whole run", () => {
-    it("every one of the 51 tools proved success, error and permission-denied live", () => {
-      expect(ALL_TOOLS).toHaveLength(51);
+    it("every one of the 58 tools proved success, error and permission-denied live (WP2-11 write successes: local DB suite)", () => {
+      expect(ALL_TOOLS).toHaveLength(58);
       const missing = ALL_TOOLS.flatMap((tool) =>
-        (["success", "error", "denied"] as const).filter((o) => !covered.get(tool)!.has(o)).map((o) => `${tool}:${o}`),
+        (["success", "error", "denied"] as const)
+          .filter((o) => !(o === "success" && SUCCESS_PROVEN_ELSEWHERE.has(tool)))
+          .filter((o) => !covered.get(tool)!.has(o))
+          .map((o) => `${tool}:${o}`),
       );
       expect(missing).toEqual([]);
     });
